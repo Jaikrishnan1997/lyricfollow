@@ -2,7 +2,7 @@
 # Downloads free, open-source software (needs internet once, then works without internet):
 #   - sherpa-onnx speech engine (Apache-2.0)  https://github.com/k2-fsa/sherpa-onnx
 #   - OpenAI Whisper speech model (MIT), multilingual: understands Malayalam, Tamil, English and more
-param([string]$Choice = '', [string]$Platform = '')
+param([string]$Choice = '', [string]$Platform = '', [switch]$Full)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -75,13 +75,14 @@ try {
   Write-Host '  Unpacking model (this can take a minute) ...'
   Expand-Bz2 $mf $tmp
   $src = Join-Path $tmp "sherpa-onnx-whisper-$model"
-  # CPU: the compact int8 files. NVIDIA GPU: the full-precision files when the package has them - the GPU runs
-  # those many times faster, while int8 models mostly fall back to the CPU.
+  # The compact int8 files are used by default: in testing they transcribed Malayalam better than the full-precision
+  # files (which sometimes return nothing for a phrase). -Full installs the full-precision files for an NVIDIA GPU,
+  # where they run several times faster.
   $enc8 = Get-ChildItem $src -Filter '*encoder.int8.onnx' | Select-Object -First 1
   $dec8 = Get-ChildItem $src -Filter '*decoder.int8.onnx' | Select-Object -First 1
   $enc32 = Get-ChildItem $src -Filter '*encoder.onnx' | Where-Object { $_.Name -notlike '*int8*' } | Select-Object -First 1
   $dec32 = Get-ChildItem $src -Filter '*decoder.onnx' | Where-Object { $_.Name -notlike '*int8*' } | Select-Object -First 1
-  $useFull = $gpu -and $enc32 -and $dec32
+  $useFull = $Full -and $gpu -and $enc32 -and $dec32
   if (-not $useFull -and -not $enc8) { $enc8 = $enc32; $dec8 = $dec32 }
   Remove-Item -Force (Join-Path $voice 'model/encoder.onnx'), (Join-Path $voice 'model/decoder.onnx'), (Join-Path $voice 'model/encoder.int8.onnx'), (Join-Path $voice 'model/decoder.int8.onnx') -ErrorAction SilentlyContinue
   if ($useFull) {
@@ -92,7 +93,7 @@ try {
     Copy-Item -Force $enc8.FullName (Join-Path $voice 'model/encoder.int8.onnx')
     Copy-Item -Force $dec8.FullName (Join-Path $voice 'model/decoder.int8.onnx')
     $tag = "whisper-$model"
-    if ($gpu) { Write-Host '  Note: this model is only available in compact (int8) form, which runs mostly on the CPU even with a GPU.' }
+    if ($gpu -and $Full) { Write-Host '  Note: this model is only available in compact (int8) form.' }
   }
   Copy-Item -Force (Get-ChildItem $src -Filter '*tokens.txt' | Select-Object -First 1).FullName (Join-Path $voice 'model/tokens.txt')
   Set-Content -Path (Join-Path $voice 'model/model.txt') -Value $tag

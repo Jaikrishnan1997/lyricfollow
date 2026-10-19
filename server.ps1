@@ -41,7 +41,7 @@ function Start-Voice {
   $threads = [Math]::Max(1, [Math]::Min(4, [Math]::Floor(($cores - 1) / [Math]::Max(1, $langs.Count - 1))))
   $provider = 'cpu'
   if (Test-Path -LiteralPath (Join-Path $root 'voice/gpu.txt')) {
-    if (Test-Path -LiteralPath (Join-Path $root 'voice/bin/cublasLt64_12.dll')) { $provider = 'cuda'; $threads = 2 }
+    if (Test-Path -LiteralPath (Join-Path $root 'voice/bin/cublasLt64_12.dll')) { $provider = 'cuda'; if ($enc -notlike '*int8*') { $threads = 2 } }
     else { Write-Host '  NVIDIA GPU files are missing - run "Setup GPU support.bat" once. Using the CPU for now.' }
   }
   $started = @()
