@@ -38,7 +38,10 @@ function Start-Voice {
   $cores = [Environment]::ProcessorCount
   $threads = [Math]::Max(1, [Math]::Min(4, [Math]::Floor(($cores - 1) / [Math]::Max(1, $langs.Count - 1))))
   $provider = 'cpu'
-  if (Test-Path -LiteralPath (Join-Path $root 'voice/gpu.txt')) { $provider = 'cuda'; $threads = 2 }
+  if (Test-Path -LiteralPath (Join-Path $root 'voice/gpu.txt')) {
+    if (Test-Path -LiteralPath (Join-Path $root 'voice/bin/cublasLt64_12.dll')) { $provider = 'cuda'; $threads = 2 }
+    else { Write-Host '  NVIDIA GPU files are missing - run "Setup GPU support.bat" once. Using the CPU for now.' }
+  }
   $started = @()
   foreach ($lang in $langs) {
     $port = $ports[$lang]; if (-not $port) { continue }
@@ -47,8 +50,11 @@ function Start-Voice {
       "--whisper-encoder=`"$(Join-Path $m 'encoder.int8.onnx')`"", "--whisper-decoder=`"$(Join-Path $m 'decoder.int8.onnx')`"",
       "--tokens=`"$(Join-Path $m 'tokens.txt')`"")
     if ($lang -ne 'auto') { $voiceArgs += "--whisper-language=$lang" }
-    if ($isWin) { Start-Process -FilePath $exe -ArgumentList $voiceArgs -WindowStyle Minimized -WorkingDirectory (Split-Path $exe) }
-    else { Start-Process -FilePath $exe -ArgumentList $voiceArgs -WorkingDirectory (Split-Path $exe) -RedirectStandardOutput (Join-Path $root "voice/voice-$lang.log") -RedirectStandardError (Join-Path $root "voice/voice-$lang-err.log") }
+    # Engine output goes to voice/voice-<lang>.log so a failed start can be diagnosed.
+    $sp = @{ FilePath = $exe; ArgumentList = $voiceArgs; WorkingDirectory = (Split-Path $exe)
+             RedirectStandardOutput = (Join-Path $root "voice/voice-$lang.log"); RedirectStandardError = (Join-Path $root "voice/voice-$lang-err.log") }
+    if ($isWin) { $sp.WindowStyle = 'Minimized' }
+    Start-Process @sp
     $started += $lang
   }
   Write-Host "  Offline voice engines started ($((Get-Content (Join-Path $m 'model.txt') -ErrorAction SilentlyContinue)), $provider): $($started -join ', ')"

@@ -85,6 +85,12 @@ try {
   Remove-Item -Recurse -Force $tmp
   Write-Host ''
   Write-Host "  Done. Offline voice is ready (whisper-$model)."
+  # The GPU build of the engine also needs NVIDIA's CUDA/cuDNN runtime files.
+  if ($gpu -and -not (Test-Path (Join-Path $voice 'bin\cublasLt64_12.dll'))) {
+    Write-Host ''
+    $env:LF_NO_PAUSE = '1'
+    & (Join-Path $root 'setup-gpu.ps1')
+  }
   Write-Host '  Start the app with "Start Lyric Follow.bat" and choose Offline at the top.'
 } catch {
   Write-Host ''
