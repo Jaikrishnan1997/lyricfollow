@@ -422,6 +422,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
    * Both feed the same matcher; the operator chooses with the Offline / Online switch in the header. */
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const LOCAL_PORTS = { ml: 6011, ta: 6012, en: 6013, hi: 6014 };
+  const HOSTED = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const localUrl = lang => 'ws://127.0.0.1:' + (LOCAL_PORTS[String(lang || 'ml').slice(0, 2)] || 6011);
   let heardKey = '', lastMatchAt = Date.now(), lastSpeechAt = 0, lastEventAt = 0, vbText = '', vbWordsAtQuote = 0;
   let detect = { id: null, n: 0 }, lastDetectAt = 0, suggestId = null, songIx = null, quoteBusy = false;
@@ -680,7 +681,10 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     mode: null, lang: '', engine: null,
     async start(mode) {
       mode = mode || S.listenMode;
-      const engine = S.net === 'online' ? 'cloud' : 'local';
+      let engine = S.net === 'online' ? 'cloud' : 'local';
+      // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
+      // cannot reach them, so listening uses the device's own online recogniser here.
+      if (engine === 'local' && HOSTED) { toast(t('local_hosted')); S.net = 'online'; saveSettings(); renderNet(); engine = 'cloud'; }
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
       this.stopEngines();
       this.mode = mode; this.engine = engine;
