@@ -29,7 +29,9 @@ function Start-Voice {
   $exe = Join-Path $root 'voice/bin/sherpa-onnx-offline-websocket-server'
   if ($isWin) { $exe += '.exe' }
   $m = Join-Path $root 'voice/model'
-  if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath (Join-Path $m 'encoder.int8.onnx'))) { return }
+  $enc = Join-Path $m 'encoder.onnx'; $dec = Join-Path $m 'decoder.onnx'          # full precision (GPU setups)
+  if (-not (Test-Path -LiteralPath $enc)) { $enc = Join-Path $m 'encoder.int8.onnx'; $dec = Join-Path $m 'decoder.int8.onnx' }
+  if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $enc)) { return }
   $langFile = Join-Path $root 'voice/languages.txt'
   $langs = @('ml', 'ta', 'en')
   if (Test-Path -LiteralPath $langFile) { $langs = @((Get-Content $langFile -Raw) -split '[\s,]+' | Where-Object { $_ }) }
@@ -47,7 +49,7 @@ function Start-Voice {
     $port = $ports[$lang]; if (-not $port) { continue }
     try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', $port); $c.Close(); $started += "$lang (already running)"; continue } catch { }
     $voiceArgs = @("--port=$port", "--num-threads=$threads", '--model-type=whisper', '--whisper-tail-paddings=300', "--provider=$provider",
-      "--whisper-encoder=`"$(Join-Path $m 'encoder.int8.onnx')`"", "--whisper-decoder=`"$(Join-Path $m 'decoder.int8.onnx')`"",
+      "--whisper-encoder=`"$enc`"", "--whisper-decoder=`"$dec`"",
       "--tokens=`"$(Join-Path $m 'tokens.txt')`"")
     if ($lang -ne 'auto') { $voiceArgs += "--whisper-language=$lang" }
     # Engine output goes to voice/voice-<lang>.log so a failed start can be diagnosed.

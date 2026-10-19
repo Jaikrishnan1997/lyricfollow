@@ -19,7 +19,7 @@ Write-Host '  ----------------------------------'
 Write-Host '  Choose the speech model for this computer:'
 Write-Host '    1) Fast      - for older / low-end laptops        (download ~120 MB)'
 Write-Host '    2) Balanced  - recommended for most laptops        (download ~210 MB)'
-Write-Host '    3) Accurate  - best for Malayalam/Tamil, needs a fast PC (download ~640 MB)'
+Write-Host '    3) Accurate  - best for Malayalam/Tamil, needs a fast PC or an NVIDIA GPU (download ~640 MB)'
 Write-Host '    4) Turbo     - top quality, for laptops with an NVIDIA GPU   (download ~560 MB)'
 Write-Host '    5) Maximum   - Whisper large-v3, the most accurate; NVIDIA GPU needed for live use (download ~1 GB)'
 Write-Host ''
@@ -51,6 +51,8 @@ function Expand-Bz2([string]$file, [string]$dest) {
 }
 
 try {
+  # Running engines keep the model files open; stop them so the files can be replaced.
+  Get-Process -Name 'sherpa-onnx-offline-websocket-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   $tmp = Join-Path $voice 'download'
   New-Item -ItemType Directory -Force -Path $tmp, (Join-Path $voice 'bin'), (Join-Path $voice 'model') | Out-Null
 
@@ -73,13 +75,27 @@ try {
   Write-Host '  Unpacking model (this can take a minute) ...'
   Expand-Bz2 $mf $tmp
   $src = Join-Path $tmp "sherpa-onnx-whisper-$model"
-  $enc = Get-ChildItem $src -Filter '*encoder.int8.onnx' | Select-Object -First 1
-  $dec = Get-ChildItem $src -Filter '*decoder.int8.onnx' | Select-Object -First 1
-  if (-not $enc) { $enc = Get-ChildItem $src -Filter '*encoder.onnx' | Select-Object -First 1; $dec = Get-ChildItem $src -Filter '*decoder.onnx' | Select-Object -First 1 }
-  Copy-Item -Force $enc.FullName (Join-Path $voice 'model/encoder.int8.onnx')
-  Copy-Item -Force $dec.FullName (Join-Path $voice 'model/decoder.int8.onnx')
+  # CPU: the compact int8 files. NVIDIA GPU: the full-precision files when the package has them - the GPU runs
+  # those many times faster, while int8 models mostly fall back to the CPU.
+  $enc8 = Get-ChildItem $src -Filter '*encoder.int8.onnx' | Select-Object -First 1
+  $dec8 = Get-ChildItem $src -Filter '*decoder.int8.onnx' | Select-Object -First 1
+  $enc32 = Get-ChildItem $src -Filter '*encoder.onnx' | Where-Object { $_.Name -notlike '*int8*' } | Select-Object -First 1
+  $dec32 = Get-ChildItem $src -Filter '*decoder.onnx' | Where-Object { $_.Name -notlike '*int8*' } | Select-Object -First 1
+  $useFull = $gpu -and $enc32 -and $dec32
+  if (-not $useFull -and -not $enc8) { $enc8 = $enc32; $dec8 = $dec32 }
+  Remove-Item -Force (Join-Path $voice 'model/encoder.onnx'), (Join-Path $voice 'model/decoder.onnx'), (Join-Path $voice 'model/encoder.int8.onnx'), (Join-Path $voice 'model/decoder.int8.onnx') -ErrorAction SilentlyContinue
+  if ($useFull) {
+    Copy-Item -Force $enc32.FullName (Join-Path $voice 'model/encoder.onnx')
+    Copy-Item -Force $dec32.FullName (Join-Path $voice 'model/decoder.onnx')
+    $tag = "whisper-$model (GPU, full precision)"
+  } else {
+    Copy-Item -Force $enc8.FullName (Join-Path $voice 'model/encoder.int8.onnx')
+    Copy-Item -Force $dec8.FullName (Join-Path $voice 'model/decoder.int8.onnx')
+    $tag = "whisper-$model"
+    if ($gpu) { Write-Host '  Note: this model is only available in compact (int8) form, which runs mostly on the CPU even with a GPU.' }
+  }
   Copy-Item -Force (Get-ChildItem $src -Filter '*tokens.txt' | Select-Object -First 1).FullName (Join-Path $voice 'model/tokens.txt')
-  Set-Content -Path (Join-Path $voice 'model/model.txt') -Value "whisper-$model"
+  Set-Content -Path (Join-Path $voice 'model/model.txt') -Value $tag
   if (-not (Test-Path (Join-Path $voice 'languages.txt'))) { Set-Content -Path (Join-Path $voice 'languages.txt') -Value 'ml ta en' }
 
   Remove-Item -Recurse -Force $tmp
