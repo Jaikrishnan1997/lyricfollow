@@ -1,0 +1,10 @@
+{
+  "name": "Lyric Follow",
+  "short_name": "Lyric Follow",
+  "description": "Church lyrics and Bible projection that follows the singer. Malayalam, Tamil and English.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#101318",
+  "theme_color": "#c2410c",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

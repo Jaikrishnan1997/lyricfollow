@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lyric Follow</title>
+<meta name="theme-color" content="#c2410c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anek+Latin:wght@400;500;600;700&family=Anek+Malayalam:wght@400;500;600;700&family=Anek+Tamil:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v6h5v2h-5v10h-2V11H6V9h5z" fill="currentColor"/></svg>
+    <span>Lyric Follow</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="live" data-i18n="tab_live">Live</button>
+    <button role="tab" data-tab="songs" data-i18n="tab_songs">Songs</button>
+    <button role="tab" data-tab="bible" data-i18n="tab_bible">Bible</button>
+    <button role="tab" data-tab="bg" data-i18n="tab_bg">Backgrounds</button>
+    <button role="tab" data-tab="online" data-i18n="tab_online">Voice &amp; Import</button>
+    <button role="tab" data-tab="settings" data-i18n="tab_settings">Settings</button>
+  </nav>
+  <div class="top-right">
+    <div class="netmode" role="group" aria-label="Offline or online">
+      <span class="ndot" id="netDot"></span>
+      <button type="button" data-net="offline">💻 <span data-i18n="mode_offline">Offline</span></button>
+      <button type="button" data-net="online">🌐 <span data-i18n="mode_online">Online</span></button>
+    </div>
+    <div class="langs" role="group" aria-label="Language">
+      <button data-lang="en">EN</button><button data-lang="ml">മല</button><button data-lang="ta">தமி</button>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+<main>
+  <!-- LIVE -->
+  <section class="tab" id="tab-live">
+    <div class="live-grid">
+      <aside class="panel">
+        <div class="phead"><h3 data-i18n="service">Today's service</h3></div>
+        <ol class="service" id="service"></ol>
+        <button class="primary wide" id="btnAddToService">+ <span data-i18n="add_song">Add song</span></button>
+      </aside>
+      <div class="panel">
+        <div class="phead">
+          <h2 id="liveTitle" class="songtitle"></h2>
+          <div class="row tight">
+            <span class="chip" id="liveLang"></span>
+            <button id="btnLiveEdit" data-i18n="edit">Edit</button>
+          </div>
+        </div>
+        <div class="slides" id="slides"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SONGS -->
+  <section class="tab" id="tab-songs" hidden>
+    <div class="split">
+      <aside class="panel">
+        <div class="row">
+          <input type="search" id="songSearch" data-i18n-ph="search_songs">
+        </div>
+        <div class="row">
+          <select id="songLangFilter"></select>
+          <button class="primary" id="btnNewSong">+ <span data-i18n="new_song">New song</span></button>
+        </div>
+        <ul class="songlist" id="songList"></ul>
+      </aside>
+      <div class="panel" id="songEditor">
+        <form id="songForm" class="form">
+          <label class="field"><span data-i18n="title">Title</span><input type="text" id="sfTitle" required></label>
+          <div class="row">
+            <label class="field"><span data-i18n="language">Language</span><select id="sfLang"></select></label>
+            <label class="field"><span data-i18n="background">Background</span><select id="sfBg"></select></label>
+          </div>
+          <label class="field"><span data-i18n="lyrics">Lyrics</span><textarea id="sfLyrics" rows="16"></textarea><small data-i18n="lyrics_hint"></small></label>
+          <div class="row">
+            <button type="button" id="sfDelete" class="danger" data-i18n="delete">Delete</button>
+            <button type="button" id="sfService" data-i18n="add_to_service">Add to service</button>
+            <button type="submit" class="primary" data-i18n="save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- BIBLE -->
+  <section class="tab" id="tab-bible" hidden>
+    <div class="panel">
+      <div class="bible-top">
+        <form id="refForm" class="refform">
+          <div class="refbox">
+            <input type="text" id="refInput" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="refSuggest" aria-expanded="false" data-i18n-ph="ref_ph">
+            <ul class="refsuggest" id="refSuggest" role="listbox" hidden></ul>
+          </div>
+          <button class="primary" data-i18n="go">Go</button>
+        </form>
+        <div class="vchips" id="vchips"></div>
+      </div>
+      <small class="hint" data-i18n="versions_hint"></small>
+      <p class="msg" id="refMsg" hidden></p>
+    </div>
+    <div class="bible-cols">
+      <div class="panel">
+        <div class="row">
+          <label class="field"><span data-i18n="book">Book</span><select id="bkSel"></select></label>
+          <label class="field narrow"><span data-i18n="chapter">Chapter</span><select id="chSel"></select></label>
+        </div>
+        <ol class="verses" id="verseList"></ol>
+      </div>
+      <div class="panel">
+        <form id="bsForm" class="row">
+          <input type="search" id="bsInput" data-i18n-ph="search_bible">
+        </form>
+        <p class="hint" id="bsStatus"></p>
+        <ol class="results" id="bsResults"></ol>
+        <div id="heardRefsBox" hidden>
+          <h3 data-i18n="heard_refs">Heard from the preacher</h3>
+          <ol class="results" id="heardRefs2"></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BACKGROUNDS -->
+  <section class="tab" id="tab-bg" hidden>
+    <div class="panel">
+      <h3 data-i18n="bg_builtin">Built-in</h3>
+      <div class="bggrid" id="bgBuiltin"></div>
+      <h3 data-i18n="bg_yours">Your backgrounds</h3>
+      <p class="hint" data-i18n="bg_none_yours"></p>
+      <div class="bggrid" id="bgMine"></div>
+      <label class="upload"><input type="file" id="bgUpload" accept="image/*,video/mp4,video/webm" multiple hidden><span>+ <span data-i18n="bg_upload">Add image or video</span></span></label>
+    </div>
+    <div class="panel">
+      <h3 data-i18n="text_style">Text on screen</h3>
+      <div class="formgrid">
+        <label class="field"><span data-i18n="church_name">Church name</span><input type="text" id="thChurch"></label>
+        <label class="field"><span><span data-i18n="text_size">Text size</span> <b id="thSizeVal"></b></span><input type="range" id="thSize" min="60" max="140" step="5"></label>
+        <label class="field"><span data-i18n="text_pos">Position</span><select id="thPos"><option value="center" data-i18n="pos_center">Middle</option><option value="bottom" data-i18n="pos_bottom">Bottom</option></select></label>
+        <label class="field"><span data-i18n="text_color">Text colour</span><select id="thColor"><option value="auto" data-i18n="color_auto">Automatic</option><option value="#ffffff">White</option><option value="#fff3c4">Cream</option><option value="#ffd166">Gold</option><option value="#111111">Black</option></select></label>
+        <label class="check"><input type="checkbox" id="thShadow"> <span data-i18n="shadow">Shadow behind text</span></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ONLINE -->
+  <section class="tab" id="tab-online" hidden>
+    <p class="banner-online" data-i18n="online_intro"></p>
+    <div class="cards">
+      <div class="panel">
+        <div class="phead"><h3 data-i18n="ai_follow">AI lyrics follow</h3><span class="netbadge engine-badge"></span></div>
+        <p class="hint" data-i18n="ai_follow_hint"></p>
+        <div id="supportMsg"></div>
+        <button class="primary wide" id="btnListen2"></button>
+        <div class="meter"><i id="level2"></i></div>
+      </div>
+      <div class="panel">
+        <div class="phead"><h3 data-i18n="voice_bible">Voice Bible</h3><span class="netbadge engine-badge"></span></div>
+        <p class="hint" data-i18n="voice_bible_hint"></p>
+        <div class="row">
+          <label class="field"><span data-i18n="speaker_lang">Speaker's language</span><select id="vbLang"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="vbAuto"> <span data-i18n="auto_show">Show on screen automatically</span></label>
+        <button class="primary wide" id="btnVB"></button>
+        <p class="heardline" id="vbHeard"></p>
+        <ol class="results" id="heardRefs"></ol>
+      </div>
+      <div class="panel ocr">
+        <div class="phead"><h3 data-i18n="ocr">Lyrics from a photo or screenshot</h3><span class="netbadge">💻 <span data-i18n="engine_offline">Offline</span></span></div>
+        <p class="hint" data-i18n="ocr_hint"></p>
+        <div class="row">
+          <label class="field"><span data-i18n="words_lang">Text language in image</span>
+            <select id="ocrLang"><option value="mal+eng">മലയാളം + English</option><option value="tam+eng">தமிழ் + English</option><option value="eng">English</option></select></label>
+          <label class="upload slim"><input type="file" id="ocrFile" accept="image/*" hidden><span data-i18n="ocr_pick">Choose image</span></label>
+        </div>
+        <div class="ocrwrap">
+          <img id="ocrImg" alt="" hidden>
+          <div class="ocrout">
+            <p class="hint" id="ocrStatus"></p>
+            <div class="ocrcheck" id="ocrCheck" hidden></div>
+            <textarea id="ocrText" rows="12" hidden></textarea>
+            <div class="row" id="ocrSave" hidden>
+              <input type="text" id="ocrTitle" data-i18n-ph="title">
+              <select id="ocrSongLang"></select>
+              <button class="primary" id="btnOcrSave" data-i18n="save_as_song">Save as song</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="tab" id="tab-settings" hidden>
+    <div class="cards">
+      <div class="panel">
+        <label class="field"><span data-i18n="ui_language">App language</span><select id="stLang"><option value="en">English</option><option value="ml">മലയാളം</option><option value="ta">தமிழ்</option></select></label>
+        <label class="field"><span data-i18n="display_mode">Projector shows</span><select id="stMode"><option value="slide" data-i18n="mode_slide"></option><option value="pair" data-i18n="mode_pair"></option><option value="plain" data-i18n="mode_plain"></option></select></label>
+        <label class="field"><span><span data-i18n="strictness">Matching strictness</span> <b id="stThrVal"></b></span><input type="range" id="stThr" min="35" max="75"><small data-i18n="strict_hint"></small></label>
+        <label class="field"><span data-i18n="blank_after"></span><select id="stBlank"></select></label>
+        <label class="check"><input type="checkbox" id="stAutoSwitch"> <span data-i18n="auto_switch"></span></label>
+        <label class="check"><input type="checkbox" id="stLow"> <span data-i18n="low_end"></span></label>
+      </div>
+      <div class="panel">
+        <h3 data-i18n="backup">Backup and sharing</h3>
+        <p class="hint" data-i18n="backup_hint"></p>
+        <label class="check"><input type="checkbox" id="bkMedia"> <span data-i18n="include_media"></span></label>
+        <div class="row">
+          <button id="btnExport" data-i18n="export">Export backup</button>
+          <label class="upload slim"><input type="file" id="importFile" accept=".json,application/json" hidden><span data-i18n="import">Import backup</span></label>
+        </div>
+        <h3 data-i18n="shortcuts">Keyboard shortcuts</h3>
+        <dl class="keys">
+          <dt>← →</dt><dd data-i18n="k_lines"></dd>
+          <dt>PgUp PgDn</dt><dd data-i18n="k_slides"></dd>
+          <dt>B</dt><dd data-i18n="k_black"></dd>
+          <dt>C</dt><dd data-i18n="k_bg"></dd>
+          <dt>A</dt><dd data-i18n="k_auto"></dd>
+          <dt>L</dt><dd data-i18n="k_listen"></dd>
+        </dl>
+      </div>
+      <div class="panel">
+        <h3 data-i18n="about">About and licences</h3>
+        <p class="hint">Lyric Follow runs on this computer. Songs, backgrounds and settings never leave it unless you export a backup.</p>
+        <ul class="about" id="aboutList"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- SCREEN DECK (always visible) -->
+<aside class="deck">
+  <div class="panel">
+    <div class="phead"><h3 data-i18n="projector">Projector</h3><span class="chip live-chip" id="screenState"></span></div>
+    <div class="preview" id="preview"></div>
+    <button class="primary wide" id="btnProjector" data-i18n="open_projector">Open projector</button>
+    <div class="row">
+      <button id="btnPrev">◀ <span data-i18n="prev">Previous</span></button>
+      <button id="btnNext"><span data-i18n="next">Next</span> ▶</button>
+    </div>
+    <div class="row">
+      <button id="btnBlack" data-i18n="black">Black</button>
+      <button id="btnBgOnly" data-i18n="bg_only">Background only</button>
+    </div>
+  </div>
+  <div class="panel listen">
+    <div class="phead"><h3 data-i18n="ai_follow">AI lyrics follow</h3><span class="netbadge engine-badge"></span></div>
+    <div class="seg" role="group">
+      <button type="button" data-lm="songs">♪ <span data-i18n="lm_songs">Singing</span></button>
+      <button type="button" data-lm="bible">📖 <span data-i18n="lm_bible">Preacher (Bible)</span></button>
+    </div>
+    <div id="lmBible" class="lmbible" hidden>
+      <label class="field"><span data-i18n="speaker_lang">Speaker's language</span><select id="vbLang2"></select></label>
+      <label class="check"><input type="checkbox" id="vbAuto2"> <span data-i18n="auto_show">Show on screen automatically</span></label>
+    </div>
+    <p class="msg" id="fileWarn" hidden></p>
+    <button class="wide" id="btnListen"></button>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText"></span><span class="pill" id="matchPill"></span></div>
+    <div class="meter"><i id="level"></i></div>
+    <p class="heardline" id="heard"></p>
+    <label class="check"><input type="checkbox" id="autoFollow"> <span data-i18n="auto">Auto follow</span></label>
+    <div class="suggest searchhelp" id="searchHelp" hidden>
+      <span data-i18n="no_song_match">This song is not in the library.</span>
+      <a id="searchLink" href="#" target="_blank" rel="noopener" data-i18n="search_web">Search the web for these lyrics</a>
+    </div>
+    <div class="suggest" id="suggest" hidden>
+      <span><span data-i18n="sounds_like">Sounds like</span>: <b id="suggestTitle"></b></span>
+      <div class="row tight"><button class="primary" id="btnSuggestYes" data-i18n="switch">Switch</button><button id="btnSuggestNo" data-i18n="ignore">Ignore</button></div>
+    </div>
+  </div>
+</aside>
+</div>
+
+<dialog id="pickDlg">
+  <div class="phead"><h3 data-i18n="choose_song">Choose a song</h3><button id="pickClose" data-i18n="close">Close</button></div>
+  <input type="search" id="pickSearch" data-i18n-ph="search_songs">
+  <ul class="songlist" id="pickList"></ul>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/i18n.js"></script>
+<script src="js/core.js"></script>
+<script src="js/bible.js"></script>
+<script src="js/store.js"></script>
+<script src="js/stage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
