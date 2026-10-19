@@ -9,10 +9,10 @@
   const SONG_LANGS = [['ml-IN', 'മലയാളം'], ['ta-IN', 'தமிழ்'], ['en-IN', 'English (India)'], ['en-US', 'English (US)'], ['hi-IN', 'हिन्दी']];
   const LANG_SHORT = { 'ml-IN': 'ML', 'ta-IN': 'TA', 'en-IN': 'EN', 'en-US': 'EN', 'hi-IN': 'HI' };
   const DEF = {
-    lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'offline', v: 4,
+    lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 5,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: false, bk: 42, ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -307,7 +307,12 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     ch.value = S.ch;
     const ol = $('verseList'); ol.innerHTML = '';
     const pv = S.versions[0];
-    if (!Bible.loaded(pv)) { ol.appendChild(el('li', 'empty', t('loading'))); await ensureVersions(); if (!Bible.loaded(pv)) return; }
+    if (!Bible.loaded(pv)) {
+      ol.appendChild(el('li', 'empty', t('loading'))); await ensureVersions();
+      if (!Bible.loaded(pv)) {   // the data file did not arrive (app server closed?) - say so and offer a retry
+        ol.innerHTML = ''; const li = el('li', 'empty'), b = el('button', 'clearbtn', t('version_failed')); b.onclick = () => renderBibleNav(); li.appendChild(b); ol.appendChild(li); return;
+      }
+    }
     const vs = Bible.chapter(pv, S.bk, S.ch);
     const r = screen.kind === 'bible' ? screen.bible : null;
     vs.forEach((txt, i) => {
@@ -396,7 +401,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function pushHeardRef(r, src, sure) {
     const k = refKey(r);
     const prev = heardRefs.find(x => refKey(x.r) === k);
-    lastRefAt = Date.now();
+    lastRefAt = Date.now(); if (sure) hunt.lockedAt = lastRefAt;
     if (prev && Date.now() - prev.at < 30000) {
       // Same reference again within half a minute: no duplicate in the list; re-show it only if the screen moved away.
       prev.at = Date.now(); if (sure) prev.sure = true;
@@ -706,25 +711,54 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     stop() { this.mode = null; this.stopEngines(); LangID.stop(); Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
   };
 
-  // Watchdog: restart a recogniser that has gone quiet; switch recogniser language to find a song in another language.
-  const hunt = { i: 0, at: 0 };
+  // Watchdog: restart a recogniser that has gone quiet; find the spoken language when the recogniser needs one.
+  // The online recogniser understands one language at a time, so in "auto" it tries Malayalam, Tamil and English
+  // in turn (a few seconds each) until a verse or song line is recognised, locks on that language, and only
+  // starts looking again after a long stretch of speech without any match. The offline language detector, when
+  // it is running, picks the language directly (LangID.apply).
+  const hunt = { i: 0, at: 0, lockedAt: 0, misses: 0 };
+  function huntLangs() {
+    if (Listen.mode === 'songs') {
+      const langs = [...new Set(service.map(id => (songById(id) || {}).lang).filter(Boolean))];
+      return langs.length ? langs : [song ? song.lang : 'ml-IN'];
+    }
+    const pref = Listen.lastBibleLang || { ml: 'ml-IN', ta: 'ta-IN', en: 'en-IN' }[S.lang] || 'ml-IN';
+    return [pref, ...['ml-IN', 'ta-IN', 'en-IN'].filter(l => l !== pref)];
+  }
+  // Evidence from each recognised phrase: a verse or song match locks the current language; weak results count as misses.
+  function huntEvidence(matched, conf, words) {
+    const now = Date.now();
+    if (matched) { hunt.lockedAt = now; hunt.misses = 0; return; }
+    if (words >= 2 && conf < .6) hunt.misses++;
+  }
   setInterval(() => {
     if (!Listen.mode) return;
     const now = Date.now();
     if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > 12000) Cloud.start(Cloud.lang);
-    if (Listen.mode === 'bible' && S.vbLang === 'auto' && LangID.disabled && now - lastRefAt > 20000 && now - lastSpeechAt < 4000 && now - hunt.at > 12000) {
-      const langs = ['ml-IN', 'ta-IN', 'en-IN']; hunt.at = now; hunt.i = (hunt.i + 1) % langs.length; Listen.setLang(langs[hunt.i]);
+    const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
+    if (!auto) return;
+    if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
+    const langs = huntLangs(); if (langs.length < 2) return;
+    const speaking = now - lastSpeechAt < 5000;
+    const lastHit = Listen.mode === 'bible' ? hunt.lockedAt : Math.max(lastMatchAt, hunt.lockedAt);
+    const locked = now - lastHit < 25000;
+    const dwell = Listen.engine === 'cloud' ? 6000 : 10000;
+    if (!locked && speaking && (now - hunt.at > dwell || hunt.misses >= 2)) {
+      hunt.misses = 0; hunt.at = now;
+      const cur = langs.indexOf(Listen.lang); hunt.i = (cur + 1) % langs.length;
+      Listen.setLang(langs[hunt.i]);
     }
-    if (Listen.mode === 'songs' && S.autoSwitch) {
-      const langs = [...new Set(service.map(id => (songById(id) || {}).lang).filter(Boolean))];
-      const quiet = now - lastMatchAt > 7000 && now - lastSpeechAt < 4000;
-      if (langs.length > 1 && quiet && now - hunt.at > 7000) {
-        hunt.at = now; hunt.i = (hunt.i + 1) % langs.length;
-        Listen.setLang(langs[hunt.i]);
-      }
-    }
-  }, 2000);
+  }, 1000);
 
+  // When served from the laptop's own window, notice if that window was closed (data files stop arriving).
+  if (!HOSTED && location.protocol !== 'file:') {
+    let down = false;
+    setInterval(async () => {
+      let ok = true;
+      try { const r = await fetch('manifest.webmanifest?ping=' + Date.now(), { cache: 'no-store' }); ok = r.ok; } catch (e) { ok = false; }
+      if (ok === down) { down = !ok; $('srvWarn').hidden = !down; if (down) $('srvWarn').textContent = t('server_down'); else if (tab === 'bible') renderBibleNav(); }
+    }, 10000);
+  }
   function setStatus(txt, live) { $('statusText').textContent = txt; $('dot').classList.toggle('live', !!live); }
   function langName(l) { return (SONG_LANGS.find(x => x[0] === l) || [, l])[1]; }
   function updateListenUI() {
@@ -751,6 +785,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   }
   function onText(finals, interim, conf) {
     lastSpeechAt = Date.now();
+    const lockBefore = hunt.lockedAt, matchBefore = lastMatchAt;
     const show = (finals || interim[0] || '').trim();
     if (show) { $('heard').textContent = show; $('vbHeard').textContent = show; }
     LangID.sample(finals);
@@ -766,6 +801,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         if (best && best.score >= .72) { singHits++; if (singHits >= 2) { singHits = 0; setListenMode('songs'); switchToSong(best.id, best.line); } } else singHits = 0;
       }
     }
+    if (finals) huntEvidence(hunt.lockedAt !== lockBefore || lastMatchAt !== matchBefore, conf == null ? 0.75 : conf, finals.trim().split(/\s+/).length);
   }
   let singHits = 0;
 
@@ -1210,6 +1246,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       S = Object.assign({}, DEF, saved, { theme: Object.assign({}, DEF.theme, saved.theme) });
       if ((saved.v || 0) < 3) { S.autoSwitch = true; S.net = 'offline'; S.v = 3; saveSettings(); }
       if ((saved.v || 0) < 4) { S.vbLang = 'auto'; S.v = 4; saveSettings(); }
+      // v5: the online recogniser is the primary engine (best accuracy in all three languages); verses show automatically.
+      if ((saved.v || 0) < 5) { S.net = 'online'; S.vbAuto = true; S.v = 5; saveSettings(); }
     }
     else { const nl = (navigator.language || '').slice(0, 2); if (nl === 'ml' || nl === 'ta') S.lang = nl; }
     songs = await Store.all('songs').catch(() => []);

@@ -75,7 +75,7 @@
   const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n))));
 
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
-  const CUE = new Set(['chapter','chapters','verse','verses','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','വാക്യത്തിൽ','அதிகாரம்','வசனம்','வசனங்கள்','अध्याय','पद','आयत',
+  const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','വാക്യത്തിൽ','அதிகாரம்','வசனம்','வசனங்கள்','अध्याय','पद','आयत',
     'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','athikaram','adhikaram','vasanam','vasanam','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };

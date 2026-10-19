@@ -201,3 +201,5 @@ body.low *{transition:none!important;animation:none!important}
 .results button.unsure .rref::after{content:' ?';color:var(--warn)}
 .searchhelp{background:var(--soft);border-color:var(--line)}
 .searchhelp a{color:var(--accent);font-weight:600}
+
+.banner{margin:0;padding:10px 16px;background:#b4231a;color:#fff;font-size:14px;text-align:center}
