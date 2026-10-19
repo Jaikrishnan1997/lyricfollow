@@ -1,7 +1,7 @@
 # Lyric Follow - tiny local web server (no install needed, built into Windows).
 # Serving the app from http://localhost lets the browser remember the microphone permission,
 # makes listening reliable, and keeps your songs in one place.
-param([int]$Port = 8765, [switch]$NoBrowser, [switch]$ForceTcp)
+param([int]$Port = 8765, [switch]$NoBrowser, [switch]$ForceTcp, [switch]$RestartVoice)
 
 $root = (Split-Path -Parent $MyInvocation.MyCommand.Path).TrimEnd('\', '/')
 $url = "http://localhost:$Port/index.html"
@@ -40,7 +40,9 @@ function Start-Voice {
   $cores = [Environment]::ProcessorCount
   $threads = [Math]::Max(1, [Math]::Min(4, [Math]::Floor(($cores - 1) / [Math]::Max(1, $langs.Count - 1))))
   $provider = 'cpu'
-  if (Test-Path -LiteralPath (Join-Path $root 'voice/gpu.txt')) {
+  # voice/cpu.txt forces the CPU even when a GPU was set up (useful for comparing results).
+  $forceCpu = (Test-Path -LiteralPath (Join-Path $root 'voice/cpu.txt')) -and ((Get-Content (Join-Path $root 'voice/cpu.txt') -Raw -ErrorAction SilentlyContinue) -match 'cpu')
+  if ((Test-Path -LiteralPath (Join-Path $root 'voice/gpu.txt')) -and -not $forceCpu) {
     if (Test-Path -LiteralPath (Join-Path $root 'voice/bin/cublasLt64_12.dll')) { $provider = 'cuda'; if ($enc -notlike '*int8*') { $threads = 2 } }
     else { Write-Host '  NVIDIA GPU files are missing - run "Setup GPU support.bat" once. Using the CPU for now.' }
   }
@@ -61,7 +63,12 @@ function Start-Voice {
   }
   Write-Host "  Offline voice engines started ($((Get-Content (Join-Path $m 'model.txt') -ErrorAction SilentlyContinue)), $provider): $($started -join ', ')"
 }
+if ($RestartVoice) {
+  Get-Process -Name 'sherpa-onnx-offline-websocket-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+}
 Start-Voice
+if ($RestartVoice) { Start-Sleep -Seconds 3; exit 0 }
 
 # Already running (second double-click)? Just open the app window.
 try {

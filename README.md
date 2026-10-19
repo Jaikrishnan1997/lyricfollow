@@ -28,7 +28,7 @@ Double-click **Setup offline voice (Balanced).bat** or **Setup offline voice (Ac
 1. Fast – older/low-end laptops (~120 MB download)
 2. Balanced – most laptops (~210 MB)
 3. Accurate – fast laptops, best for Malayalam/Tamil (~640 MB)
-4. Turbo – top quality, for laptops with an NVIDIA GPU (~560 MB). The setup installs the GPU engine automatically when an NVIDIA card is found, together with NVIDIA's CUDA 12 / cuDNN 9 runtime files (~1.7 GB, free). If the launcher says the GPU files are missing, run **Setup GPU support.bat** once.
+4. Turbo – top quality, for laptops with an NVIDIA GPU (~560 MB). The setup installs the GPU engine automatically when an NVIDIA card is found, together with NVIDIA's CUDA 12 / cuDNN 9 runtime files (~1.7 GB, free). If the launcher says the GPU files are missing, run **Setup GPU support.bat** once. After changing the model or GPU settings, **Restart voice engines.bat** restarts only the engines (the app window can stay open). To compare, `voice/cpu.txt` containing `cpu` forces the CPU; put `gpu` in it (or delete it) to use the GPU again.
 5. Maximum – Whisper large-v3, the most accurate Whisper model (~1 GB). Live use needs an NVIDIA GPU; on a CPU each phrase takes 10–20 s, so the setup offers Accurate instead when no GPU is found. Each language engine loads its own copy of the model, so with Maximum keep `voice/languages.txt` to the languages you really use (e.g. `ml ta`) unless the card has 8 GB or more.
 
 It downloads the free sherpa-onnx speech engine (Apache-2.0) and an OpenAI Whisper model (MIT) into the `voice` folder.
