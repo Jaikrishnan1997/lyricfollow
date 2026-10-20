@@ -1355,9 +1355,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
       const bookOk = !r.fuzzy || Listen.engine === 'local';
       const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9));
-      if (sure || finals) { pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', sure); vbText = ''; vbWordsAtQuote = 0; }
+      if (sure || finals) { pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', sure); vbText = ''; vbWordsAtQuote = 0; partRef = null; }
       return;
     }
+    if (finals && pieceRef(finals)) return;
     const words = vbText.trim().split(/\s+/).length;
     if (finals && !quoteBusy && words - vbWordsAtQuote >= 5) {
       vbWordsAtQuote = words; quoteBusy = true;
@@ -1369,6 +1370,28 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         .then(all => { const q = all.map(r => r && r[0]).filter(Boolean).sort((a, b) => b.score - a.score)[0]; if (q && q.score >= .6) pushHeardRef({ book: q.book, ch: q.ch, v: q.v, ve: q.v }, 'quote', q.score >= .7); })
         .catch(() => {}).finally(() => { quoteBusy = false; });
     }
+  }
+  // A reference said in pieces, or with one number misheard: "மத்தேயு 1-ஆம் வசனம் <misheard> அதிகாரம்" keeps
+  // Matthew ?:1 waiting, and "அஞ்சாம் அதிகாரம்" said next completes it. "Verse 17" alone, said soon after a
+  // verse was shown, moves within that chapter. The screen never sits on an old verse without saying what it heard.
+  let partRef = null;
+  function pieceRef(text) {
+    const p = Bible.parsePartial(text); if (!p) return false;
+    const now = Date.now();
+    if (p.book != null) partRef = { book: p.book, ch: p.ch, v: p.v, at: now };
+    else if (partRef && now - partRef.at < 30000) { if (p.ch != null) partRef.ch = p.ch; if (p.v != null) partRef.v = p.v; partRef.at = now; }
+    else if (p.v != null && screen.kind === 'bible' && screen.bible && now - lastRefAt < 300000) partRef = { book: screen.bible.book, ch: p.ch != null ? p.ch : screen.bible.ch, v: p.v, at: now };
+    else return false;
+    const r = partRef;
+    if (r.ch == null && r.v == null) return false;           // only a book name so far: wait quietly
+    if (r.ch != null && r.v != null) {
+      partRef = null;
+      if (!Bible.validRef(r.book, r.ch, r.v)) return false;
+      pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.v }, 'ref', true); vbText = ''; vbWordsAtQuote = 0;
+      return true;
+    }
+    toast(Bible.bookName(r.book, S.lang) + ' ' + (r.ch != null ? r.ch : '?') + ':' + (r.v != null ? r.v : '?') + ' …');
+    return true;
   }
   function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : 'en'; }
 

@@ -208,6 +208,11 @@
   /** Parse "John 3:16", "jn 3 16-18", "യോഹന്നാൻ 3:16", "யோவான் மூன்றாம் அதிகாரம் பதினாறாம் வசனம்". */
   function parseRef(text, opts) {
     opts = opts || {};
+    const toks = prepToks(text);
+    if (!toks.length) return null;
+    return parseToks(toks, opts);
+  }
+  function prepToks(text) {
     // Decoration words ("book", "gospel", "ലേഖനം"...) and fillers ("ആ", "ഈ", "அதாவது", "uh", "the") are dropped.
     let toks = Core.keyWords(text).split(/\s+/).filter(Boolean).filter(t => !NOISE.has(t) && !FILLER.has(t) && !/^[aeiou]{1,2}$/.test(t));
     toks = toks.filter((t, i) => !(t === 'of' && i === 0));
@@ -234,7 +239,9 @@
       let j = i + 1; while (j < toks.length && cueKind(toks[j])) j++;
       return !(j < toks.length && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
     });
-    if (!toks.length) return null;
+    return toks;
+  }
+  function parseToks(toks, opts) {
     let f = findBook(toks, opts.exactOnly);
     // Speech: a badly spelled book name right before "chapter verse" numbers ("vohmar 8 28" = Romans 8:28).
     if (!f && opts.exactOnly) {
@@ -280,6 +287,29 @@
     // "tight": the numbers come straight after the book name with nothing else between (strong signal in speech).
     const tight = after.length > 0 && Core.numbers(after.slice(0, 2).join(' ')).length >= 1 && after.slice(0, 1).every(t => Core.numbers(t).length || CUE.has(t.replace(/[^a-z]/g, '')));
     return { book: f.book, ch, v, ve, hasVerse: nums.length >= 2 || book.ch === 1, cue, tight, fuzzy: f.score === 0 };
+  }
+
+  /** Part of a reference, for references spoken in pieces or with one misheard number:
+   *  "மத்தேயு ஒண்ணாவது வசனம் <misheard> அதிகாரம்" -> { book: Matthew, v: 1 }; then "அஞ்சாம் அதிகாரம்" -> { ch: 5 }.
+   *  Without a book name only numbers labelled by a chapter/verse word count ("verse 17", "17-ാം വാക്യം"). */
+  function parsePartial(text) {
+    const toks = prepToks(text); if (!toks.length) return null;
+    const f = findBook(toks, true);
+    const lab = labelledNumbers(f ? toks.slice(f.end) : toks);
+    const c = lab.find(x => x.kind === 'ch'), v = lab.find(x => x.kind === 'v');
+    const out = { book: f ? f.book : null, ch: c ? c.val : null, v: v ? v.val : null };
+    if (f && !c && !v && lab.length === 1) out.ch = lab[0].val;          // "Matthew 5" ... "verse 3"
+    if (!f && !c && !v && lab.length === 1) {                              // "വാക്യം 20", "அதிகாரம் 5": the word before the only number
+      const k = cueKind(toks[lab[0].start - 1] || ''); if (k === 'ch') out.ch = lab[0].val; else if (k === 'v') out.v = lab[0].val;
+    }
+    if (out.book == null && out.ch == null && out.v == null) return null;
+    return out;
+  }
+  /** True when the verse exists (checked against a loaded Bible when there is one). */
+  function validRef(book, ch, v) {
+    const b = BOOKS[book]; if (!b || !(ch >= 1 && ch <= b.ch) || !(v >= 1 && v <= 176)) return false;
+    const id = Object.keys(DATA)[0]; if (!id) return true;
+    const n = chapter(id, book, ch).length; return !n || v <= n;
   }
 
   function refLabel(r, lang) {
@@ -407,6 +437,6 @@
     return [...best.entries()].sort((x, y) => x[1] - y[1] || x[0] - y[0]).slice(0, limit || 8).map(([b]) => b);
   }
 
-  const Bible = { suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
+  const Bible = { parsePartial, validRef, suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
   if (typeof module !== 'undefined' && module.exports) module.exports = Bible; else root.LFBible = Bible;
 })(typeof window !== 'undefined' ? window : globalThis);
