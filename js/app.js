@@ -1185,8 +1185,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   const hunt = { i: 0, at: 0, lockedAt: 0, misses: 0 };
   function huntLangs() {
     if (Listen.mode === 'songs') {
-      const langs = [...new Set(service.map(id => (songById(id) || {}).lang).filter(Boolean))];
-      return langs.length ? langs : [song ? song.lang : 'ml-IN'];
+      const langs = [...new Set([song && song.lang, ...service.map(id => (songById(id) || {}).lang)].filter(Boolean))];
+      return langs.length ? langs : ['ml-IN'];
     }
     const pref = Listen.lastBibleLang || { ml: 'ml-IN', ta: 'ta-IN', en: 'en-IN' }[S.lang] || 'ml-IN';
     return [pref, ...['ml-IN', 'ta-IN', 'en-IN'].filter(l => l !== pref)];
@@ -1200,16 +1200,22 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   setInterval(() => {
     if (!Listen.mode) return;
     const now = Date.now();
-    if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > 12000) Cloud.start(Cloud.lang);
+    // A recogniser that has delivered nothing for a long while is restarted. Singing over music often gives no words
+    // for a stretch, and every restart loses a second of audio, so the singing mode waits longer.
+    if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > (Listen.mode === 'songs' ? 25000 : 12000)) Cloud.start(Cloud.lang);
     const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
     if (!auto || Listen.engine === 'gemini') return;      // Gemini understands every language at once
     if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
     const langs = huntLangs().filter(l => Listen.engine !== 'cloud' || !Cloud.unsupported.has(l)); if (langs.length < 2) return;
     // Without the microphone meter (phones) there is no way to know whether someone is speaking: keep rotating.
-    const speaking = Mic.stream ? now - lastSpeechAt < 5000 : true;
+    // Singing: only change language when the recogniser IS writing words and none of them fit the songs. Music, an
+    // instrumental part or silence gives no words - switching then only cuts the recogniser off mid-line (seen live:
+    // ml/ta swapped every 6 s through a whole song and nothing was recognised).
+    const songs = Listen.mode === 'songs';
+    const speaking = songs ? now - lastSpeechAt < 6000 : (Mic.stream ? now - lastSpeechAt < 5000 : true);
     const lastHit = Listen.mode === 'bible' ? hunt.lockedAt : Math.max(lastMatchAt, hunt.lockedAt);
-    const locked = now - lastHit < 25000;
-    const dwell = Listen.engine === 'cloud' ? (Listen.mode === 'bible' ? 4000 : 6000) : 10000;
+    const locked = now - lastHit < (songs ? 20000 : 25000);
+    const dwell = Listen.engine === 'cloud' ? (Listen.mode === 'bible' ? 4000 : 12000) : 10000;
     if (!locked && speaking && (now - hunt.at > dwell || hunt.misses >= 2)) {
       hunt.misses = 0; hunt.at = now;
       const cur = langs.indexOf(Listen.lang); hunt.i = (cur + 1) % langs.length;
