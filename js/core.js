@@ -161,7 +161,8 @@
       else if (d === 1) s += .05;
       else if (d === 2 || d === 3) s -= .03 * (d - 1);
       else if (d === -1) s -= .10;
-      else s -= .18;
+      // Further away: the nearest copy of a repeated line wins (a chorus sung again goes to the next chorus, not the first).
+      else s -= d > 0 ? .15 + Math.min(.06, d * .002) : .18 + Math.min(.06, -d * .002);
       if (s > best.s) best = { j, s };
     }
     st.score = Math.max(best.s, curS);

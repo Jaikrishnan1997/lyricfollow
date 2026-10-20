@@ -74,6 +74,10 @@
   const songById = id => songs.find(s => s.id === id);
 
   function loadSong(id, opts) {
+    // The song already on screen opened again (tapped in the service list, auto-detected, edited): keep its place.
+    if (song && song.id === id && follow.cur >= 0 && !(opts && (opts.line != null || opts.restart))) {
+      const s2 = songById(id); if (s2 && s2.lyrics === song.lyrics) { song = s2; renderService(); renderLive(); Track.show(song.yt); return; }
+    }
     song = songById(id) || null;
     const p = parseLyrics(song ? song.lyrics : '');
     lines = p.ls; slides = p.sl;
@@ -188,7 +192,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     if (!service.length) { ol.appendChild(el('li', 'empty', t('service_empty'))).style.border = '0'; return; }
     service.forEach((id, i) => {
       const s = songById(id), li = el('li', song && song.id === id ? 'cur' : '');
-      const b = el('button', 't', (favs.has(id) ? '★ ' : '') + s.title); b.title = s.title; b.onclick = () => loadSong(id);
+      const b = el('button', 't', (favs.has(id) ? '★ ' : '') + s.title); b.title = s.title; b.onclick = () => loadSong(id, { restart: true });
       const chip = el('span', 'chip', LANG_SHORT[s.lang] || '');
       const up = el('button', 'ic', '↑'); up.title = t('up'); up.disabled = i === 0;
       up.onclick = () => { [service[i - 1], service[i]] = [service[i], service[i - 1]]; saveService(); renderService(); };
@@ -1011,12 +1015,15 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; sc.onerror = () => { $('trackHint').textContent = t('no_internet'); }; document.head.appendChild(sc);
     },
     show(yt) {
+      // Same backing track as now (the same song re-opened, or a song sharing the track): keep playing, never restart.
+      if (yt && this.cur && this.cur.id === yt.id && (this.cur.start || 0) === (yt.start || 0)) { this.cur = yt; $('trackBox').hidden = false; return; }
       this.cur = yt || null; $('trackBox').hidden = !yt;
       if (!yt) { if (this.ready) try { this.player.stopVideo(); } catch (e) {} return; }
       $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkAuto').checked = !!S.trackAuto; $('trkVol').value = S.trackVol; $('trkSize').value = S.trackSize || 'compact'; $('ytWrap').classList.toggle('compact', (S.trackSize || 'compact') === 'compact');
       this.api(); if (this.ready) this.cue(yt, S.trackAuto); else this.pendingPlay = !!S.trackAuto;
     },
     cue(yt, play) {
+      this.cues = (this.cues || 0) + 1;
       const o = { videoId: yt.id, startSeconds: yt.start || 0 }; if (yt.end) o.endSeconds = yt.end;
       try { if (play && userGesture) this.player.loadVideoById(o); else this.player.cueVideoById(o); } catch (e) {}
     },
@@ -1338,6 +1345,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     lastDetectAt = now;
     // Look at the whole recent window and at the latest phrase alone, so a new song is not drowned by the old one.
     const cands = Core.songLookup(songIx, h, 8).concat(h.length > 160 ? Core.songLookup(songIx, h.slice(-160), 8) : []).filter(x => !song || x.id !== song.id);
+    // The current song is only left when what is heard is NOT in it. A chorus sung again, a repeated line or a line
+    // that also appears in another song (very common: "…துதியுங்கள்", "Hallelujah") must never restart or switch songs.
+    if (song && lines.length) {
+      const own = Math.max(Core.songScore(h.slice(-90), lines), Core.songScore(h.slice(-45), lines));
+      curScore = Math.max(curScore, own);
+      if (own >= Math.max(thr, .5)) { detect.n = 0; detect.id = null; return; }
+    }
     // 1) Today's service list is where the song almost always is: it is tried first, on its own.
     // 2) The rest of the library is consulted only after the service list has given nothing for 5 seconds,
     //    and then only for a song where a whole line is clearly matched - never on a few shared words.
@@ -1348,7 +1362,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const lib = fav || (quietFor > 5000 ? cands.filter(x => !service.includes(x.id) && x.score >= .72).sort((a, b) => b.score - a.score)[0] : null);
     const need = Math.max(thr + .1, .62);
     const best = inSvc && inSvc.score >= need ? inSvc : lib;
-    if (best && best.score > curScore + .1) {
+    if (best && best.score > curScore + .15) {
       detect.n = detect.id === best.id ? detect.n + 1 : 1; detect.id = best.id; detect.line = best.line;
       const inService = service.includes(best.id);
       if (detect.n >= (inService ? 2 : best.score >= .85 ? 2 : 3) && suggestId !== best.id) {
@@ -1902,10 +1916,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
+    open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
+    service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
   };
   init();
 })();
