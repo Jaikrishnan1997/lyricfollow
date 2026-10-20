@@ -1,5 +1,5 @@
 /* Lyric Follow service worker: keeps the app and Bible files available offline after the first visit. */
-const CACHE = 'lyricfollow-v7';
+const CACHE = 'lyricfollow-v8';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/i18n.js', 'js/core.js', 'js/bible.js', 'js/store.js', 'js/stage.js', 'js/app.js', 'js/bible-worker.js', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -12,7 +12,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.open(CACHE).then(async c => {
       const hit = await c.match(e.request);
       if (bible && hit) return hit;
-      try { const r = await fetch(e.request); if (r.ok) c.put(e.request, r.clone()); return r; }
+      // App files are always revalidated with the server so an update is picked up on the next open.
+      try { const r = await fetch(bible ? e.request : new Request(e.request, { cache: 'no-cache' })); if (r.ok) c.put(e.request, r.clone()); return r; }
       catch (err) { return hit || Response.error(); }
     }));
   } else if (u.hostname.endsWith('gstatic.com') || u.hostname.endsWith('googleapis.com')) {
