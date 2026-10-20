@@ -9,7 +9,7 @@
   const SONG_LANGS = [['ml-IN', 'മലയാളം'], ['ta-IN', 'தமிழ்'], ['en-IN', 'English (India)'], ['en-US', 'English (US)'], ['hi-IN', 'हिन्दी']];
   const LANG_SHORT = { 'ml-IN': 'ML', 'ta-IN': 'TA', 'en-IN': 'EN', 'en-US': 'EN', 'hi-IN': 'HI' };
   const DEF = {
-    lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 5,
+    lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
     versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, trackSize: 'compact', ch: 3, autoFollow: true, listenMode: 'songs'
@@ -339,8 +339,9 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     });
     const cur = ol.querySelector('.cur'); if (cur && tab === 'bible') cur.scrollIntoView({ block: 'nearest' });
   }
+  let lastBible = null;
   async function showBible(r) {
-    await ensureVersions();
+    await ensureVersions(); lastBible = r;
     screen.kind = 'bible'; screen.bible = r; screen.bgOnly = false; screen.black = false; screen.autoBlank = false;
     if (Listen.mode === 'songs') { S.listenMode = 'bible'; saveSettings(); Listen.start('bible'); }
     if (S.bk !== r.book || S.ch !== r.ch) { S.bk = r.book; S.ch = r.ch; saveSettings(); }
@@ -1073,7 +1074,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         }
         if (out.song && S.autoSwitch) { const id = service.find(x => (songById(x) || {}).title === out.song); if (id && (!song || id !== song.id)) switchToSong(id, 0); }
       }
-      if (out.ref) { const r = Bible.parseRef(String(out.ref), { exactOnly: true, needChapter: true, needVerse: true }); if (r) { if (Listen.mode === 'songs') setListenMode('bible'); pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
+      if (out.ref && (Listen.mode === 'bible' || S.autoMode)) { const r = Bible.parseRef(String(out.ref), { exactOnly: true, needChapter: true, needVerse: true }); if (r) { if (Listen.mode === 'songs') setListenMode('bible'); pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
       setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Gemini`, true);
     }
   };
@@ -1181,7 +1182,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
   function setListenMode(m) {
     S.listenMode = m; saveSettings();
-    if (m === 'bible') Track.pause();
+    if (m === 'bible') {
+      Track.pause();
+      // Preacher: the song leaves the screen; the last verse comes back, or the background until a verse is heard.
+      if (screen.kind === 'song' || screen.kind === 'idle') { if (lastBible) { screen.kind = 'bible'; screen.bible = lastBible; screen.bgOnly = false; } else screen.bgOnly = true; output(); renderSlides(); }
+    }
     if (m === 'songs' && song && screen.kind === 'bible') { screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
     if (Listen.mode && Listen.mode !== m) { if (m === 'bible') vbText = ''; Listen.start(m); } else updateListenUI();
   }
@@ -1193,12 +1198,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     LangID.sample(finals);
     if (Listen.mode === 'songs') {
       onSongSpeech(finals, interim);
-      // A clearly spoken reference during singing mode ("John chapter 3 verse 16") moves to the preacher.
-      if (finals) { const r = Bible.parseRef(finals.slice(-120), { exactOnly: true, needChapter: true, needVerse: true }); if (r && r.cue && r.tight && !r.fuzzy) { setListenMode('bible'); vbText = ''; pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
+      // Only with automatic switching on: a clearly spoken reference during singing ("John chapter 3 verse 16") moves to the preacher.
+      if (finals && S.autoMode) { const r = Bible.parseRef(finals.slice(-120), { exactOnly: true, needChapter: true, needVerse: true }); if (r && r.cue && r.tight && !r.fuzzy) { setListenMode('bible'); vbText = ''; pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
     } else if (Listen.mode === 'bible') {
       onBibleSpeech(finals, interim, conf == null ? 0.75 : conf);
-      // Singing that clearly matches a song while in preacher mode moves back to the songs.
-      if (songIx && (finals || interim[0])) {
+      // Only with automatic switching on: singing that clearly matches a song while in preacher mode moves back to the songs.
+      if (S.autoMode && songIx && (finals || interim[0])) {
         const h = Core.key(finals || interim[0]); const best = Core.songLookup(songIx, h, 1)[0];
         if (best && best.score >= .72) { singHits++; if (singHits >= 2) { singHits = 0; setListenMode('songs'); switchToSong(best.id, best.line); } } else singHits = 0;
       }
@@ -1320,7 +1325,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (!r) r = Bible.parseRef(tail, opts);
     if (r) {
       // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
-      const singing = songIx && Core.songLookup(songIx, Core.key(tail), 1).some(x => x.score >= .6);
+      const singing = S.autoMode && songIx && Core.songLookup(songIx, Core.key(tail), 1).some(x => x.score >= .6);
       // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
       // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
       const indic = /[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
@@ -1656,6 +1661,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
+    $('stAutoMode').checked = !!S.autoMode; $('stAutoMode').onchange = e => { S.autoMode = e.target.checked; saveSettings(); };
     $('packMl').onclick = () => Packs.install('ml'); $('packEn').onclick = () => Packs.install('en'); $('packTa').onclick = () => Packs.installLocal('vendor/songs-ta-fgs.json');
     $('bulkFiles').onchange = e => { const fs = [...e.target.files]; if (fs.length) Bulk.importFiles(fs, $('bulkService').checked); e.target.value = ''; };
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
@@ -1689,6 +1695,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if ((saved.v || 0) < 4) { S.vbLang = 'auto'; S.v = 4; saveSettings(); }
       // v5: the online recogniser is the primary engine (best accuracy in all three languages); verses show automatically.
       if ((saved.v || 0) < 5) { S.net = 'online'; S.vbAuto = true; S.v = 5; saveSettings(); }
+      // v6: Singing listens only for songs and Preacher only for Bible verses, unless automatic switching is turned on.
+      if ((saved.v || 0) < 6) { S.autoMode = false; S.v = 6; saveSettings(); }
     }
     else { const nl = (navigator.language || '').slice(0, 2); if (nl === 'ml' || nl === 'ta') S.lang = nl; }
     songs = await Store.all('songs').catch(() => []);
