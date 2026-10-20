@@ -1175,6 +1175,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       cand.sort((a, b) => Math.abs(mains.indexOf(a) - ci - .4) - Math.abs(mains.indexOf(b) - ci - .4));
       const pos = Core.place(Core.keyWords(text).split(/\s+/), lines, cand); if (!pos) return;
       const mj = mains.indexOf(pos.j);
+      if (mj > ci + 1 && pos.sc < 2.5) return;                         // two or more lines ahead needs 3+ matching words
       // singing speed (seconds per word) from the movement between two clips
       const gw = mains.slice(0, mj).reduce((a, i) => a + (lines[i].w || []).length, 0) + pos.p;
       if (this.lastPos && gw > this.lastPos.gw) { const v = (clipEnd - this.lastPos.t) / 1000 / (gw - this.lastPos.gw); if (v > .12 && v < 3) this.spw = this.spw * .6 + v * .4; }
@@ -1236,7 +1237,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // Repeated lines (chorus): of the equally good copies take the first one at or after the current place.
       const good = top.all.filter(x => x[1] >= top.score - .05).map(x => x[0]).sort((a, b) => a - b);
       const ahead = good.find(i => i >= follow.cur), line = ahead != null ? ahead : good[good.length - 1];
-      if (line >= follow.cur + 2 && good.length <= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); return; }
+      // Catching up 2+ lines needs real evidence: a line found nowhere else in the song, from 3+ heard words, seen in
+      // two clips running (or one long, unmistakable clip). Seen live: a single "இயேசுவைத் துதியுங்கள்" (in two
+      // lines) jumped a whole verse ahead, and Whisper - given the lyrics there as its hint - kept "confirming" it.
+      const nWords = Core.keyWords(text).split(/\s+/).filter(w => w.length >= 2).length;
+      if (line >= follow.cur + 2) {
+        if (good.length === 1 && nWords >= 3) {
+          this.fwd = this.fwd && this.fwd.line === line ? { line, n: this.fwd.n + 1 } : { line, n: 1 };
+          if (this.fwd.n >= 2 || (top.score >= .95 && nWords >= 5)) { this.fwd = null; this.back = { line: -1, n: 0 }; Lead.go(line); }
+        }
+        return;
+      }
+      this.fwd = null;
       if (ahead == null && line <= follow.cur - 3) {                     // song started again / a verse repeated
         this.back = this.back.line === line ? { line, n: this.back.n + 1 } : { line, n: 1 };
         if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
@@ -1277,8 +1289,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const main = lines.filter(l => !l.alt);
       // (Not the opening lines of every service song: seen live, Whisper then writes those lines over talk and music.)
       if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
+      // The current line and the next two only: lyrics further ahead in the hint get "heard" in unclear audio.
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
-      return main.slice(Math.max(0, at - 1), at + 4).map(l => l.text).join(' ').slice(0, 400);
+      return main.slice(at, at + 3).map(l => l.text).join(' ').slice(0, 400);
     },
     async send(a, clipEnd) {
       this.busy = true;
