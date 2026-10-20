@@ -266,7 +266,9 @@
         let best = null, tie = false;
         for (const [w, st] of cands) { if (w.length < 5) continue; const dig = /^\d/.test(w);
           for (const [a, b] of ALIAS_LIST) { if (a.length < 5 || /\d/.test(a) !== dig || (dig && a[0] !== w[0]) || Math.abs(a.length - w.length) > 2) continue; const d = lev(a, w);
-            if (d <= (dig ? (w.length >= 7 ? 2 : 1) : w.length >= 6 ? 2 : 1) && (!best || d < best.d)) { tie = false; best = { b, d, st }; } else if (best && d === best.d && b !== best.b) tie = true; } }
+            // Books in the sermon plan are expected: they may be heard a little worse and still win.
+            const pf = opts.prefer && opts.prefer.has(b) ? 1 : 0, dd = d - pf * .5;
+            if (d <= (dig ? (w.length >= 7 ? 2 : 1) : w.length >= 6 ? 2 : 1) + pf && (!best || dd < best.d)) { tie = false; best = { b, d: dd, st }; } else if (best && dd === best.d && b !== best.b) tie = true; } }
         if (best && tie && /^\d/.test(toks[best.st])) best = null;
         if (best) { f = { book: best.b, start: best.st, end: i + 1, score: 0 }; break; }
       }

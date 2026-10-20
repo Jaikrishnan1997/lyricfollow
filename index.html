@@ -312,6 +312,9 @@
     <div id="lmBible" class="lmbible" hidden>
       <label class="field"><span data-i18n="speaker_lang">Speaker's language</span><select id="vbLang2"></select></label>
       <label class="check"><input type="checkbox" id="vbAuto2"> <span data-i18n="auto_show">Show on screen automatically</span></label>
+      <label class="check"><input type="checkbox" id="vfOn"> <span data-i18n="follow_reading">Follow the verses as they are read</span></label>
+      <label class="field"><span data-i18n="plan_title">Sermon plan (passages)</span><input type="text" id="planInput" autocomplete="off" spellcheck="false" data-i18n-ph="plan_ph"></label>
+      <div class="vchips planchips" id="planChips"></div>
     </div>
     <p class="msg" id="fileWarn" hidden></p>
     <button class="wide" id="btnListen"></button>
@@ -322,6 +325,10 @@
     <div class="suggest searchhelp" id="searchHelp" hidden>
       <span data-i18n="no_song_match">This song is not in the library.</span>
       <a id="searchLink" href="#" target="_blank" rel="noopener" data-i18n="search_web">Search the web for these lyrics</a>
+    </div>
+    <div class="suggest refask" id="refAsk" hidden>
+      <span><span data-i18n="did_say">Did the preacher say</span> <b id="refAskLabel"></b>?</span>
+      <div class="row tight"><button class="primary" id="btnAskShow"><span data-i18n="show_it">Show</span> ⏎</button><button id="btnAskNo"><span data-i18n="ignore">Ignore</span> Esc</button></div>
     </div>
     <div class="suggest" id="suggest" hidden>
       <span><span data-i18n="sounds_like">Sounds like</span>: <b id="suggestTitle"></b></span>

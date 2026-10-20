@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, trackSize: 'compact', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -426,7 +426,40 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     }
     heardRefs.unshift({ r, src, at: Date.now(), sure: !!sure }); heardRefs.length = Math.min(heardRefs.length, 10);
     renderHeardRefs();
-    if (S.vbAuto && sure) showBible(r); else toast((sure ? '' : '? ') + Bible.refLabel(r, 'en'));
+    if (S.vbAuto && sure) { showBible(r); hideAsk(); }
+    else if (!sure && Listen.mode === 'bible') askRef(r);
+    else toast(Bible.refLabel(r, 'en'));
+  }
+  // Unsure reference: a big "Did the preacher say Matthew 5:1?" with Show (Enter) / Ignore (Esc) - one tap, never stuck.
+  let asked = null, askTimer = 0;
+  function askRef(r) {
+    asked = r; const lang = (Bible.VERSIONS.find(v => v.id === S.versions[0]) || {}).lang;
+    $('refAskLabel').textContent = Bible.refLabel(r, lang) + (lang === 'en' ? '' : ' · ' + Bible.refLabel(r, 'en'));
+    $('refAsk').hidden = false; clearTimeout(askTimer); askTimer = setTimeout(hideAsk, 15000);
+  }
+  function hideAsk() { asked = null; clearTimeout(askTimer); const b = $('refAsk'); if (b) b.hidden = true; }
+  function acceptAsk() { const r = asked; hideAsk(); if (r) { const h = heardRefs.find(x => refKey(x.r) === refKey(r)); if (h) h.sure = true; renderHeardRefs(); showBible(r); } }
+
+  /* ---------- Sermon plan: the passages for today, typed before the service ("Matthew 5; Romans 8:28") ----------
+   * Planned books may be heard a little worse and still be found, a planned chapter completes a half-heard
+   * reference, planned references show without asking, and each passage is one tap away. */
+  let planCache = { text: null, list: [] };
+  function planList() {
+    if (planCache.text === S.plan) return planCache.list;
+    const list = String(S.plan || '').split(/;|\n|,(?=\s*[^\d\s])/).map(x => x.trim()).filter(Boolean)
+      .map(x => { const r = Bible.parseRef(x); return r ? { book: r.book, ch: r.ch, v: r.hasVerse ? r.v : 0, ve: r.hasVerse ? r.ve : 0 } : null; }).filter(Boolean);
+    planCache = { text: S.plan, list }; return list;
+  }
+  const planBooks = () => new Set(planList().map(p => p.book));
+  const inPlan = r => planList().some(p => p.book === r.book && p.ch === r.ch);
+  function renderPlan() {
+    const box = $('planChips'); if (!box) return; box.innerHTML = '';
+    const lang = (Bible.VERSIONS.find(v => v.id === S.versions[0]) || {}).lang;
+    planList().forEach(p => {
+      const r = { book: p.book, ch: p.ch, v: p.v || 1, ve: p.v ? p.ve : 1 };
+      const b = el('button', '', p.v ? Bible.refLabel(r, lang) : Bible.bookName(p.book, lang) + ' ' + p.ch); b.type = 'button';
+      b.onclick = () => { hideAsk(); showBible(r); }; box.appendChild(b);
+    });
   }
   function renderHeardRefs() {
     for (const id of ['heardRefs', 'heardRefs2']) {
@@ -1340,7 +1373,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   function onBibleSpeech(finals, interim, conf) {
     if (finals) vbText = (vbText + ' ' + finals).slice(-400);
     const tail = (vbText + ' ' + (interim[0] || '')).slice(-90);
-    const opts = { exactOnly: true, needChapter: true, needVerse: true };
+    const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: planBooks() };
     // A reference said at the start of a long sentence ("John 3 16, for God so loved...") would fall off the
     // 90-character tail, so the whole finished phrase is tried first.
     let r = finals && finals.length > 90 ? Bible.parseRef(finals, opts) : null;
@@ -1354,13 +1387,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const need = r.ch === r.v ? .85 : indic ? .4 : .72;
       // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
       const bookOk = !r.fuzzy || Listen.engine === 'local';
-      const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9));
+      const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9) || (inPlan(r) && (r.tight || conf >= .5)));
       if (sure || finals) { pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', sure); vbText = ''; vbWordsAtQuote = 0; partRef = null; }
       return;
     }
     if (finals && pieceRef(finals)) return;
+    if (verseFollow(finals, interim)) return;
     const words = vbText.trim().split(/\s+/).length;
-    if (finals && !quoteBusy && words - vbWordsAtQuote >= 5) {
+    if (finals && !quoteBusy && words - vbWordsAtQuote >= 5 && Date.now() - VF.at > 8000) {
       vbWordsAtQuote = words; quoteBusy = true;
       const lang = (Listen.engine === 'local' || S.vbLang === 'auto' ? detectScript(vbText) : S.vbLang.slice(0, 2));
       const en = S.versions.find(v => (Bible.VERSIONS.find(x => x.id === v) || {}).lang === 'en') || 'kjv';
@@ -1380,8 +1414,16 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const now = Date.now();
     if (p.book != null) partRef = { book: p.book, ch: p.ch, v: p.v, at: now };
     else if (partRef && now - partRef.at < 30000) { if (p.ch != null) partRef.ch = p.ch; if (p.v != null) partRef.v = p.v; partRef.at = now; }
+    else if (p.ch != null && planList().filter(x => x.ch === p.ch).length === 1 && !(screen.bible && screen.bible.ch === p.ch)) {
+      const m = planList().find(x => x.ch === p.ch); partRef = { book: m.book, ch: p.ch, v: p.v, at: now };   // another planned chapter
+    }
     else if (p.v != null && screen.kind === 'bible' && screen.bible && now - lastRefAt < 300000) partRef = { book: screen.bible.book, ch: p.ch != null ? p.ch : screen.bible.ch, v: p.v, at: now };
+    else if (p.ch != null) {                  // "<misheard book> 5-ാം അധ്യായം 3-ാം വാക്യം": the one planned chapter 5
+      const m = planList().filter(x => x.ch === p.ch); if (m.length !== 1) return false;
+      partRef = { book: m[0].book, ch: p.ch, v: p.v, at: now };
+    }
     else return false;
+    if (partRef.ch == null) { const m = planList().filter(x => x.book === partRef.book); if (m.length && m.every(x => x.ch === m[0].ch)) partRef.ch = m[0].ch; }
     const r = partRef;
     if (r.ch == null && r.v == null) return false;           // only a book name so far: wait quietly
     if (r.ch != null && r.v != null) {
@@ -1391,6 +1433,52 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       return true;
     }
     toast(Bible.bookName(r.book, S.lang) + ' ' + (r.ch != null ? r.ch : '?') + ':' + (r.v != null ? r.v : '?') + ' …');
+    return true;
+  }
+  /* ---------- Verse follow: the verses move as the preacher reads them ----------
+   * The chapter on screen is cut into short pieces (about 8 words) and followed exactly like song lines: the next
+   * piece moves as soon as it is clearly heard, jumps need repeated confirmation. The spoken language's Bible is
+   * used (Malayalam 1910 / Tamil OV / the chosen English version), with the other loaded versions of the same
+   * language as alternatives, since preachers do not always read the same translation. */
+  const VF = { key: '', lines: [], vOf: [], first: [], st: { cur: -1, pend: -1, hits: 0 }, heard: '', shown: '', at: 0 };
+  function vfVersion() {
+    const l = (Listen.lang || '').slice(0, 2);
+    if (l === 'ml') return 'mal1910'; if (l === 'ta') return 'tamov';
+    return S.versions.find(v => (Bible.VERSIONS.find(x => x.id === v) || {}).lang === 'en') || 'kjv';
+  }
+  function vfPrepare(r) {
+    const vid = vfVersion(), key = vid + ':' + r.book + ':' + r.ch;
+    if (VF.key === key) return true;
+    const verses = Bible.chapter(vid, r.book, r.ch);
+    if (!verses.length) { if (!Bible.loaded(vid)) Bible.load(vid).catch(() => {}); return false; }
+    const lang = (Bible.VERSIONS.find(x => x.id === vid) || {}).lang;
+    const others = Bible.VERSIONS.filter(x => x.lang === lang && x.id !== vid && Bible.loaded(x.id)).map(x => Bible.chapter(x.id, r.book, r.ch));
+    const texts = [], vOf = [], first = [], alts = others.map(() => []);
+    const cut = (t, n, k) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.slice(Math.floor(k * w.length / n), Math.floor((k + 1) * w.length / n)).join(' '); };
+    verses.forEach((t, i) => {
+      const n = Math.max(1, Math.round(t.split(/\s+/).length / 8)); first[i] = texts.length;
+      for (let k = 0; k < n; k++) { texts.push(cut(t, n, k)); vOf.push(i + 1); others.forEach((o, x) => alts[x].push(cut(o[i], n, k))); }
+    });
+    const lines = Core.prepare(texts), altLines = alts.map(a => Core.prepare(a));
+    lines.forEach((ln, j) => { const a = altLines.map(x => x[j]).filter(x => x && x.key.length >= 3); if (a.length) ln.alts = a; });
+    Object.assign(VF, { key, lines, vOf, first, shown: '' });
+    return true;
+  }
+  function verseFollow(finals, interim) {
+    if (S.verseFollow === false || !S.vbAuto || screen.kind !== 'bible' || !screen.bible) return false;
+    const r = screen.bible; if (!vfPrepare(r)) return false;
+    // In step with the screen: a new reference, or the operator pressed next/previous.
+    if (VF.shown !== refKey(r)) { VF.shown = refKey(r); VF.st = { cur: VF.first[r.v - 1] != null ? VF.first[r.v - 1] : 0, pend: -1, hits: 0 }; VF.heard = ''; }
+    if (finals) VF.heard = (VF.heard + ' ' + Core.keyWords(finals)).slice(-300);
+    const thr = S.thr / 100;
+    let moved = false;
+    for (const alt of (interim.length ? interim.slice(0, 2) : [''])) {
+      if (Core.decide(VF.st, VF.lines, (VF.heard + ' ' + Core.keyWords(alt)).slice(-300), thr)) { moved = true; break; }
+    }
+    const reading = VF.st.score >= thr; if (reading) VF.at = Date.now();
+    if (!moved) return reading;
+    const v = VF.vOf[VF.st.cur];
+    if (v < r.v || v > r.ve) { const nr = { book: r.book, ch: r.ch, v, ve: v }; VF.shown = refKey(nr); showBible(nr); }   // inside a shown range: stay
     return true;
   }
   function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : 'en'; }
@@ -1586,6 +1674,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     else if (k === 'c' || k === 'C') { screen.bgOnly = !screen.bgOnly; output(); }
     else if (k === 'a' || k === 'A') { S.autoFollow = !S.autoFollow; $('autoFollow').checked = S.autoFollow; saveSettings(); }
     else if (k === 'l' || k === 'L') { Listen.mode ? Listen.stop() : Listen.start(); }
+    else if (k === 'Enter' && asked) { acceptAsk(); e.preventDefault(); }
+    else if (k === 'Escape' && asked) { hideAsk(); e.preventDefault(); }
   }
 
   function openPicker() {
@@ -1624,6 +1714,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setListenMode(b.dataset.lm));
     $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
     $('vbAuto2').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto').checked = S.vbAuto; saveSettings(); };
+    $('vfOn').checked = S.verseFollow !== false; $('vfOn').onchange = e => { S.verseFollow = e.target.checked; saveSettings(); };
+    $('planInput').value = S.plan || '';
+    $('planInput').oninput = () => { S.plan = $('planInput').value; saveSettings(); renderPlan(); };
+    renderPlan(); ensureVersions().then(renderPlan);
+    $('btnAskShow').onclick = acceptAsk; $('btnAskNo').onclick = hideAsk;
     const listenClick = () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); else toggleListen(); };
     // On phones any tap on the page counts as the user gesture the browser wants: resume without hunting for the button.
     document.addEventListener('touchend', () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); }, { passive: true });
@@ -1768,10 +1863,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   window.LF_DEBUG = {
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
+    setLang(l) { Listen.lang = l; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
   };
   init();
 })();
