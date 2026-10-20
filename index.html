@@ -102,9 +102,10 @@
           </div>
           <label class="field"><span data-i18n="lyrics">Lyrics</span><textarea id="sfLyrics" rows="16"></textarea><small data-i18n="lyrics_hint"></small></label>
           <label class="field"><span data-i18n="track">Backing track (YouTube link, with time)</span>
-            <div class="row tight"><input type="text" id="sfYt" placeholder="https://youtu.be/…?t=108"><button type="button" id="sfYtPick" data-i18n="track_pick">Choose</button></div>
+            <div class="row tight"><input type="text" id="sfYt" placeholder="https://youtu.be/…?t=108"><button type="button" id="sfYtPick" data-i18n="track_pick">Choose</button><button type="button" id="sfYtFind" title="YouTube">🔎 <span data-i18n="yt_find">Find on YouTube</span></button></div>
             <small id="sfYtInfo" class="hint"></small></label>
           <div class="row">
+            <button type="button" id="sfFav" class="favbtn" hidden>☆ Favourite</button>
             <button type="button" id="sfDelete" class="danger" data-i18n="delete">Delete</button>
             <button type="button" id="sfService" data-i18n="add_to_service">Add to service</button>
             <button type="submit" class="primary" data-i18n="save">Save</button>

@@ -188,7 +188,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     if (!service.length) { ol.appendChild(el('li', 'empty', t('service_empty'))).style.border = '0'; return; }
     service.forEach((id, i) => {
       const s = songById(id), li = el('li', song && song.id === id ? 'cur' : '');
-      const b = el('button', 't', s.title); b.title = s.title; b.onclick = () => loadSong(id);
+      const b = el('button', 't', (favs.has(id) ? '★ ' : '') + s.title); b.title = s.title; b.onclick = () => loadSong(id);
       const chip = el('span', 'chip', LANG_SHORT[s.lang] || '');
       const up = el('button', 'ic', '↑'); up.title = t('up'); up.disabled = i === 0;
       up.onclick = () => { [service[i - 1], service[i]] = [service[i], service[i - 1]]; saveService(); renderService(); };
@@ -241,9 +241,26 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     if (!s._k || s._ku !== s.updated) { s._k = Core.key(s.title + ' ' + s.lyrics); s._ku = s.updated; }
     return s._k.includes(qk);
   }
+  /* ---------- Favourites: songs this church sings, starred on this device; listed first and found first ---------- */
+  let favs = new Set();
+  function toggleFav(id) {
+    favs.has(id) ? favs.delete(id) : favs.add(id);
+    Store.set('favs', [...favs]).catch(() => {});
+    renderSongList(); renderService(); if ($('pickDlg').open) renderPicker(); renderFavBtn();
+  }
+  function star(id) {
+    const st = el('span', 'star' + (favs.has(id) ? ' on' : ''), favs.has(id) ? '★' : '☆');
+    st.title = t('favourite'); st.setAttribute('role', 'button');
+    st.onclick = e => { e.stopPropagation(); toggleFav(id); };
+    return st;
+  }
+  function addFavOption(sel) { const o = document.createElement('option'); o.value = 'fav'; o.textContent = '★ ' + t('favourites'); sel.insertBefore(o, sel.options[1] || null); }
+  function renderFavBtn() { const b = $('sfFav'); if (!b) return; const on = editingId && favs.has(editingId); b.hidden = !editingId; b.textContent = (on ? '★ ' : '☆ ') + t('favourite'); b.classList.toggle('on', !!on); }
   function sortedSongs(q, lang) {
     const ql = (q || '').trim().toLowerCase(), qk = Core.key(ql);
-    return songs.filter(s => (!lang || s.lang === lang) && songMatches(s, ql, qk)).sort((a, b) => a.title.localeCompare(b.title));
+    const onlyFav = lang === 'fav'; if (onlyFav) lang = '';
+    return songs.filter(s => (!lang || s.lang === lang) && (!onlyFav || favs.has(s.id)) && songMatches(s, ql, qk))
+      .sort((a, b) => (favs.has(b.id) - favs.has(a.id)) || a.title.localeCompare(b.title));
   }
   function renderSongList() {
     const ul = $('songList'); ul.innerHTML = '';
@@ -251,7 +268,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     if (!list.length) { ul.appendChild(el('li', 'empty', t('no_songs'))); return; }
     list.forEach(s => {
       const li = el('li'), b = el('button', s.id === editingId ? 'sel' : '');
-      b.append(el('span', 't', s.title), el('span', 'chip', LANG_SHORT[s.lang] || ''));
+      b.append(star(s.id), el('span', 't', s.title), el('span', 'chip', LANG_SHORT[s.lang] || ''));
+      if (s.yt && s.yt.id) b.append(el('span', 'chip yt', '▶'));
       if (service.includes(s.id)) b.append(el('span', 'chip', '✓'));
       b.onclick = () => editSong(s.id);
       li.appendChild(b); ul.appendChild(li);
@@ -265,7 +283,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     bgOptions($('sfBg'), true); $('sfBg').value = s ? (s.bg || '') : '';
     $('sfLyrics').value = s ? s.lyrics : '';
     $('sfYt').value = s && s.yt ? Track.link(s.yt) : ''; Track.describe();
-    $('sfDelete').hidden = !s;
+    $('sfDelete').hidden = !s; renderFavBtn();
     $('sfService').hidden = !s;
     $('sfService').textContent = s && service.includes(s.id) ? t('in_service') : t('add_to_service');
     $('sfService').disabled = !!(s && service.includes(s.id));
@@ -892,7 +910,11 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
         // An updated bundled pack: the same song gets the new lyrics (same id, so service lists keep it).
         const old = replace && byTitle.get(p.title);
-        if (old) { if (old.lyrics !== lyrics) { Object.assign(old, { lyrics, updated: now }); if (p.yt && p.yt.id) old.yt = { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 }; recs.push(old); } continue; }
+        if (old) {
+          const ytNew = p.yt && p.yt.id && !(old.yt && old.yt.id);       // a YouTube link was found for it (never replaces the user's own)
+          if (old.lyrics !== lyrics || ytNew) { Object.assign(old, { lyrics, updated: now }); if (p.yt && p.yt.id && (ytNew || old.lyrics === lyrics)) old.yt = { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 }; recs.push(old); }
+          continue;
+        }
         const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
         recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: p.yt && p.yt.id ? { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 } : null, src: p.src || '', created: now, updated: now });
       }
@@ -1321,7 +1343,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     //    and then only for a song where a whole line is clearly matched - never on a few shared words.
     const inSvc = cands.filter(x => service.includes(x.id)).sort((a, b) => b.score - a.score)[0];
     const quietFor = now - lastMatchAt;
-    const lib = quietFor > 5000 ? cands.filter(x => !service.includes(x.id) && x.score >= .72).sort((a, b) => b.score - a.score)[0] : null;
+    // Favourites (the church's own songs) come before the rest of the library: after 2.5 s, on a slightly lower bar.
+    const fav = quietFor > 2500 ? cands.filter(x => !service.includes(x.id) && favs.has(x.id) && x.score >= .66).sort((a, b) => b.score - a.score)[0] : null;
+    const lib = fav || (quietFor > 5000 ? cands.filter(x => !service.includes(x.id) && x.score >= .72).sort((a, b) => b.score - a.score)[0] : null);
     const need = Math.max(thr + .1, .62);
     const best = inSvc && inSvc.score >= need ? inSvc : lib;
     if (best && best.score > curScore + .1) {
@@ -1660,7 +1684,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   function renderAll() {
     applyI18n(); renderNet(); renderSettings(); renderService(); renderLive(); renderSongList(); updateListenUI();
     fillLangSelect($('sfLang')); fillLangSelect($('ocrSongLang'));
-    const lf = $('songLangFilter'), lv = lf.value; fillLangSelect(lf, true); lf.value = lv;
+    const lf = $('songLangFilter'), lv = lf.value; fillLangSelect(lf, true); addFavOption(lf); lf.value = lv;
     if (tab === 'bible') { renderVChips(); renderBibleNav(); }
     if (tab === 'bg') renderBg();
     if (editingId || tab === 'songs') editSong(editingId);
@@ -1692,7 +1716,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (!list.length) { ul.appendChild(el('li', 'empty', t('no_songs'))); return; }
     list.forEach(s => {
       const li = el('li'), b = el('button');
-      b.append(el('span', 't', s.title), el('span', 'chip', LANG_SHORT[s.lang] || ''));
+      b.append(star(s.id), el('span', 't', s.title), el('span', 'chip', LANG_SHORT[s.lang] || ''));
       if (service.includes(s.id)) b.append(el('span', 'chip', '✓'));
       b.onclick = () => { if (!service.includes(s.id)) { service.push(s.id); saveService(); } $('pickDlg').close(); renderService(); if (!song) loadSong(s.id); };
       li.appendChild(b); ul.appendChild(li);
@@ -1741,6 +1765,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // songs
     $('songSearch').oninput = renderSongList;
     $('songLangFilter').onchange = renderSongList;
+    $('sfFav').onclick = () => { if (editingId) toggleFav(editingId); };
+    // No link yet: one tap searches YouTube for this song (most-viewed results first is YouTube's own ordering);
+    // copy the chosen video's link back into the box and Save.
+    $('sfYtFind').onclick = () => {
+      const title = ($('sfTitle').value || '').replace(/\(.*?\)/g, ' ').trim(); if (!title) return;
+      const hint = { 'ta-IN': 'tamil christian song', 'ml-IN': 'malayalam christian song', 'en-IN': 'hymn' }[$('sfLang').value] || 'christian song';
+      window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(title + ' ' + hint), '_blank', 'noopener');
+    };
     $('btnNewSong').onclick = () => editSong(null);
     $('songForm').onsubmit = async e => {
       e.preventDefault();
@@ -1849,11 +1881,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       for (const x of SAMPLES) { const s = { id: uid(), bg: '', created: Date.now(), updated: Date.now(), ...x }; songs.push(s); await Store.put('songs', s).catch(() => {}); }
       service = songs.map(s => s.id); saveService();
     } else service = (await Store.get('service').catch(() => null)) || [];
+    favs = new Set((await Store.get('favs').catch(() => null)) || []);
     for (const m of await Store.all('media').catch(() => [])) { try { media.set(m.id, { id: m.id, name: m.name, type: m.type, url: URL.createObjectURL(m.blob) }); } catch (e) {} }
 
     const css = document.createElement('style'); css.textContent = Stage.CSS; document.head.appendChild(css);
     wire();
-    fillLangSelect($('sfLang')); fillLangSelect($('songLangFilter'), true); fillLangSelect($('ocrSongLang'));
+    fillLangSelect($('sfLang')); fillLangSelect($('songLangFilter'), true); addFavOption($('songLangFilter')); fillLangSelect($('ocrSongLang'));
     rebuildSongIndex();
     renderAll(); setTab('live');
     if (service[0]) loadSong(service[0]);
@@ -1872,7 +1905,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
   };
   init();
 })();
