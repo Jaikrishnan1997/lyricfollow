@@ -717,7 +717,9 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       this.lang = mode === 'songs' ? (song ? song.lang : 'ml-IN') : (S.vbLang === 'auto' ? (this.lastBibleLang || { ml: 'ml-IN', ta: 'ta-IN', en: 'en-IN' }[S.lang] || 'ml-IN') : S.vbLang);
       lastEventAt = Date.now(); hunt.i = 0; hunt.at = Date.now();
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
-      if (engine === 'local' || (!HOSTED && location.protocol !== 'file:')) {   // the microphone also feeds language detection (laptop)
+      // Laptop: the microphone also feeds the level meter and language detection. iPhone/iPad: keeping the
+      // microphone open makes Safari treat the page as "already capturing", so the recogniser may restart itself.
+      if (engine === 'local' || (!HOSTED && location.protocol !== 'file:') || IOS) {
         this.waitingMic = true; updateListenUI();
         const ok = await Mic.start();
         this.waitingMic = false;
