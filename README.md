@@ -127,6 +127,12 @@ Today's service list is tried first, on its own. Only when nothing in the servic
 whole library consulted, and then a song is chosen only when a whole line matches clearly (score ≥ 0.72, confirmed on
 a second phrase) - a few shared words never switch the screen.
 
+## Tamil song pack (vendor/songs-ta-fgs.json)
+
+159 Tamil songs whose rights holders published them on freegospelsongs.in (a non-profit site that describes them as
+copyright-free and invites sharing; terms: free for personal devotion, church and outreach programs, no commercial use).
+Each song carries its album page as source. Voice & Import → *தமிழ் · local pack* loads them into the library.
+
 ## Optional: Gemini AI listening (Online mode)
 
 Settings → *AI listening (Gemini)*: paste your own Gemini API key (free at https://aistudio.google.com/apikey) and tick
