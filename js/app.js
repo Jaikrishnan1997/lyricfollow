@@ -1208,7 +1208,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    *  - another service song clearly sung (two clips running) while the open one no longer fits: it changes song.
    * Otherwise it stays with the song until it ends - shared lines and repeated choruses never switch it. */
   const Svc = {
-    ix: null, key: '', other: { id: null, n: 0 }, back: { line: -1, n: 0 }, log: [],
+    ix: null, key: '', other: { id: null, n: 0 }, back: { line: -1, n: 0 }, log: [], okId: null, okAt: 0,
     index() {
       const key = service.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|');
       if (key !== this.key) { this.key = key; this.ix = Core.serviceIndex(service.map(id => songById(id)).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) }))); }
@@ -1234,6 +1234,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       }
       if (mine && top.score >= .5) this.other = { id: null, n: 0 };
       if (top.score < .6) return;
+      this.okId = song.id; this.okAt = Date.now();                        // the audio confirms the open song
       // Repeated lines (chorus): of the equally good copies take the first one at or after the current place.
       const good = top.all.filter(x => x[1] >= top.score - .05).map(x => x[0]).sort((a, b) => a - b);
       const ahead = good.find(i => i >= follow.cur), line = ahead != null ? ahead : good[good.length - 1];
@@ -1255,7 +1256,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       } else this.back = { line: -1, n: 0 };
     },
     open(id, line) {
-      this.other = { id: null, n: 0 }; this.back = { line: -1, n: 0 };
+      this.other = { id: null, n: 0 }; this.back = { line: -1, n: 0 }; this.okId = id; this.okAt = Date.now();
       if (song && song.id === id) { Lead.go(line); return; }
       loadSong(id, { line }); toast(t('sounds_like') + ': ' + songById(id).title);
     }
@@ -1284,6 +1285,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     prompt() {
       if (Listen.mode !== 'songs' || !song || !lines.length) return '';
+      // Only a song the audio itself has confirmed in the last 12 s gets its lyrics as the hint. Seen live: with the
+      // wrong song open, its lyrics in the hint made Whisper write that song's words over a different song, and
+      // the wrong song "matched". Without a hint Whisper writes what is sung and the service index finds the song.
+      if (!(Svc.okId === song.id && Date.now() - Svc.okAt < 12000)) return '';
       // Before the song has started only its first line is given: with more, Whisper "hears" later lyric words in
       // the noise before the singing (seen live: it jumped to line 4 during the intro).
       const main = lines.filter(l => !l.alt);
