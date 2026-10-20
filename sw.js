@@ -1,5 +1,5 @@
 /* Lyric Follow service worker: keeps the app and Bible files available offline after the first visit. */
-const CACHE = 'lyricfollow-v32';
+const CACHE = 'lyricfollow-v33';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/i18n.js', 'js/core.js', 'js/bible.js', 'js/store.js', 'js/stage.js', 'js/app.js', 'js/bible-worker.js', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

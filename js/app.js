@@ -1243,7 +1243,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const res = Core.serviceFind(this.index(), Core.keyWords(text).split(/\s+/), 4); const top = res[0]; if (!top) return;
       const mine = song && res.find(r => r.id === song.id);
       this.log.push([Math.round(performance.now() / 100) / 10, (songById(top.id) || {}).title?.slice(0, 10), top.line, +top.score.toFixed(2), mine ? +mine.score.toFixed(2) : null, this.other.n]); if (this.log.length > 60) this.log.shift();
-      if (!song || (top.id !== song.id && follow.cur < 0 && top.score >= .6)) { if (top.score >= .6) this.open(top.id, top.line); return; }
+      const nW = Core.keyWords(text).split(/\s+/).filter(w => w.length >= 2).length;
+      if (nW < 2) return;                                                  // one word says nothing about the song
+      if (!song || (top.id !== song.id && follow.cur < 0 && top.score >= .6)) { if (top.score >= .6 && nW >= 3) this.open(top.id, top.line); return; }
       if (top.id !== song.id) {
         const fits = mine ? mine.score : 0;
         // Clearly another song: it fits well and much better than the open one (praise songs share many words).
@@ -1343,7 +1345,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
-        if (/^(thank you[.!]?|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
+        if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
         if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);

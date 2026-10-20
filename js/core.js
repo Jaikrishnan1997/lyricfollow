@@ -289,7 +289,9 @@
     const bySong = new Map();
     for (const [r, v] of acc) {
       const row = ix.rows[r], hc = Math.min(1, v / (heardTot || 1)), lc = Math.min(1, v / row.total);
-      const sc = Math.sqrt(hc * Math.max(lc, Math.min(1, hc * .8)));      // explains what was heard, and covers the line (or its part)
+      // explains what was heard, and covers the line (or a good part of it - only when 3+ words were heard:
+      // a single word, e.g. Whisper's "வணக்கம்!" over silence, matched a Malayalam line by its skeleton alone)
+      const sc = Math.sqrt(hc * (hw.length >= 3 ? Math.max(lc, Math.min(1, hc * .8)) : lc));
       const b = bySong.get(row.id); if (!b || sc > b.score) bySong.set(row.id, { id: row.id, line: row.line, score: sc, all: (b ? b.all : []).concat([[row.line, sc]]) }); else b.all.push([row.line, sc]);
     }
     return [...bySong.values()].sort((a, b) => b.score - a.score).slice(0, limit || 3);
