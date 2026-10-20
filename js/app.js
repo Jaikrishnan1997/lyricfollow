@@ -103,6 +103,10 @@
       const s2 = songById(id); if (s2 && s2.lyrics === song.lyrics) { song = s2; renderService(); renderLive(); Track.show(song.yt); return; }
     }
     song = songById(id) || null;
+    // A song the operator opened is trusted like one the audio confirmed: Whisper gets its lyrics as the hint
+    // straight away (that is what made it write the lines almost word for word). Songs opened automatically
+    // must first be confirmed by the singing.
+    if (song && (!opts || opts.restart)) { try { Svc.okId = song.id; Svc.okAt = Date.now() + 10 * 60000; Svc.mineAt = Date.now(); } catch (e) { /* first song at start-up, before Svc exists */ } }
     const p = parseLyrics(song ? song.lyrics : '');
     lines = p.ls; slides = p.sl;
     const startLine = opts && opts.line != null && lines[opts.line] ? opts.line : -1;
@@ -1245,6 +1249,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       this.log.push([Math.round(performance.now() / 100) / 10, (songById(top.id) || {}).title?.slice(0, 10), top.line, +top.score.toFixed(2), mine ? +mine.score.toFixed(2) : null, this.other.n]); if (this.log.length > 60) this.log.shift();
       const nW = Core.keyWords(text).split(/\s+/).filter(w => w.length >= 2).length;
       if (nW < 2) return;                                                  // one word says nothing about the song
+      // Singing heard for 25 s and none of it fits the open song: stop trusting it, so Whisper gets no hint from
+      // it (a wrong song's lyrics in the hint make Whisper write that song) and the right one can be found.
+      if (song && nW >= 3 && this.okId === song.id) { if (!this.mineAt) this.mineAt = Date.now(); if (Date.now() - this.mineAt > 25000) this.okAt = 0; }
       if (!song || (top.id !== song.id && follow.cur < 0 && top.score >= .6)) { if (top.score >= .6 && nW >= 3) this.open(top.id, top.line); return; }
       if (top.id !== song.id) {
         const fits = mine ? mine.score : 0;
@@ -1260,7 +1267,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       }
       if (mine && top.score >= .5) this.other = { id: null, n: 0 };
       if (top.score < .6) return;
-      this.okId = song.id; this.okAt = Date.now();                        // the audio confirms the open song
+      this.okId = song.id; this.okAt = Math.max(this.okAt, Date.now()); this.mineAt = Date.now();   // the audio confirms the open song
       // Repeated lines (chorus): of the equally good copies take the first one at or after the current place.
       const good = top.all.filter(x => x[1] >= top.score - .05).map(x => x[0]).sort((a, b) => a - b);
       const ahead = good.find(i => i >= follow.cur), line = ahead != null ? ahead : good[good.length - 1];
