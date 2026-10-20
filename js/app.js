@@ -1134,12 +1134,19 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const text = String(out.text || '').trim();
       if (text) { this.lastText = text.slice(-120); onText(text, [], 0.9); }
       if (Listen.mode === 'songs') {
-        const ln = Number(out.line);
+        let ln = Number(out.line);
+        // A repeated line (chorus) has several copies: take the copy at or just after the current place, never the first one.
+        if (song && Number.isInteger(ln) && ln >= 0 && ln < lines.length && follow.cur >= 0 && lines[ln].key) {
+          const same = lines.map((l, i) => i).filter(i => !lines[i].alt && lines[i].key === lines[ln].key);
+          if (same.length > 1) ln = same.find(i => i >= follow.cur) ?? same[same.length - 1];
+        }
         if (song && Number.isInteger(ln) && ln >= 0 && ln < lines.length && !lines[ln].alt && ln !== follow.cur) {
           follow.cur = ln; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
           if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
         }
-        if (out.song && S.autoSwitch) { const id = service.find(x => (songById(x) || {}).title === out.song); if (id && (!song || id !== song.id)) switchToSong(id, 0); }
+        // Another song only when the words are not in the current one (shared lines and choruses never switch).
+        const inCur = song && text && Core.songScore(Core.keyWords(text).slice(-90), lines) >= .5;
+        if (out.song && S.autoSwitch && !inCur) { const id = service.find(x => (songById(x) || {}).title === out.song); if (id && (!song || id !== song.id)) switchToSong(id, 0); }
       }
       if (out.ref && (Listen.mode === 'bible' || S.autoMode)) { const r = Bible.parseRef(String(out.ref), { exactOnly: true, needChapter: true, needVerse: true }); if (r) { if (Listen.mode === 'songs') setListenMode('bible'); pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
       setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Gemini`, true);
@@ -1216,6 +1223,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const lastHit = Listen.mode === 'bible' ? hunt.lockedAt : Math.max(lastMatchAt, hunt.lockedAt);
     const locked = now - lastHit < (songs ? 20000 : 25000);
     const dwell = Listen.engine === 'cloud' ? (Listen.mode === 'bible' ? 4000 : 12000) : 10000;
+    // Singing and nothing recognised for 15 s in another language: go back to the open song's language.
+    if (songs && song && Listen.lang !== song.lang && now - lastSpeechAt > 15000 && now - hunt.at > 15000) { hunt.at = now; Listen.setLang(song.lang); return; }
     if (!locked && speaking && (now - hunt.at > dwell || hunt.misses >= 2)) {
       hunt.misses = 0; hunt.at = now;
       const cur = langs.indexOf(Listen.lang); hunt.i = (cur + 1) % langs.length;
