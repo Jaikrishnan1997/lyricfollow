@@ -848,6 +848,23 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       x = x.replace(/^\((?:ട്യൂൺ|tune|രാഗം|Tune)[^)]*\)\s*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
       return x;
     },
+    // A pack file placed in vendor/ on this computer (not part of the published app), e.g. songs licensed for
+    // church use by their publishers. Format: {songs:[{title, lang, lyrics, src, artist}]}.
+    async installLocal(file) {
+      if (this.busy) return; this.busy = true; const st = $('packStatus'); let added = 0, skipped = 0;
+      try {
+        st.textContent = t('loading');
+        const r = await fetch(file, { cache: 'no-cache' }); if (!r.ok) throw new Error(file + ' ' + r.status);
+        const pack = await r.json(); const seen = new Set(songs.map(s => Bulk.dupKey(s)));
+        for (const p of pack.songs || []) {
+          const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
+          const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
+          await saveSong({ title: p.title, lang: p.lang || Bulk.lang(lyrics), bg: '', lyrics, src: p.src || '' }, null); added++;
+        }
+        rebuildSongIndex(); renderSongList(); st.textContent = `${added} ${t('packs_done')} · ${skipped} ${t('packs_skip')}`;
+      } catch (e) { st.textContent = 'Pack: ' + e.message; }
+      this.busy = false;
+    },
     async install(which) {
       if (this.busy) return; this.busy = true;
       const st = $('packStatus'); const host = which === 'ml' ? 'ml.wikisource.org' : 'en.wikisource.org';
@@ -1610,7 +1627,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
-    $('packMl').onclick = () => Packs.install('ml'); $('packEn').onclick = () => Packs.install('en');
+    $('packMl').onclick = () => Packs.install('ml'); $('packEn').onclick = () => Packs.install('en'); $('packTa').onclick = () => Packs.installLocal('vendor/songs-ta-fgs.json');
     $('bulkFiles').onchange = e => { const fs = [...e.target.files]; if (fs.length) Bulk.importFiles(fs, $('bulkService').checked); e.target.value = ''; };
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
     $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };

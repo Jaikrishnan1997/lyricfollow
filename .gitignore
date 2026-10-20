@@ -1,3 +1,4 @@
 voice/
 test/
 *.log
+vendor/songs-ta-fgs.json
