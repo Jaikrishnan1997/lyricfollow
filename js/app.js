@@ -42,7 +42,17 @@
   function toast(msg) { const e = $('toast'); e.textContent = msg; e.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove('show'), 2600); }
 
   let saveTimer;
-  function saveSettings() { clearTimeout(saveTimer); saveTimer = setTimeout(() => Store.set('settings', S).catch(() => {}), 300); }
+  // Several tabs of the app share one settings record. Each tab tells the others what it saved, so an older tab
+  // never writes back stale settings over a newer change (seen: a Groq key pasted in one tab was overwritten by
+  // another tab still holding the old one).
+  const settingsBus = (() => { try { return new BroadcastChannel('lyricfollow-settings'); } catch (e) { return null; } })();
+  function saveSettings() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { Store.set('settings', S).catch(() => {}); try { settingsBus && settingsBus.postMessage(JSON.parse(JSON.stringify(S))); } catch (e) {} }, 300); }
+  if (settingsBus) settingsBus.onmessage = e => {
+    const n = e.data || {}; if (typeof n !== 'object') return;
+    for (const k of ['groq', 'groqKey', 'groqModel', 'groqBible', 'gemini', 'geminiKey', 'geminiModel', 'plan', 'packs', 'packVer']) if (k in n) S[k] = n[k];
+    const set = (id, v, chk) => { const el2 = document.getElementById(id); if (el2) chk ? (el2.checked = !!v) : (el2.value = v || ''); };
+    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey); set('planInput', S.plan);
+  };
   function saveService() { Store.set('service', service).catch(() => {}); }
 
   /* ---------- songs ---------- */
