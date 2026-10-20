@@ -82,7 +82,7 @@
     const p = parseLyrics(song ? song.lyrics : '');
     lines = p.ls; slides = p.sl;
     const startLine = opts && opts.line != null && lines[opts.line] ? opts.line : -1;
-    follow.cur = startLine; follow.pend = -1; follow.hits = 0; follow.score = 0;
+    follow.cur = startLine; follow.pend = -1; follow.hits = 0; follow.score = 0; if (typeof Lead !== 'undefined') Lead.reset();
     heardKey = ''; lastMatchAt = Date.now(); screen.autoBlank = false; hideSuggest();
     if (!opts || !opts.keepScreen) { screen.kind = song ? 'song' : 'idle'; screen.bgOnly = false; }
     if (song && Listen.mode === 'bible') { S.listenMode = 'songs'; saveSettings(); Listen.start('songs'); }
@@ -1158,8 +1158,50 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    * around the current place (its "prompt"), so it writes the words that are being sung in the song's own spelling.
    * Clips that are silence or music only are not sent, and segments Whisper itself marks as "no speech" are dropped
    * (Whisper otherwise repeats its prompt over instrumental parts). */
+  /* Look-ahead for clip-based listening (Whisper, Gemini, offline). A clip arrives 1-4 s after it was sung, so
+   * following only what was recognised always lags a line behind. The newest words of each clip say exactly where
+   * the singer was when the clip ended (line and word); with the singing speed measured from clip to clip, the
+   * next line is shown when the singer reaches it - and at the end of a line, straight away. Never more than one
+   * line beyond what was actually heard, so a pause or an instrumental part cannot run the screen away. */
+  const Lead = {
+    timer: null, spw: .5, lastPos: null, heardJ: -1,
+    reset() { clearTimeout(this.timer); this.timer = null; this.lastPos = null; this.heardJ = -1; },
+    mains() { const m = []; lines.forEach((l, i) => { if (!l.alt && l.key) m.push(i); }); return m; },
+    heard(text, clipEnd) {
+      if (!song || !lines.length || !S.autoFollow) return;
+      const mains = this.mains(); if (!mains.length) return;
+      const ci = Math.max(0, mains.indexOf(follow.cur));
+      const cand = mains.slice(Math.max(0, ci - 1), ci + 4);          // nearest lines first: current, then ahead
+      cand.sort((a, b) => Math.abs(mains.indexOf(a) - ci - .4) - Math.abs(mains.indexOf(b) - ci - .4));
+      const pos = Core.place(Core.keyWords(text).split(/\s+/), lines, cand); if (!pos) return;
+      const mj = mains.indexOf(pos.j);
+      // singing speed (seconds per word) from the movement between two clips
+      const gw = mains.slice(0, mj).reduce((a, i) => a + (lines[i].w || []).length, 0) + pos.p;
+      if (this.lastPos && gw > this.lastPos.gw) { const v = (clipEnd - this.lastPos.t) / 1000 / (gw - this.lastPos.gw); if (v > .12 && v < 3) this.spw = this.spw * .6 + v * .4; }
+      this.lastPos = { gw, t: clipEnd }; this.heardJ = mj;
+      const late = (Date.now() - clipEnd) / 1000;                       // how long ago that clip ended
+      let left = (pos.n - 1 - pos.p) * this.spw - late;                // seconds until this line is finished
+      let target = mj;
+      // At its end already: show the next line - but a line is never skipped: one not yet shown is shown first.
+      if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj]) target = mj + 1;
+      else if (left <= .35) left = .35;
+      if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target]);
+      clearTimeout(this.timer); this.timer = null;
+      if (target === mj && mj + 1 < mains.length) {
+        this.timer = setTimeout(() => {                                  // the singer will reach the next line now
+          if (!song || this.heardJ !== mj || follow.cur !== mains[mj]) return;
+          this.go(mains[mj + 1]);
+        }, Math.max(150, (left - .2) * 1000));
+      }
+    },
+    go(i) {
+      follow.cur = i; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
+      if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
+    }
+  };
+
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 4, sent: 0,
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null,
     start() { this.stop(); this.lastSent = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
@@ -1167,10 +1209,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       this.timer = setTimeout(() => this.tick(), 300);
       const now = Date.now();
       if (this.busy || now < this.backoffUntil || now - this.lastSent < this.clipSec * 1000 || !Mic.stream) return;
-      const a = Mic.last(5); this.lastSent = now;
+      const a = Mic.last(4.5); this.lastSent = now;
       let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
       if (!a.length || Math.sqrt(e / a.length) < .004) return;
-      this.send(a);
+      this.send(a, now);
     },
     lang() {
       const l = Listen.mode === 'songs' ? (song ? song.lang : Listen.lang) : (S.vbLang === 'auto' ? '' : S.vbLang);
@@ -1181,11 +1223,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // Before the song has started only its first line is given: with more, Whisper "hears" later lyric words in
       // the noise before the singing (seen live: it jumped to line 4 during the intro).
       const main = lines.filter(l => !l.alt);
-      if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
+      // ...plus the opening line of each song in today's service, so whichever of them is started is written right.
+      if (follow.cur < 0) return [main[0] && main[0].text, ...service.filter(id => id !== song.id).map(id => { const sg = songById(id); return sg ? (sg.lyrics.split('\n').find(x => x.trim()) || '') : ''; })].filter(Boolean).join(' · ').slice(0, 400);
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
       return main.slice(Math.max(0, at - 1), at + 4).map(l => l.text).join(' ').slice(0, 400);
     },
-    async send(a) {
+    async send(a, clipEnd) {
       this.busy = true;
       const fd = new FormData();
       fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
@@ -1194,16 +1237,19 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
       try {
         const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
-        if (r.status === 429) { this.backoffUntil = Date.now() + 20000; setStatus(t('whisper_quota'), false); return; }
+        if (r.status === 429) { this.backoffUntil = Date.now() + 6000; setStatus(t('whisper_quota'), false); return; }
         if (r.status === 401 || r.status === 403) { this.fails = 9; throw new Error('key'); }
         if (!r.ok) throw new Error('HTTP ' + r.status);
+        // Groq's free tier allows 20 clips a minute and about 2000 a day: one clip every 3.2 s, slowing to one every
+        // 5 s when fewer than 300 are left today.
+        const rem = +r.headers.get('x-ratelimit-remaining-requests'); if (rem >= 0 && r.headers.has('x-ratelimit-remaining-requests')) { this.left = rem; this.clipSec = rem < 300 ? 5 : 3.2; }
         const j = await r.json(); this.fails = 0; this.sent++;
         lastEventAt = Date.now();
         const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
         let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
-        if (text && Listen.mode) onText(text, [], .85);
+        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') Lead.heard(text, clipEnd || Date.now()); }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
       } catch (e) {
         this.fails++;
@@ -1999,7 +2045,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
-    whisper: () => ({ engine: Listen.engine, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
+    whisper: () => ({ engine: Listen.engine, left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },

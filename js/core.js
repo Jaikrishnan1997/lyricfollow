@@ -191,6 +191,32 @@
     return false;
   }
 
+  /** Where in the song the LAST heard words are: { j: line index, p: word position in that line, n: words in it }.
+   *  The newest words of a clip are aligned backwards against each candidate line, so "…வல்லோரைத் துதியுங்கள்"
+   *  says the singer is at the end of that line. Candidates are main lines (not transliteration twins) from `from`. */
+  function place(heardWords, lines, cand) {
+    const hw = heardWords.filter(w => w.length >= 2).slice(-5); if (!hw.length) return null;
+    let best = null;
+    for (const j of cand) {
+      const ln = lines[j]; if (!ln || !ln.w || !ln.w.length) continue;
+      let pj = j - 1; while (pj >= 0 && lines[pj].alt) pj--;
+      const before = pj >= 0 ? (lines[pj].w || []) : [];
+      for (const own of [ln.w, ...(ln.alts || []).map(a => a.w || [])]) {
+        if (!own.length) continue;
+        // the previous line's words go in front, so a clip that runs from one line into the next is placed right
+        const words = before.concat(own), off = before.length;
+        for (let p = words.length - 1; p >= off; p--) {
+          // match heard words backwards from the last one against the line backwards from p
+          let k = hw.length - 1, q = p, got = 0, miss = 0;
+          while (k >= 0 && q >= 0 && miss <= 1) { const m = wordMatch(hw[k], [words[q]]); if (m >= .7) { got += m; k--; q--; } else if (miss === 0 && k > 0 && wordMatch(hw[k - 1], [words[q]]) >= .7) { miss++; k--; } else { miss++; q--; } }
+          const sc = got - miss * .3;
+          if (sc >= 1.6 && (!best || sc > best.sc + .2 || (Math.abs(sc - best.sc) <= .2 && cand.indexOf(j) < cand.indexOf(best.j)))) best = { j, p: p - off, n: own.length, sc };
+        }
+      }
+    }
+    return best;
+  }
+
   /* ---------- Song library index: finds which song (and line) is being sung, across all songs ---------- */
   function songIndex(list) {   // list: [{id, lines:[{key,g}]}]
     const map = new Map();
@@ -320,6 +346,6 @@
     return out;
   }
 
-  const Core = { skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { wordMatch, place, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
