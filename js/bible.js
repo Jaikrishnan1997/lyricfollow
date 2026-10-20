@@ -77,6 +77,38 @@
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
   const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','വാക്യത്തിൽ','அதிகாரம்','வசனம்','வசனங்கள்','अध्याय','पद','आयत',
     'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','athikaram','adhikaram','vasanam','vasanam','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
+  const CH_CUE = new Set(['chapter','chapters','ch','അദ്ധ്യായം','അധ്യായം','അദ്ധ്യായത്തിൽ','அதிகாரம்','अध्याय','adhyayam','athyayam','adyayam','adhyaayam','athikaram','adhikaram','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','வசனம்','வசனங்கள்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  function cueKind(tok) {
+    if (!tok) return '';
+    const k = tok.replace(/[^a-z]/g, ''); if (!k) return '';
+    for (const c of CH_CUE) if (k === c || (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5)))) return 'ch';
+    for (const c of V_CUE) if (k === c || (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5)))) return 'v';
+    return '';
+  }
+  /** Numbers in speech order, each with the chapter/verse word next to it, if any:
+   *  Tamil and Malayalam often say the verse first ("2-ாம் வசனம் 3-ாம் அதிகாரம்" = chapter 3 verse 2). */
+  function labelledNumbers(toks) {
+    const out = [];
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i]; if (cueKind(t)) continue;
+      let n = Core.numbers(t); let span = 1;
+      if (!n.length && toks[i + 1] && !cueKind(toks[i + 1])) { const j = Core.numbers(t + ' ' + toks[i + 1]); if (j.length === 1) { n = j; span = 2; } }
+      if (!n.length) continue;
+      let val = n[0];
+      const prev = out[out.length - 1];
+      if (prev && prev.end === i && prev.word && !/^\d/.test(t) && prev.val % 10 === 0 && prev.val >= 20 && val < 10) { prev.val += val; prev.end = i + span; continue; }
+      // English says the word first ("chapter 3"); Malayalam/Tamil say it after the number ("3-ാം അധ്യായം"),
+      // sometimes with an ordinal particle in between ("16 ஆம் வசனம்").
+      const EN = /^(chapter|chapters|ch|verse|verses|versus|v|vs)$/;
+      let next = toks[i + span]; if (next && !cueKind(next) && /^(am|aam|vatu|avatu|m)$/.test(next.replace(/[^a-z]/g, ''))) next = toks[i + span + 1];
+      const prevTok = toks[i - 1] || '';
+      const kind = (cueKind(prevTok) && EN.test(prevTok.replace(/[^a-z]/g, ''))) ? cueKind(prevTok) : (cueKind(next) || cueKind(prevTok));
+      out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind });
+      i += span - 1;
+    }
+    return out;
+  }
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
   // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
@@ -167,6 +199,12 @@
     if (opts.needVerse && nums.length < 2 && book.ch > 1) return null;
     let ch = nums[0] || 1, v = nums[1] || 1, ve = nums[2] && nums[2] > v ? nums[2] : v;
     if (book.ch === 1 && nums.length === 1) { v = ch; ve = v; ch = 1; }
+    // Spoken order may be verse-first: trust the chapter/verse words when both kinds are present.
+    const lab = labelledNumbers(toks.slice(f.end));
+    const chs = lab.filter(x => x.kind === 'ch'), vs = lab.filter(x => x.kind === 'v');
+    if (chs.length && vs.length) { ch = chs[0].val; v = vs[0].val; ve = vs[1] && vs[1].val > v ? vs[1].val : (lab.find(x => x.start > vs[0].end && !x.kind && x.val > v) || { val: v }).val; }
+    else if (vs.length === 1 && lab.length === 2 && !chs.length) { const other = lab.find(x => x !== vs[0]); ch = other.val; v = vs[0].val; ve = v; }
+    else if (chs.length === 1 && lab.length === 2 && !vs.length) { const other = lab.find(x => x !== chs[0]); ch = chs[0].val; v = other.val; ve = v; }
     if (ch < 1 || ch > book.ch) return null;
     // Validate against the loaded text when available (e.g. Matthew 1 has 25 verses, so 1:191 is noise).
     const loadedId = Object.keys(DATA)[0];
