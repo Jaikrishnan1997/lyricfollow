@@ -121,6 +121,12 @@ phrase is scored against the lines in two ways (sound trigrams and fuzzy word ma
 screen moves to the next line as soon as it is clearly heard; a jump to any other line must be heard twice in a row
 (three times for a long jump), so one noisy phrase never makes the screen skip around.
 
+## Which song is being sung
+
+Today's service list is tried first, on its own. Only when nothing in the service list has matched for 5 seconds is the
+whole library consulted, and then a song is chosen only when a whole line matches clearly (score ≥ 0.72, confirmed on
+a second phrase) - a few shared words never switch the screen.
+
 ## Optional: Gemini AI listening (Online mode)
 
 Settings → *AI listening (Gemini)*: paste your own Gemini API key (free at https://aistudio.google.com/apikey) and tick
@@ -137,4 +143,4 @@ A song can carry a YouTube link with a start time (song editor → *Backing trac
 Thalaimuraigalin Sangeetham (Tamil) / Thalamurakalude Sangeetham (Malayalam) episodes by LightHouse Records, whose
 chapter times are bundled in `vendor/yt-tracks.json`). *Match all my songs automatically* attaches tracks to songs whose
 titles sound like an episode chapter. On the Live tab the track plays through the official embedded YouTube player
-(internet needed; nothing is downloaded), with play/stop, volume and an option to start it whenever a song opens.
+(internet needed; nothing is downloaded), with play/stop, volume, a Music (small 200 px player) / Video (large player) choice, and an option to start it whenever a song opens. YouTube's terms require the player to stay visible, so "music only" is the smallest allowed player rather than a hidden one.

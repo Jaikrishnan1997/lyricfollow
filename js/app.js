@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 5,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, trackSize: 'compact', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -918,7 +918,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     show(yt) {
       this.cur = yt || null; $('trackBox').hidden = !yt;
       if (!yt) { if (this.ready) try { this.player.stopVideo(); } catch (e) {} return; }
-      $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkAuto').checked = !!S.trackAuto; $('trkVol').value = S.trackVol;
+      $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkAuto').checked = !!S.trackAuto; $('trkVol').value = S.trackVol; $('trkSize').value = S.trackSize || 'compact'; $('ytWrap').classList.toggle('compact', (S.trackSize || 'compact') === 'compact');
       this.api(); if (this.ready) this.cue(yt, S.trackAuto); else this.pendingPlay = !!S.trackAuto;
     },
     cue(yt, play) {
@@ -1204,15 +1204,19 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (!songIx || (!isFinal && now - lastDetectAt < 250) || h.length < 12) return;
     lastDetectAt = now;
     // Look at the whole recent window and at the latest phrase alone, so a new song is not drowned by the old one.
-    const cands = Core.songLookup(songIx, h, 4).concat(h.length > 160 ? Core.songLookup(songIx, h.slice(-160), 4) : []);
-    // Songs in today's service list are the likely ones: they get a small head start over the rest of the library.
-    for (const c of cands) if (service.includes(c.id)) c.score += .05;
-    const best = cands.filter(x => !song || x.id !== song.id).sort((a, b) => b.score - a.score)[0];
+    const cands = Core.songLookup(songIx, h, 8).concat(h.length > 160 ? Core.songLookup(songIx, h.slice(-160), 8) : []).filter(x => !song || x.id !== song.id);
+    // 1) Today's service list is where the song almost always is: it is tried first, on its own.
+    // 2) The rest of the library is consulted only after the service list has given nothing for 5 seconds,
+    //    and then only for a song where a whole line is clearly matched - never on a few shared words.
+    const inSvc = cands.filter(x => service.includes(x.id)).sort((a, b) => b.score - a.score)[0];
+    const quietFor = now - lastMatchAt;
+    const lib = quietFor > 5000 ? cands.filter(x => !service.includes(x.id) && x.score >= .72).sort((a, b) => b.score - a.score)[0] : null;
     const need = Math.max(thr + .1, .62);
-    if (best && best.score >= need && best.score > curScore + .1) {
+    const best = inSvc && inSvc.score >= need ? inSvc : lib;
+    if (best && best.score > curScore + .1) {
       detect.n = detect.id === best.id ? detect.n + 1 : 1; detect.id = best.id; detect.line = best.line;
       const inService = service.includes(best.id);
-      if (detect.n >= (inService || best.score >= .78 ? 2 : 3) && suggestId !== best.id) {
+      if (detect.n >= (inService ? 2 : best.score >= .85 ? 2 : 3) && suggestId !== best.id) {
         if (S.autoSwitch) switchToSong(best.id, best.line);
         else showSuggest(best.id, best.line);
       }
@@ -1611,6 +1615,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
     $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };
     $('trkAuto').onchange = e => { S.trackAuto = e.target.checked; saveSettings(); };
+    $('trkSize').onchange = e => { S.trackSize = e.target.value; saveSettings(); $('ytWrap').classList.toggle('compact', S.trackSize === 'compact'); };
     $('sfYt').addEventListener('input', () => Track.describe()); $('sfYtPick').onclick = () => Track.openPicker(true);
     $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
     Track.loadCatalog().then(() => { Track.describe(); if (song && song.yt) $('trackName').textContent = Track.chapterName(song.yt) || song.yt.id; });
@@ -1661,6 +1666,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   // Test hook: lets automated checks feed recognised text without a microphone.
   window.LF_DEBUG = {
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
+    quiet(ms) { lastMatchAt = Date.now() - ms; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),

@@ -48,10 +48,11 @@
         <button class="primary wide" id="btnAddToService">+ <span data-i18n="add_song">Add song</span></button>
         <div class="track" id="trackBox" hidden>
           <div class="phead"><h3 data-i18n="track_title">Backing track</h3><span class="chip" id="trackName"></span></div>
-          <div id="ytHost"></div>
+          <div id="ytWrap" class="compact"><div id="ytHost"></div></div>
           <div class="row tight">
             <button id="trkPlay">▶</button><button id="trkStop">■</button>
             <input type="range" id="trkVol" min="0" max="100" value="70" title="Volume">
+            <select id="trkSize" title="Player size"><option value="compact" data-i18n="track_compact">Music (small player)</option><option value="normal" data-i18n="track_video">Video (large player)</option></select>
           </div>
           <label class="check"><input type="checkbox" id="trkAuto"> <span data-i18n="track_auto">Play when a song opens</span></label>
           <p class="hint" id="trackHint" data-i18n="track_hint"></p>
