@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -1153,11 +1153,69 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
+  /* Whisper large-v3 through Groq (open-source model, hosted; free tier ~2000 requests a day): sends a 5-second clip
+   * every 4 s. Whisper is trained on singing and music, unlike the browser recogniser, and it is told the lyric lines
+   * around the current place (its "prompt"), so it writes the words that are being sung in the song's own spelling.
+   * Clips that are silence or music only are not sent, and segments Whisper itself marks as "no speech" are dropped
+   * (Whisper otherwise repeats its prompt over instrumental parts). */
+  const Whisper = {
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 4, sent: 0,
+    start() { this.stop(); this.lastSent = Date.now(); this.tick(); },
+    stop() { clearTimeout(this.timer); this.timer = null; },
+    tick() {
+      if (!Listen.mode || Listen.engine !== 'whisper') return;
+      this.timer = setTimeout(() => this.tick(), 300);
+      const now = Date.now();
+      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.clipSec * 1000 || !Mic.stream) return;
+      const a = Mic.last(5); this.lastSent = now;
+      let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
+      if (!a.length || Math.sqrt(e / a.length) < .004) return;
+      this.send(a);
+    },
+    lang() {
+      const l = Listen.mode === 'songs' ? (song ? song.lang : Listen.lang) : (S.vbLang === 'auto' ? '' : S.vbLang);
+      return String(l || '').slice(0, 2);
+    },
+    prompt() {
+      if (Listen.mode !== 'songs' || !song || !lines.length) return '';
+      const main = lines.filter(l => !l.alt), at = Math.max(0, main.indexOf(lines[follow.cur]));
+      return main.slice(Math.max(0, at - 1), at + 4).map(l => l.text).join(' ').slice(0, 400);
+    },
+    async send(a) {
+      this.busy = true;
+      const fd = new FormData();
+      fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
+      fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', 'verbose_json'); fd.append('temperature', '0');
+      const lg = this.lang(); if (lg) fd.append('language', lg);
+      const pr = this.prompt(); if (pr) fd.append('prompt', pr);
+      try {
+        const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
+        if (r.status === 429) { this.backoffUntil = Date.now() + 20000; setStatus(t('whisper_quota'), false); return; }
+        if (r.status === 401 || r.status === 403) { this.fails = 9; throw new Error('key'); }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json(); this.fails = 0; this.sent++;
+        lastEventAt = Date.now();
+        const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
+        let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
+        if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
+        if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
+        if (text && Listen.mode) onText(text, [], .85);
+        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
+      } catch (e) {
+        this.fails++;
+        if (this.fails >= 3) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+      } finally { this.busy = false; }
+    }
+  };
+
   const Listen = {
     mode: null, lang: '', engine: null,
     async start(mode) {
       mode = mode || S.listenMode;
-      let engine = S.net === 'online' ? (S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
+      // Online: Whisper large-v3 (Groq) for singing - the browser recogniser only understands speech, not songs;
+      // preaching stays on the browser recogniser (streaming, no daily limit) unless chosen for it too.
+      const wantWhisper = S.groq && S.groqKey && ((mode || S.listenMode) === 'songs' || S.groqBible);
+      let engine = S.net === 'online' ? (wantWhisper ? 'whisper' : S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
       // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
       // cannot reach them, so listening uses the device's own online recogniser here.
       if (engine === 'local' && HOSTED) { toast(t('local_hosted')); S.net = 'online'; saveSettings(); renderNet(); engine = 'cloud'; }
@@ -1169,18 +1227,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
       // Laptop: the microphone also feeds the level meter and language detection. iPhone/iPad: keeping the
       // microphone open makes Safari treat the page as "already capturing", so the recogniser may restart itself.
-      if (engine === 'local' || engine === 'gemini' || (!HOSTED && location.protocol !== 'file:') || IOS) {
+      if (engine === 'local' || engine === 'gemini' || engine === 'whisper' || (!HOSTED && location.protocol !== 'file:') || IOS) {
         this.waitingMic = true; updateListenUI();
         const ok = await Mic.start();
         this.waitingMic = false;
         if (!ok && engine !== 'cloud') { this.mode = null; updateListenUI(); toast(t('mic_blocked')); return; }
       }
       if (!this.mode) return;
-      if (engine === 'cloud') Cloud.start(this.lang); else if (engine === 'gemini') Gemini.start(); else Local.start(this.lang);
+      if (engine === 'cloud') Cloud.start(this.lang); else if (engine === 'gemini') Gemini.start(); else if (engine === 'whisper') Whisper.start(); else Local.start(this.lang);
       updateListenUI();
     },
     setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else if (this.engine === 'local') Local.start(lang); updateListenUI(); },
-    stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); },
+    stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); Whisper.stop(); },
     stop() { this.mode = null; this.stopEngines(); LangID.stop(); Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
   };
 
@@ -1211,7 +1269,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // for a stretch, and every restart loses a second of audio, so the singing mode waits longer.
     if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > (Listen.mode === 'songs' ? 25000 : 12000)) Cloud.start(Cloud.lang);
     const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
-    if (!auto || Listen.engine === 'gemini') return;      // Gemini understands every language at once
+    if (!auto || Listen.engine === 'gemini' || Listen.engine === 'whisper') return;      // these understand every language at once
     if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
     const langs = huntLangs().filter(l => Listen.engine !== 'cloud' || !Cloud.unsupported.has(l)); if (langs.length < 2) return;
     // Without the microphone meter (phones) there is no way to know whether someone is speaking: keep rotating.
@@ -1252,12 +1310,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('sel', b.dataset.lm === S.listenMode));
     $('lmBible').hidden = !vb;
     $('autoFollow').closest('label').hidden = vb;
-    const gem = cloud && S.gemini && S.geminiKey;
-    document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
+    const gem = cloud && S.gemini && S.geminiKey, wh = cloud && Listen.engine === 'whisper';
+    document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = wh ? '🎵 Whisper AI' : gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
     if (Listen.mode && Listen.waitingMic) setStatus(t('mic_wait'), false);
     else if (Listen.mode) {
       if (Listen.engine === 'local' && !Local.ok) setStatus(t('local_connecting'), false);
-      else setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · ${Listen.engine === 'gemini' ? 'Gemini' : langName(Listen.lang)}`, true);
+      else setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · ${Listen.engine === 'gemini' ? 'Gemini' : Listen.engine === 'whisper' ? 'Whisper' : langName(Listen.lang)}`, true);
     } else setStatus(disabled ? t('need_chrome') : t('not_listening'), false);
     $('matchPill').hidden = Listen.mode !== 'songs';
     if (Listen.mode !== 'songs') { $('matchPill').textContent = ''; $('matchPill').className = 'pill'; }
@@ -1877,6 +1935,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('sfYt').addEventListener('input', () => Track.describe()); $('sfYtPick').onclick = () => Track.openPicker(true);
     $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
     Track.loadCatalog().then(() => { Track.describe(); if (song && song.yt) $('trackName').textContent = Track.chapterName(song.yt) || song.yt.id; });
+    $('stWhOn').checked = !!S.groq; $('stWhKey').value = S.groqKey || ''; $('stWhModel').value = S.groqModel || 'whisper-large-v3'; $('stWhBible').checked = !!S.groqBible;
+    const whRe = () => { saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stWhOn').onchange = e => { S.groq = e.target.checked; whRe(); };
+    $('stWhKey').onchange = e => { S.groqKey = e.target.value.trim(); whRe(); };
+    $('stWhModel').onchange = e => { S.groqModel = e.target.value || 'whisper-large-v3'; whRe(); };
+    $('stWhBible').onchange = e => { S.groqBible = e.target.checked; whRe(); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
     $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
@@ -1931,6 +1995,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
+    whisper: () => ({ engine: Listen.engine, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
