@@ -856,7 +856,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       for (const p of pack.songs || []) {
         const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
         const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
-        recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: null, src: p.src || '', created: now, updated: now });
+        recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: p.yt && p.yt.id ? { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 } : null, src: p.src || '', created: now, updated: now });
       }
       if (recs.length) { await Store.putMany('songs', recs); for (const r of recs) songs.push(r); }
       return { added: recs.length, skipped };
