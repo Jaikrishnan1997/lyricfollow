@@ -725,6 +725,104 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   };
   setInterval(() => LangID.tick(), 1000);
 
+  // Bulk import of song sheets (.txt/.md/.docx/.pptx). Everything runs in the browser; nothing is uploaded.
+  const Bulk = {
+    async unzip(buf) {
+      const dv = new DataView(buf), u8 = new Uint8Array(buf), files = new Map();
+      let eocd = buf.byteLength - 22; while (eocd >= 0 && dv.getUint32(eocd, true) !== 0x06054b50) eocd--;
+      if (eocd < 0) throw new Error('zip');
+      let n = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true);
+      const td = new TextDecoder();
+      for (let i = 0; i < n; i++) {
+        const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true), nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true), loc = dv.getUint32(off + 42, true);
+        const name = td.decode(u8.subarray(off + 46, off + 46 + nlen));
+        const lnlen = dv.getUint16(loc + 26, true), lelen = dv.getUint16(loc + 28, true), start = loc + 30 + lnlen + lelen;
+        const data = u8.subarray(start, start + csize);
+        if (/\.xml$/.test(name)) {
+          let bytes = data;
+          if (method === 8) { const ds = new DecompressionStream('deflate-raw'); const w = ds.writable.getWriter(); w.write(data); w.close(); bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer()); }
+          files.set(name, td.decode(bytes));
+        }
+        off += 46 + nlen + elen + clen;
+      }
+      return files;
+    },
+    xmlText(x) { return x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#(\d+);/g, (m, c) => String.fromCharCode(+c)).trim(); },
+    /** Returns a list of "paragraph" objects {t, h (heading), pb (page break before)} for any supported file. */
+    async paragraphs(file) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.docx')) {
+        const z = await this.unzip(await file.arrayBuffer()); const xml = z.get('word/document.xml') || '';
+        const out = []; const ps = xml.split(/<w:p[ >]/).slice(1);
+        for (const p of ps) {
+          const h = /<w:pStyle w:val="(Heading|Title|heading|Ttulo|Titre)/.test(p) || (/<w:b\/>|<w:b w:val="1"\/>/.test(p) && !/<w:r>(?:(?!<w:b).)*<w:t/.test(p));
+          const pb = /w:type="page"|<w:lastRenderedPageBreak/.test(p);
+          const t = (p.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).map(x => this.xmlText(x)).join('');
+          out.push({ t: t.trim(), h: !!h && t.trim().length > 0 && t.trim().length < 80, pb });
+        }
+        return out;
+      }
+      if (name.endsWith('.pptx')) {
+        const z = await this.unzip(await file.arrayBuffer());
+        const slides = [...z.keys()].filter(k => /^ppt\/slides\/slide\d+\.xml$/.test(k)).sort((a, b) => +a.match(/(\d+)/)[1] - +b.match(/(\d+)/)[1]);
+        const out = [];
+        for (const k of slides) {
+          const xml = z.get(k); const paras = xml.split(/<a:p[ >]/).slice(1).map(p => (p.match(/<a:t>[^<]*<\/a:t>/g) || []).map(x => this.xmlText(x)).join('')).map(x => x.trim()).filter(Boolean);
+          if (!paras.length) continue;
+          paras.forEach((t, i) => out.push({ t, h: false, pb: i === 0 }));
+          out.push({ t: '', h: false, pb: false });
+        }
+        return out;
+      }
+      const text = await file.text();
+      return text.replace(/\r/g, '').split('\n').map(l => ({ t: l.trim(), h: /^#+\s|^(title|song)\s*[:：]/i.test(l), pb: /^(={3,}|-{3,}|\*{3,}|_{3,})$/.test(l.trim()) }));
+    },
+    /** Splits paragraphs into songs: at headings, page breaks, separator lines, or 3+ blank lines. */
+    split(paras, fallbackTitle) {
+      const songs = []; let cur = null, blanks = 0;
+      const push = () => { if (cur && cur.lines.join('').trim()) songs.push(cur); cur = null; };
+      for (const p of paras) {
+        if (!p.t) { blanks++; if (cur) cur.lines.push(''); continue; }
+        if (p.h || (p.pb && cur && cur.lines.filter(Boolean).length >= 4) || blanks >= 3) { push(); }
+        blanks = 0;
+        if (!cur) { cur = { title: p.h ? p.t.replace(/^#+\s*|^(title|song)\s*[:：]\s*/i, '') : '', lines: [] }; if (p.h) continue; }
+        cur.lines.push(p.t);
+      }
+      push();
+      for (const s of songs) {
+        s.lines = s.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim().split('\n');
+        if (!s.title) s.title = s.lines.find(Boolean) || fallbackTitle;
+        s.title = s.title.replace(/^\d+[.)]\s*/, '').slice(0, 80);
+      }
+      return songs.length ? songs : [];
+    },
+    lang(text) {
+      const ml = (text.match(/[\u0D00-\u0D7F]/g) || []).length, ta = (text.match(/[\u0B80-\u0BFF]/g) || []).length, la = (text.match(/[A-Za-z]/g) || []).length;
+      return ml >= ta && ml > la / 4 ? 'ml-IN' : ta > la / 4 ? 'ta-IN' : 'en-IN';
+    },
+    dupKey(s) { return Core.skel(Core.key((s.title + ' ' + (s.lyrics || '').split('\n').filter(Boolean).slice(0, 2).join(' ')).replace(/\(.*?\)/g, ''))).slice(0, 40); },
+    async importFiles(files, toService) {
+      const st = $('bulkStatus'), list = $('bulkList'); list.innerHTML = ''; let added = 0, dupes = 0;
+      const seen = new Set(songs.map(s => this.dupKey(s)));
+      for (const f of files) {
+        st.textContent = f.name;
+        let parts = [];
+        try { parts = this.split(await this.paragraphs(f), f.name.replace(/\.[^.]+$/, '')); } catch (e) { const li = el('li', 'empty', f.name + ': ' + t('ref_bad')); list.appendChild(li); continue; }
+        for (const p of parts) {
+          const lyrics = p.lines.join('\n').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
+          const cand = { title: p.title, lyrics }; const k = this.dupKey(cand);
+          if (seen.has(k)) { dupes++; continue; } seen.add(k);
+          const s = await saveSong({ title: p.title, lang: this.lang(lyrics), bg: '', lyrics }, null); added++;
+          if (toService && !service.includes(s.id)) service.push(s.id);
+          const li = el('li'); const b = el('button', '', `${s.title} · ${langName(s.lang)}`); b.onclick = () => { setTab('songs'); editSong(s.id); }; li.appendChild(b); list.appendChild(li);
+        }
+      }
+      if (toService) saveService();
+      rebuildSongIndex(); renderService(); renderSongList();
+      st.textContent = `${added} ${t('bulk_done')} · ${dupes} ${t('bulk_dupes')}`;
+    }
+  };
+
   // Backing tracks: a YouTube video (optionally from a start time) played through the official embedded player
   // in the console window - never downloaded. Each song can carry its own link; a bundled list of the
   // Thalaimuraigalin / Thalamurakalude Sangeetham episodes (with chapter times) makes choosing one quick.
@@ -1455,6 +1553,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
+    $('bulkFiles').onchange = e => { const fs = [...e.target.files]; if (fs.length) Bulk.importFiles(fs, $('bulkService').checked); e.target.value = ''; };
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
     $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };
     $('trkAuto').onchange = e => { S.trackAuto = e.target.checked; saveSettings(); };

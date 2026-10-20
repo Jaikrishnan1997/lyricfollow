@@ -195,6 +195,16 @@
         <p class="heardline" id="vbHeard"></p>
         <ol class="results" id="heardRefs"></ol>
       </div>
+      <div class="panel">
+        <div class="phead"><h3 data-i18n="bulk">Import song files</h3><span class="netbadge">💻 <span data-i18n="engine_offline">Offline</span></span></div>
+        <p class="hint" data-i18n="bulk_hint"></p>
+        <div class="row">
+          <label class="upload slim"><input type="file" id="bulkFiles" accept=".txt,.md,.docx,.pptx,text/plain" multiple hidden><span data-i18n="bulk_pick">Choose files</span></label>
+          <label class="check"><input type="checkbox" id="bulkService"> <span data-i18n="bulk_service">Add to today's service</span></label>
+        </div>
+        <p class="hint" id="bulkStatus"></p>
+        <ol class="results" id="bulkList"></ol>
+      </div>
       <div class="panel ocr">
         <div class="phead"><h3 data-i18n="ocr">Lyrics from a photo or screenshot</h3><span class="netbadge">💻 <span data-i18n="engine_offline">Offline</span></span></div>
         <p class="hint" data-i18n="ocr_hint"></p>
