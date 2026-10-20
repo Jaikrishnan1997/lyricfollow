@@ -1,0 +1,21 @@
+{
+  "note": "Backing tracks played through the official YouTube player (needs internet). Chapter times come from the episode descriptions on the LightHouse Records channel.",
+  "series": [
+    { "name": "Thalaimuraigalin Sangeetham (Tamil) - LightHouse Records", "lang": "ta-IN", "episodes": [
+      { "ep": 1, "id": "W6LnHN744tU", "c": [[0, "Yeshuvaiye Thuthi Sei"], [349, "Varavenum Enatharasae"], [647, "Enna En Anandham"], [981, "Sathai Nishkalamai"], [1209, "En Meetpar Uyirodu"], [1541, "Deva Pitha Enthan"]] },
+      { "ep": 2, "id": "5CSOaF3Sfw8", "c": [[103, "Illaan Yendhanukku"], [405, "Mangkalam Sezhikka"], [554, "Yesuvae Kirupaasanappathiyae"], [727, "Aa Varum Naam Ellaarum"], [932, "Thanthanai Thuthippoamae"], [1056, "Seer Migu Vaan Puvi"], [1285, "Devane Naan Umathandaiyil"], [1528, "Dasare Ithatharaniyai Anbai"]] },
+      { "ep": 3, "id": "y6XLOHC213s", "c": [[124, "Anbae Pirathaanam - Sahothara"], [363, "Arasanaik Kaanamaliruppomo"], [569, "Kaalaththin Arumaiyai Arinthu"], [850, "Kankalai Yereduppaen"], [1134, "Saruvalohaathipaa Namaskkaaram"], [1427, "Aaseervathiyum Karththarae"], [1614, "Thaen Inimaiyilum Yesuvin Naamam"], [1807, "Paatham Ontrae Vaendum"]] },
+      { "ep": 4, "id": "_n56udjflsM", "c": [[108, "Aananthame Paramaananthame"], [306, "Anbu Niraintha Pon Yesuvae"], [410, "Yesuvae Um Paatham Panikirean"], [479, "En Yesuvae En Jeevane"], [629, "Parama Seeyon Naattil"], [806, "Potri Thuthipom"], [1014, "Yesuvae Um Naamaththinaal"], [1264, "Yesu Azhaikiraar"]] },
+      { "ep": 5, "id": "9K8eqQBjP9A", "c": [[173, "Thuthithu Paadida Paathiram"], [270, "Kathiravan Thondrum"], [300, "Anaathi Devan Un Adaikkalamae"], [345, "Unnathamaan-Navarin Uyar"], [513, "Kodaa Kodi Sthothiram"], [591, "Aananthamai Inpakaanaan"], [653, "Tham Kirubai Perithallo"], [739, "Yesuvai Nambinor Mandathillai"], [943, "Sathiya Vedham"], [1200, "Ennai Maravaa Yesu Naadhaa"], [1424, "Nigarae Illatha Sarvesa"], [1700, "Devan Varugindraar Vegam"]] },
+      { "ep": 6, "id": "goU20c3xxko", "c": [[104, "Alleluyaa Kartharaiye"], [366, "Magizhvom Magizhvom"], [479, "Athisayamana Olimaya Naadam"], [515, "Yesu Kristhuvin Nal Seedaraguvom"], [547, "Irul Soozhum Kaalam"], [729, "Enthan Ullam Thangum"], [929, "Ummai Pol Yaarundu"], [1034, "Yarukkai Vaazgiraai Nee"], [1150, "Karthane Em Thunaiyaneer"], [1306, "Urakkam Thelivom"]] },
+      { "ep": 7, "id": "iulFBQB7bG8", "c": [[98, "Santhosham Ponguthe"], [262, "Ennil Adanga Sthoththiram"], [585, "Pareer Arunodhayam"], [783, "Inba Yesu Rajavai"], [974, "Enakkai Jeevan Vittavarae"], [1152, "Ulagor Unnai Pakaiththaalum"], [1420, "Thooyathi Thooyavare"], [1507, "Enthan Naavil Puthu Paattu"], [1649, "Karthavin Janamae"]] },
+      { "ep": 8, "id": "_qg4gkB7wCI", "c": [[118, "Yesuvin Kudumbam Ondru Undu"], [366, "Lesaana Kaariyam"], [578, "Kalvari Mamalai Oram"], [944, "Neer En Sontham"], [1216, "Isravele Kartharai Nambu"], [1440, "Naan Nirpathum"]] },
+      { "ep": 9, "id": "NuZqSyzKf3w", "c": [[112, "Entha Kaalathilum Entha Nerathilum"], [195, "Deva Kirubai Endrum Ullathu"], [253, "Idho Manusharin Mathiyil"], [304, "Maarida Em Maa Nesare"], [337, "Nandriyal Padiduvom"], [460, "Balipeedathil Ennai Parane"], [557, "Kalvariyin Karunai Ithae"], [678, "Kartharin Kai Kurugavillai"], [878, "Paralogame En Sonthame"]] }
+    ] },
+    { "name": "Thalamurakalude Sangeetham (Malayalam) - LightHouse Records", "lang": "ml-IN", "episodes": [
+      { "ep": 1, "id": "CmNmexHP6Ik", "c": [] }, { "ep": 2, "id": "wA2BM1hWKLk", "c": [] }, { "ep": 3, "id": "RuG_EHCxDOs", "c": [] },
+      { "ep": 4, "id": "7yzCITPSaYA", "c": [] }, { "ep": 5, "id": "OOsmZts60mQ", "c": [] }, { "ep": 6, "id": "guLVn1gsTQI", "c": [] },
+      { "ep": 7, "id": "FNUbwU6p_EU", "c": [] }, { "ep": 8, "id": "XvTjpstKfbM", "c": [] }, { "ep": 9, "id": "9hltcmK0Ft8", "c": [] }
+    ] }
+  ]
+}

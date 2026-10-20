@@ -130,3 +130,11 @@ English and mixtures, and sung words in a noisy hall, far better than the browse
 leaves your browser. One clip is sent about every 5 seconds while there is sound; the free tier has a daily request cap
 (shown in AI Studio), so a long service may need the paid tier (a few rupees per service). If Gemini stops answering,
 the app falls back to the browser recogniser automatically.
+
+## Backing tracks (YouTube)
+
+A song can carry a YouTube link with a start time (song editor → *Backing track*, or *Choose* to pick from the
+Thalaimuraigalin Sangeetham (Tamil) / Thalamurakalude Sangeetham (Malayalam) episodes by LightHouse Records, whose
+chapter times are bundled in `vendor/yt-tracks.json`). *Match all my songs automatically* attaches tracks to songs whose
+titles sound like an episode chapter. On the Live tab the track plays through the official embedded YouTube player
+(internet needed; nothing is downloaded), with play/stop, volume and an option to start it whenever a song opens.

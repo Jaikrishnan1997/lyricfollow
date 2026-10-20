@@ -306,6 +306,6 @@
     return out;
   }
 
-  const Core = { skel, collapseRepeats, translit, key, keyWords, grams, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);

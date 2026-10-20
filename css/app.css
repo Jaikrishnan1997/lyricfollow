@@ -203,3 +203,13 @@ body.low *{transition:none!important;animation:none!important}
 .searchhelp a{color:var(--accent);font-weight:600}
 
 .banner{margin:0;padding:10px 16px;background:#b4231a;color:#fff;font-size:14px;text-align:center}
+
+.track{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+#ytHost{width:100%;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden}
+#ytHost iframe{width:100%;height:100%;border:0}
+.track .row button{min-width:44px}
+.track input[type=range]{flex:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal-box{background:var(--panel,#fff);color:inherit;border-radius:12px;padding:16px;width:min(640px,100%);max-height:85vh;display:flex;flex-direction:column;gap:10px}
+.modal-box .results{overflow:auto;max-height:50vh}
+.modal-box .results button{width:100%;text-align:left}

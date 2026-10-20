@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 5,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', trackAuto: false, trackVol: 70, ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -84,6 +84,7 @@
     if (song && Listen.mode === 'bible') { S.listenMode = 'songs'; saveSettings(); Listen.start('songs'); }
     else if (Listen.mode === 'songs' && song && Listen.lang !== song.lang) Listen.setLang(song.lang);
     renderService(); renderLive(); output();
+    Track.show(song ? song.yt : null);
   }
 
   /* ---------- screen output ---------- */
@@ -263,6 +264,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     $('sfLang').value = s ? s.lang : (S.lang === 'ta' ? 'ta-IN' : S.lang === 'en' ? 'en-IN' : 'ml-IN');
     bgOptions($('sfBg'), true); $('sfBg').value = s ? (s.bg || '') : '';
     $('sfLyrics').value = s ? s.lyrics : '';
+    $('sfYt').value = s && s.yt ? Track.link(s.yt) : ''; Track.describe();
     $('sfDelete').hidden = !s;
     $('sfService').hidden = !s;
     $('sfService').textContent = s && service.includes(s.id) ? t('in_service') : t('add_to_service');
@@ -275,7 +277,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     let s = id ? songById(id) : null;
     if (s) Object.assign(s, data, { updated: now });
     else { s = Object.assign({ id: uid(), bg: '', created: now, updated: now }, data); songs.push(s); }
-    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', created: s.created || now, updated: s.updated });
+    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', yt: s.yt || null, created: s.created || now, updated: s.updated });
     songsChanged();
     if (song && song.id === s.id) loadSong(s.id, { keepScreen: true });
     return s;
@@ -723,6 +725,95 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   };
   setInterval(() => LangID.tick(), 1000);
 
+  // Backing tracks: a YouTube video (optionally from a start time) played through the official embedded player
+  // in the console window - never downloaded. Each song can carry its own link; a bundled list of the
+  // Thalaimuraigalin / Thalamurakalude Sangeetham episodes (with chapter times) makes choosing one quick.
+  const Track = {
+    player: null, ready: false, apiAsked: false, cur: null, catalog: null, pendingPlay: false,
+    parse(text) {
+      text = String(text || '').trim(); if (!text) return null;
+      const m = text.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([\w-]{11})/) || text.match(/^([\w-]{11})$/);
+      if (!m) return null;
+      let start = 0; const tm = text.match(/[?&#](?:t|start)=(\d+)(?:s)?/) || text.match(/[?&#]t=(?:(\d+)m)?(\d+)s/);
+      if (tm) start = tm.length > 2 ? (+(tm[1] || 0)) * 60 + (+tm[2]) : +tm[1];
+      const em = text.match(/[?&#]end=(\d+)/);
+      return { id: m[1], start, end: em ? +em[1] : 0 };
+    },
+    link(yt) { return yt ? `https://youtu.be/${yt.id}?t=${yt.start || 0}${yt.end ? '&end=' + yt.end : ''}` : ''; },
+    describe() {
+      const yt = this.parse($('sfYt').value), box = $('sfYtInfo');
+      box.textContent = yt ? `${yt.id} · ${fmtTime(yt.start)}${yt.end ? '–' + fmtTime(yt.end) : ''} · ${this.chapterName(yt) || ''}` : '';
+    },
+    chapterName(yt) {
+      if (!this.catalog || !yt) return '';
+      for (const ser of this.catalog.series) for (const ep of ser.episodes) if (ep.id === yt.id) { const c = ep.c.find(x => x[0] === yt.start); return c ? `${c[1]} (Ep-${ep.ep})` : `Ep-${ep.ep}`; }
+      return '';
+    },
+    async loadCatalog() {
+      if (this.catalog) return this.catalog;
+      try { this.catalog = await (await fetch('vendor/yt-tracks.json')).json(); } catch (e) { this.catalog = { series: [] }; }
+      return this.catalog;
+    },
+    // --- player ---
+    api() {
+      if (this.apiAsked) return; this.apiAsked = true;
+      window.onYouTubeIframeAPIReady = () => {
+        this.player = new YT.Player('ytHost', { width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+          events: { onReady: () => { this.ready = true; this.player.setVolume(S.trackVol); if (this.cur) this.cue(this.cur, this.pendingPlay); },
+                    onStateChange: e => { this.renderButtons(e.data); } } });
+      };
+      const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; sc.onerror = () => { $('trackHint').textContent = t('no_internet'); }; document.head.appendChild(sc);
+    },
+    show(yt) {
+      this.cur = yt || null; $('trackBox').hidden = !yt;
+      if (!yt) { if (this.ready) try { this.player.stopVideo(); } catch (e) {} return; }
+      $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkAuto').checked = !!S.trackAuto; $('trkVol').value = S.trackVol;
+      this.api(); if (this.ready) this.cue(yt, S.trackAuto); else this.pendingPlay = !!S.trackAuto;
+    },
+    cue(yt, play) {
+      const o = { videoId: yt.id, startSeconds: yt.start || 0 }; if (yt.end) o.endSeconds = yt.end;
+      try { if (play && userGesture) this.player.loadVideoById(o); else this.player.cueVideoById(o); } catch (e) {}
+    },
+    play() { if (!this.ready) return; try { const st = this.player.getPlayerState(); if (st === 1) this.player.pauseVideo(); else this.player.playVideo(); } catch (e) {} },
+    stop() { if (this.ready) try { this.player.stopVideo(); if (this.cur) this.cue(this.cur, false); } catch (e) {} },
+    pause() { if (this.ready) try { if (this.player.getPlayerState() === 1) this.player.pauseVideo(); } catch (e) {} },
+    renderButtons(state) { $('trkPlay').textContent = state === 1 ? '❚❚' : '▶'; },
+    // --- picker ---
+    async openPicker(forSong) {
+      await this.loadCatalog(); $('trackPicker').hidden = false; $('trkPickSearch').value = ''; this.renderPicker(forSong);
+      $('trkPickSearch').oninput = () => this.renderPicker(forSong);
+    },
+    renderPicker(forSong) {
+      const q = Core.key($('trkPickSearch').value), list = $('trkPickList'); list.innerHTML = '';
+      for (const ser of this.catalog.series) for (const ep of ser.episodes) {
+        const items = ep.c.length ? ep.c : [[0, `Ep-${ep.ep} (${ser.name.split('(')[1] ? ser.name.split('(')[1].replace(')', '') : ''} whole episode)`]];
+        for (const [tsec, name] of items) {
+          if (q && !Core.key(name).includes(q) && !Core.skel(Core.key(name)).includes(Core.skel(q))) continue;
+          const li = el('li'), b = el('button', '', `${name} · Ep-${ep.ep} · ${fmtTime(tsec)}`);
+          b.onclick = () => { const yt = { id: ep.id, start: tsec, end: 0 }; $('trackPicker').hidden = true; if (forSong) { $('sfYt').value = this.link(yt); this.describe(); } };
+          li.appendChild(b); list.appendChild(li);
+        }
+      }
+    },
+    // Attach tracks to every song whose title (or first line) sounds like a chapter name.
+    async autoMatch() {
+      await this.loadCatalog(); let n = 0;
+      const chapters = []; for (const ser of this.catalog.series) for (const ep of ser.episodes) for (const [tsec, name] of ep.c) chapters.push({ id: ep.id, start: tsec, name, k: Core.skel(Core.key(name)) });
+      for (const s of songs) {
+        if (s.yt) continue;
+        const cands = [s.title, (s.lyrics || '').split('\n')[0] || ''].map(x => Core.skel(Core.key(x.replace(/\(.*?\)/g, '')))).filter(x => x.length >= 6);
+        let best = null;
+        for (const c of chapters) for (const k of cands) { const sc = skelSim(k, c.k); if (sc > .72 && (!best || sc > best.sc)) best = { c, sc }; }
+        if (best) { s.yt = { id: best.c.id, start: best.c.start, end: 0 }; await saveSong({ yt: s.yt }, s.id); n++; }
+      }
+      toast(n ? `${n} ${t('track_matched')}` : t('track_none')); if (song) this.show(song.yt);
+      return n;
+    }
+  };
+  function skelSim(a, b) { const A = Core.bigrams(a), B = Core.bigrams(b); return Core.dice(A, Math.max(0, a.length - 1), B, Math.max(0, b.length - 1)); }
+  function fmtTime(sec) { sec = +sec || 0; return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+  let userGesture = false; document.addEventListener('pointerdown', () => { userGesture = true; }, { once: true, capture: true });
+
   // Gemini engine (optional): the microphone audio is sent in short clips to Google's Gemini model with the
   // current song's lyrics and the service list as context. The model answers with the words heard, the lyric line
   // being sung and any Bible reference - it understands Malayalam, Tamil, English and mixtures of them, and sung
@@ -905,6 +996,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
   function setListenMode(m) {
     S.listenMode = m; saveSettings();
+    if (m === 'bible') Track.pause();
     if (m === 'songs' && song && screen.kind === 'bible') { screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
     if (Listen.mode && Listen.mode !== m) { if (m === 'bible') vbText = ''; Listen.start(m); } else updateListenUI();
   }
@@ -1301,7 +1393,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('btnNewSong').onclick = () => editSong(null);
     $('songForm').onsubmit = async e => {
       e.preventDefault();
-      const data = { title: $('sfTitle').value.trim() || t('untitled'), lang: $('sfLang').value, bg: $('sfBg').value, lyrics: $('sfLyrics').value };
+      const data = { title: $('sfTitle').value.trim() || t('untitled'), lang: $('sfLang').value, bg: $('sfBg').value, lyrics: $('sfLyrics').value, yt: Track.parse($('sfYt').value) };
       const s = await saveSong(data, editingId);
       editingId = s.id; toast(t('saved')); editSong(s.id); renderService();
     };
@@ -1363,6 +1455,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
+    $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
+    $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };
+    $('trkAuto').onchange = e => { S.trackAuto = e.target.checked; saveSettings(); };
+    $('sfYt').addEventListener('input', () => Track.describe()); $('sfYtPick').onclick = () => Track.openPicker(true);
+    $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
+    Track.loadCatalog().then(() => { Track.describe(); if (song && song.yt) $('trackName').textContent = Track.chapterName(song.yt) || song.yt.id; });
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
     $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };

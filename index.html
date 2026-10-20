@@ -46,6 +46,16 @@
         <div class="phead"><h3 data-i18n="service">Today's service</h3></div>
         <ol class="service" id="service"></ol>
         <button class="primary wide" id="btnAddToService">+ <span data-i18n="add_song">Add song</span></button>
+        <div class="track" id="trackBox" hidden>
+          <div class="phead"><h3 data-i18n="track_title">Backing track</h3><span class="chip" id="trackName"></span></div>
+          <div id="ytHost"></div>
+          <div class="row tight">
+            <button id="trkPlay">▶</button><button id="trkStop">■</button>
+            <input type="range" id="trkVol" min="0" max="100" value="70" title="Volume">
+          </div>
+          <label class="check"><input type="checkbox" id="trkAuto"> <span data-i18n="track_auto">Play when a song opens</span></label>
+          <p class="hint" id="trackHint" data-i18n="track_hint"></p>
+        </div>
       </aside>
       <div class="panel">
         <div class="phead">
@@ -61,6 +71,15 @@
   </section>
 
   <!-- SONGS -->
+  <div class="modal" id="trackPicker" hidden>
+    <div class="modal-box">
+      <div class="phead"><h3 data-i18n="track_pick_title">Choose a backing track</h3><button id="trkPickClose">✕</button></div>
+      <input type="search" id="trkPickSearch" data-i18n-ph="search">
+      <ol class="results" id="trkPickList"></ol>
+      <p class="hint" data-i18n="track_pick_hint"></p>
+      <button id="trkAutoMatch" data-i18n="track_automatch">Match all my songs automatically</button>
+    </div>
+  </div>
   <section class="tab" id="tab-songs" hidden>
     <div class="split">
       <aside class="panel">
@@ -81,6 +100,9 @@
             <label class="field"><span data-i18n="background">Background</span><select id="sfBg"></select></label>
           </div>
           <label class="field"><span data-i18n="lyrics">Lyrics</span><textarea id="sfLyrics" rows="16"></textarea><small data-i18n="lyrics_hint"></small></label>
+          <label class="field"><span data-i18n="track">Backing track (YouTube link, with time)</span>
+            <div class="row tight"><input type="text" id="sfYt" placeholder="https://youtu.be/…?t=108"><button type="button" id="sfYtPick" data-i18n="track_pick">Choose</button></div>
+            <small id="sfYtInfo" class="hint"></small></label>
           <div class="row">
             <button type="button" id="sfDelete" class="danger" data-i18n="delete">Delete</button>
             <button type="button" id="sfService" data-i18n="add_to_service">Add to service</button>
