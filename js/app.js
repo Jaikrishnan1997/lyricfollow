@@ -1306,7 +1306,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // No song open yet: the main language of today's service (seen live: left to guess, Whisper wrote Tamil
       // singing as English - "Rajani Rajana, Vishnu Rajan" for "இராஜாதி இராஜனாம் இயேசுராஜன்").
       const svcLang = () => { const c = {}; service.forEach(id => { const g = (songById(id) || {}).lang; if (g) c[g] = (c[g] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; };
-      const l = Listen.mode === 'songs' ? (song ? song.lang : svcLang()) : (S.vbLang === 'auto' ? '' : S.vbLang);
+      // The open song's language only once the audio has confirmed that song (a wrong song in another language
+      // would otherwise make Whisper write everything in that language, and the right song could not be found).
+      const sure = song && Svc.okId === song.id && Date.now() - Svc.okAt < 20000;
+      const l = Listen.mode === 'songs' ? (sure ? song.lang : svcLang()) : (S.vbLang === 'auto' ? '' : S.vbLang);
       return String(l || '').slice(0, 2);
     },
     prompt() {
@@ -1556,7 +1559,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const pill = $('matchPill'); pill.textContent = Math.round(sc * 100) + '%';
     pill.className = 'pill ' + (sc >= thr + .15 ? 'good' : sc >= thr ? 'ok' : 'low');
     if (moved) { if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
-    if (S.autoFollow) detectOtherSong((heardKey + ' ' + Core.keyWords(interim[0] || '')).slice(-400), sc, thr, !!finals);
+    // With Whisper the service songs are found by the service index (Svc); the older letter-pattern detector
+    // opened a Malayalam song on Whisper's repeated "வணக்கம்" over silence, so it is not used then.
+    if (S.autoFollow && Listen.engine !== 'whisper') detectOtherSong((heardKey + ' ' + Core.keyWords(interim[0] || '')).slice(-400), sc, thr, !!finals);
   }
 
   // Finds the song being sung anywhere in the library (fast index), and jumps to it at the right line.
