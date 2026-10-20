@@ -1178,7 +1178,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     prompt() {
       if (Listen.mode !== 'songs' || !song || !lines.length) return '';
-      const main = lines.filter(l => !l.alt), at = Math.max(0, main.indexOf(lines[follow.cur]));
+      // Before the song has started only its first line is given: with more, Whisper "hears" later lyric words in
+      // the noise before the singing (seen live: it jumped to line 4 during the intro).
+      const main = lines.filter(l => !l.alt);
+      if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
+      const at = Math.max(0, main.indexOf(lines[follow.cur]));
       return main.slice(Math.max(0, at - 1), at + 4).map(l => l.text).join(' ').slice(0, 400);
     },
     async send(a) {
@@ -1399,7 +1403,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     let moved = false;
     if (song && lines.length && S.autoFollow) {
       for (const alt of (interim.length ? interim : [''])) {
-        if (Core.decide(follow, lines, (heardKey + ' ' + Core.keyWords(alt)).slice(-400), thr)) { moved = true; break; }
+        if (Core.decide(follow, lines, (heardKey + ' ' + Core.keyWords(alt)).slice(-400), thr, Listen.engine === 'whisper' ? { back: .25 } : null)) { moved = true; break; }
       }
     }
     const sc = song ? follow.score : 0;

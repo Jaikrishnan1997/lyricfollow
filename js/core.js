@@ -147,20 +147,32 @@
   }
 
   /** Choose the line being sung. Forward moves are preferred; jumps need a stronger match. */
-  function decide(st, lines, heard, thr) {
+  function decide(st, lines, heard, thr, opts) {
     const HG = heardGrams(heard);
     let best = { j: st.cur, s: 0 }, curS = 0;
-    if (HG.length || HG.words.length) for (let j = 0; j < lines.length; j++) {
-      const ln = lines[j]; if (ln.key.length < 3) continue;
-      let prev = j - 1; while (prev >= 0 && lines[prev].alt) prev--;
+    // Moving ahead needs a word of the new line that the current line does not have: lines that share an ending
+    // ("…தேவனைத் துதியுங்கள்") must not pull the screen forward while the current line is being sung (or repeated).
+    const curLn = lines[st.cur], recent = HG.words.slice(-6);
+    const curW = curLn && curLn.w ? curLn.w.concat(...(curLn.alts || []).map(a => a.w || [])) : [];
+    const distinct = ln => { if (!curLn || !recent.length) return true; const own = (ln.w || []).concat(...(ln.alts || []).map(a => a.w || [])).filter(w => !curW.includes(w)); return own.length > 0 && recent.some(h => wordMatch(h, own) >= .9); };
+    const rawOf = j => {
+      const ln = lines[j]; let prev = j - 1; while (prev >= 0 && lines[prev].alt) prev--;
       let raw = Math.max(HG.length ? scoreG(HG, ln.g, ln) : 0, .95 * wordScore(HG.words, ln, lines[prev]));
       if (ln.alts) for (const a of ln.alts) raw = Math.max(raw, HG.length ? scoreG(HG, a.g, a) : 0, .95 * wordScore(HG.words, a, null));
+      return raw;
+    };
+    const curRaw = curLn && curLn.key && curLn.key.length >= 3 && (HG.length || HG.words.length) ? rawOf(st.cur) : 0;
+    if (HG.length || HG.words.length) for (let j = 0; j < lines.length; j++) {
+      const ln = lines[j]; if (ln.key.length < 3) continue;
+      const raw = j === st.cur ? curRaw : rawOf(j);
       let s = raw;
       const d = j - st.cur;
+      // ...unless the new line clearly fits better than the current one.
+      if (d > 0 && d <= 3 && curRaw >= raw - .05 && !distinct(ln)) s -= .15;
       if (d === 0) { s += .02; curS = raw; }
       else if (d === 1) s += .05;
       else if (d === 2 || d === 3) s -= .03 * (d - 1);
-      else if (d === -1) s -= .10;
+      else if (d === -1) s -= (opts && opts.back) || .10;      // clip-based engines hear the end of the previous line again
       // Further away: the nearest copy of a repeated line wins (a chorus sung again goes to the next chorus, not the first).
       else s -= d > 0 ? .15 + Math.min(.06, d * .002) : .18 + Math.min(.06, -d * .002);
       if (s > best.s) best = { j, s };
