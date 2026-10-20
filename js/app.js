@@ -885,14 +885,18 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     // Song packs shipped with the app (vendor/packs.json): the free collections are part of every copy, so a fresh
     // browser, an incognito window or a new phone has the whole library on first open. Format of a pack file:
     // {name, licence, songs:[{title, lang, lyrics, src}]}. Written in one transaction; duplicates skipped by sound.
-    async addPack(pack, st) {
+    async addPack(pack, st, replace) {
       const seen = new Set(songs.map(s => Bulk.dupKey(s))); const now = Date.now(); const recs = []; let skipped = 0;
+      const byTitle = new Map(songs.map(s => [s.title, s]));
       for (const p of pack.songs || []) {
         const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
+        // An updated bundled pack: the same song gets the new lyrics (same id, so service lists keep it).
+        const old = replace && byTitle.get(p.title);
+        if (old) { if (old.lyrics !== lyrics) { Object.assign(old, { lyrics, updated: now }); if (p.yt && p.yt.id) old.yt = { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 }; recs.push(old); } continue; }
         const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
         recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: p.yt && p.yt.id ? { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 } : null, src: p.src || '', created: now, updated: now });
       }
-      if (recs.length) { await Store.putMany('songs', recs); for (const r of recs) songs.push(r); }
+      if (recs.length) { await Store.putMany('songs', recs); for (const r of recs) if (!songs.includes(r)) songs.push(r); }
       return { added: recs.length, skipped };
     },
     async installLocal(file) {
@@ -908,10 +912,11 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     // First run (or a pack added in an update): load every bundled pack that this browser has not got yet.
     async installBundled() {
       let list; try { list = (await (await fetch('vendor/packs.json', { cache: 'no-cache' })).json()).packs || []; } catch (e) { return; }
-      const done = S.packs || {}; let total = 0;
+      const done = S.packs || {}, ver = S.packVer || {}; let total = 0;
       for (const pk of list) {
-        if (done[pk.id]) continue;
-        try { const pack = await (await fetch(pk.file)).json(); const res = await this.addPack(pack); total += res.added; done[pk.id] = Date.now(); S.packs = done; saveSettings(); }
+        const want = pk.v || 1;
+        if (done[pk.id] && (ver[pk.id] || 1) >= want) continue;      // new version of a pack: new songs added, changed ones updated
+        try { const pack = await (await fetch(pk.file, { cache: 'no-cache' })).json(); const res = await this.addPack(pack, null, !!done[pk.id]); total += res.added; done[pk.id] = Date.now(); ver[pk.id] = want; S.packs = done; S.packVer = ver; saveSettings(); }
         catch (e) { /* offline or missing: tried again next start */ }
       }
       if (total) { rebuildSongIndex(); renderSongList(); renderService(); toast(`${total} ${t('packs_done')}`); }
