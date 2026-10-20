@@ -1175,6 +1175,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
     $('vbAuto2').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto').checked = S.vbAuto; saveSettings(); };
     const listenClick = () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); else toggleListen(); };
+    // On phones any tap on the page counts as the user gesture the browser wants: resume without hunting for the button.
+    document.addEventListener('touchend', () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); }, { passive: true });
     $('btnListen').onclick = listenClick; $('btnListen2').onclick = listenClick;
     $('autoFollow').onchange = e => { S.autoFollow = e.target.checked; saveSettings(); };
     $('btnSuggestYes').onclick = () => { const id = suggestId, line = +$('suggest').dataset.line || 0; hideSuggest(); if (id) switchToSong(id, line); };
