@@ -848,22 +848,39 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       x = x.replace(/^\((?:ട്യൂൺ|tune|രാഗം|Tune)[^)]*\)\s*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
       return x;
     },
-    // A pack file placed in vendor/ on this computer (not part of the published app), e.g. songs licensed for
-    // church use by their publishers. Format: {songs:[{title, lang, lyrics, src, artist}]}.
+    // Song packs shipped with the app (vendor/packs.json): the free collections are part of every copy, so a fresh
+    // browser, an incognito window or a new phone has the whole library on first open. Format of a pack file:
+    // {name, licence, songs:[{title, lang, lyrics, src}]}. Written in one transaction; duplicates skipped by sound.
+    async addPack(pack, st) {
+      const seen = new Set(songs.map(s => Bulk.dupKey(s))); const now = Date.now(); const recs = []; let skipped = 0;
+      for (const p of pack.songs || []) {
+        const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
+        const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
+        recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: null, src: p.src || '', created: now, updated: now });
+      }
+      if (recs.length) { await Store.putMany('songs', recs); for (const r of recs) songs.push(r); }
+      return { added: recs.length, skipped };
+    },
     async installLocal(file) {
-      if (this.busy) return; this.busy = true; const st = $('packStatus'); let added = 0, skipped = 0;
+      if (this.busy) return; this.busy = true; const st = $('packStatus');
       try {
         st.textContent = t('loading');
         const r = await fetch(file, { cache: 'no-cache' }); if (!r.ok) throw new Error(file + ' ' + r.status);
-        const pack = await r.json(); const seen = new Set(songs.map(s => Bulk.dupKey(s)));
-        for (const p of pack.songs || []) {
-          const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
-          const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
-          await saveSong({ title: p.title, lang: p.lang || Bulk.lang(lyrics), bg: '', lyrics, src: p.src || '' }, null); added++;
-        }
-        rebuildSongIndex(); renderSongList(); st.textContent = `${added} ${t('packs_done')} · ${skipped} ${t('packs_skip')}`;
+        const res = await this.addPack(await r.json());
+        rebuildSongIndex(); renderSongList(); st.textContent = `${res.added} ${t('packs_done')} · ${res.skipped} ${t('packs_skip')}`;
       } catch (e) { st.textContent = 'Pack: ' + e.message; }
       this.busy = false;
+    },
+    // First run (or a pack added in an update): load every bundled pack that this browser has not got yet.
+    async installBundled() {
+      let list; try { list = (await (await fetch('vendor/packs.json', { cache: 'no-cache' })).json()).packs || []; } catch (e) { return; }
+      const done = S.packs || {}; let total = 0;
+      for (const pk of list) {
+        if (done[pk.id]) continue;
+        try { const pack = await (await fetch(pk.file)).json(); const res = await this.addPack(pack); total += res.added; done[pk.id] = Date.now(); S.packs = done; saveSettings(); }
+        catch (e) { /* offline or missing: tried again next start */ }
+      }
+      if (total) { rebuildSongIndex(); renderSongList(); renderService(); toast(`${total} ${t('packs_done')}`); }
     },
     async install(which) {
       if (this.busy) return; this.busy = true;
@@ -1190,8 +1207,20 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
   let singHits = 0;
 
+  // The library index is (re)built in small slices during idle time, so even a 1,000-song library never blocks
+  // the screen; the previous index keeps serving until the new one is ready.
+  let ixBuild = 0;
   function rebuildSongIndex() {
-    songIx = Core.songIndex(songs.map(s => ({ id: s.id, lines: prepared(s) })));
+    const run = ++ixBuild, list = [], all = songs.slice(); let i = 0;
+    const step = () => {
+      if (run !== ixBuild) return;
+      const end = Math.min(all.length, i + 40);
+      for (; i < end; i++) list.push({ id: all[i].id, lines: prepared(all[i]) });
+      if (i < all.length) (window.requestIdleCallback || (f => setTimeout(f, 0)))(step, { timeout: 200 });
+      else songIx = Core.songIndex(list);
+    };
+    if (!songIx) { for (const s of all) list.push({ id: s.id, lines: prepared(s) }); songIx = Core.songIndex(list); i = all.length; return; }
+    step();
   }
   let ixTimer;
   function songsChanged() { clearTimeout(ixTimer); ixTimer = setTimeout(rebuildSongIndex, 300); }
@@ -1675,6 +1704,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     rebuildSongIndex();
     renderAll(); setTab('live');
     if (service[0]) loadSong(service[0]);
+    // Bundled song collections arrive after the screen is up, so the first paint is never delayed.
+    setTimeout(() => Packs.installBundled(), 800);
     if (!SR) $('supportMsg').innerHTML = `<p class="msg">${t('need_chrome')}</p>`;
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
     // Load the chosen Bible versions in the background so the Bible tab opens instantly.

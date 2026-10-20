@@ -36,6 +36,8 @@
   window.LFStore = {
     all: store => tx(store, 'readonly', (s, m) => s ? s.getAll() : [...m.values()]).then(r => r || []),
     put: (store, obj) => tx(store, 'readwrite', (s, m) => s ? s.put(obj) : m.set(obj.id, obj)),
+    // Many records in one transaction (hundreds of songs in well under a second instead of one write each).
+    putMany: (store, objs) => tx(store, 'readwrite', (s, m) => { for (const o of objs) s ? s.put(o) : m.set(o.id, o); return null; }),
     del: (store, id) => tx(store, 'readwrite', (s, m) => s ? s.delete(id) : m.delete(id)),
     clear: store => tx(store, 'readwrite', (s, m) => s ? s.clear() : m.clear()),
     get: k => tx('kv', 'readonly', (s, m) => s ? s.get(k) : m.get(k)),

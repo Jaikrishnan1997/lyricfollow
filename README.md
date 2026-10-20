@@ -127,6 +127,13 @@ Today's service list is tried first, on its own. Only when nothing in the servic
 whole library consulted, and then a song is chosen only when a whole line matches clearly (score ≥ 0.72, confirmed on
 a second phrase) - a few shared words never switch the screen.
 
+## Bundled song collections (vendor/packs.json)
+
+Every copy of the app ships the free collections and loads them into the browser's library on first open (also in a
+new browser, an incognito window or a new phone): Malayalam hymns from Wikisource (427), classic English hymns from
+Wikisource (260) and the Tamil pack below (159). Loading takes about a second (one database transaction);
+duplicates are skipped by sound, so the buttons under *Free song collections* can be pressed again safely.
+
 ## Tamil song pack (vendor/songs-ta-fgs.json)
 
 159 Tamil songs whose rights holders published them on freegospelsongs.in (a non-profit site that describes them as
