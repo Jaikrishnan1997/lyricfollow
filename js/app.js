@@ -1264,8 +1264,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       this.send(a, now);
     },
     lang() {
-      // No song open yet: let Whisper detect the language; the service index finds the song.
-      const l = Listen.mode === 'songs' ? (song ? song.lang : '') : (S.vbLang === 'auto' ? '' : S.vbLang);
+      // No song open yet: the main language of today's service (seen live: left to guess, Whisper wrote Tamil
+      // singing as English - "Rajani Rajana, Vishnu Rajan" for "இராஜாதி இராஜனாம் இயேசுராஜன்").
+      const svcLang = () => { const c = {}; service.forEach(id => { const g = (songById(id) || {}).lang; if (g) c[g] = (c[g] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; };
+      const l = Listen.mode === 'songs' ? (song ? song.lang : svcLang()) : (S.vbLang === 'auto' ? '' : S.vbLang);
       return String(l || '').slice(0, 2);
     },
     prompt() {
@@ -1298,6 +1300,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
         let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
+        // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
+        if (/^(thank you[.!]?|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
         if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
