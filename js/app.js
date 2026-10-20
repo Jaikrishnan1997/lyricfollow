@@ -46,12 +46,26 @@
   // never writes back stale settings over a newer change (seen: a Groq key pasted in one tab was overwritten by
   // another tab still holding the old one).
   const settingsBus = (() => { try { return new BroadcastChannel('lyricfollow-settings'); } catch (e) { return null; } })();
-  function saveSettings() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { Store.set('settings', S).catch(() => {}); try { settingsBus && settingsBus.postMessage(JSON.parse(JSON.stringify(S))); } catch (e) {} }, 300); }
+  // Keys and the AI switches carry the time they were last changed (S.keysAt): whichever tab changed them last wins,
+  // both when a tab saves (the stored record is read first) and when another tab announces its settings.
+  const KEYS = ['groq', 'groqKey', 'groqModel', 'groqBible', 'gemini', 'geminiKey', 'geminiModel'];
+  function saveSettings() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try { const st = await Store.get('settings'); if (st && (st.keysAt || 0) > (S.keysAt || 0)) { for (const k of KEYS) if (k in st) S[k] = st[k]; S.keysAt = st.keysAt; showKeys(); } } catch (e) {}
+      Store.set('settings', S).catch(() => {});
+      try { settingsBus && settingsBus.postMessage(JSON.parse(JSON.stringify(S))); } catch (e) {}
+    }, 300);
+  }
+  function showKeys() {
+    const set = (id, v, chk) => { const el2 = document.getElementById(id); if (el2) chk ? (el2.checked = !!v) : (el2.value = v || ''); };
+    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey);
+  }
   if (settingsBus) settingsBus.onmessage = e => {
     const n = e.data || {}; if (typeof n !== 'object') return;
-    for (const k of ['groq', 'groqKey', 'groqModel', 'groqBible', 'gemini', 'geminiKey', 'geminiModel', 'plan', 'packs', 'packVer']) if (k in n) S[k] = n[k];
-    const set = (id, v, chk) => { const el2 = document.getElementById(id); if (el2) chk ? (el2.checked = !!v) : (el2.value = v || ''); };
-    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey); set('planInput', S.plan);
+    if ((n.keysAt || 0) > (S.keysAt || 0)) { for (const k of KEYS) if (k in n) S[k] = n[k]; S.keysAt = n.keysAt; showKeys(); }
+    for (const k of ['plan', 'packs', 'packVer']) if (k in n) S[k] = n[k];
+    const pi = document.getElementById('planInput'); if (pi && document.activeElement !== pi) pi.value = S.plan || '';
   };
   function saveService() { Store.set('service', service).catch(() => {}); }
 
@@ -2068,14 +2082,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
     Track.loadCatalog().then(() => { Track.describe(); if (song && song.yt) $('trackName').textContent = Track.chapterName(song.yt) || song.yt.id; });
     $('stWhOn').checked = !!S.groq; $('stWhKey').value = S.groqKey || ''; $('stWhModel').value = S.groqModel || 'whisper-large-v3'; $('stWhBible').checked = !!S.groqBible;
-    const whRe = () => { saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    const whRe = () => { S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stWhOn').onchange = e => { S.groq = e.target.checked; whRe(); };
     $('stWhKey').onchange = e => { S.groqKey = e.target.value.trim(); whRe(); };
     $('stWhModel').onchange = e => { S.groqModel = e.target.value || 'whisper-large-v3'; whRe(); };
     $('stWhBible').onchange = e => { S.groqBible = e.target.checked; whRe(); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
-    $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
-    $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemOn').onchange = e => { S.gemini = e.target.checked; S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stGemModel').onchange = e => { S.geminiModel = e.target.value.trim() || 'gemini-2.5-flash-lite'; saveSettings(); };
     $('stLow').onchange = e => { S.low = e.target.checked; saveSettings(); document.body.classList.toggle('low', S.low); const st2 = projWin && !projWin.closed && projWin.document.getElementById('stage'); if (st2 && st2._lf) st2._lf.bgKey = null; if ($('preview')._lf) $('preview')._lf.bgKey = null; output(); };
     $('btnExport').onclick = exportBackup;
