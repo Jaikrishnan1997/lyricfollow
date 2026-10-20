@@ -525,6 +525,9 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
 
   // Online engine (browser speech recognition). A fresh recogniser is created on every restart: Edge in particular
   // can stop delivering results silently, so a watchdog restarts it when nothing arrives for a while.
+  // iPhone/iPad Safari rejects a recogniser that is started from a timer ("not-allowed"): it must be restarted
+  // straight away inside the previous session's end event, on the same object, without aborting it.
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const Cloud = {
     rec: null, lang: '', timer: null, fails: 0, unsupported: new Set(), startTimer: null, stalled: false,
     // Some devices (iPhone) only recognise a few languages: fall back to Indian English, which still catches
@@ -560,11 +563,13 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         }
         else if (e.error === 'language-not-supported') { this.unsupported.add(this.lang); toast(t('lang_unsupported') + ': ' + langName(this.lang)); }
         else if (e.error === 'network') { this.fails++; if (this.fails >= 3) setStatus(navigator.onLine ? t('speech_service_down') : t('no_internet'), false); }
+        else if (e.error === 'aborted' || e.error === 'no-speech') { /* normal on phones: the end event restarts it */ }
         else if (e.error === 'audio-capture') { this.fails++; if (this.fails >= 2) { this.stalled = true; updateListenUI(); setStatus(t('tap_resume'), false); } }
       };
       rec.onend = () => {
         if (this.rec !== rec || !Listen.mode || this.stalled) return;
         clearTimeout(this.timer);
+        if (IOS && rec.lang === this.pick(this.lang)) { try { rec.start(); lastEventAt = Date.now(); return; } catch (e) {} }
         this.timer = setTimeout(() => { if (this.rec === rec && Listen.mode && !this.stalled) this.start(this.lang); }, Math.min(5000, 150 + this.fails * 1000));
       };
       try { rec.start(); } catch (e) { this.fails++; if (this.fails >= 3) { this.stalled = true; updateListenUI(); setStatus(t('tap_resume'), false); } }
