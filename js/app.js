@@ -1290,6 +1290,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         return;
       }
       this.fwd = null;
+      // The song started again from the top (common when a song is sung twice): its opening lines, heard twice
+      // while the screen is far on, go back on the usual bar.
+      if (line <= 3 && follow.cur >= 8 && top.score >= .45) {
+        this.back = this.back.line >= 0 && this.back.line <= 4 ? { line, n: this.back.n + 1 } : { line, n: 1 };
+        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
+        return;
+      }
       if (ahead == null && line <= follow.cur - 3) {                     // song started again / a verse repeated
         this.back = this.back.line === line ? { line, n: this.back.n + 1 } : { line, n: 1 };
         if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
@@ -1350,7 +1357,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
       try {
         const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
-        if (r.status === 429) { this.backoffUntil = Date.now() + 6000; setStatus(t('whisper_quota'), false); return; }
+        if (r.status === 429) {
+          // The free tier's daily limit is per model: when one is used up, carry on with the other one.
+          const msg = await r.text().catch(() => '');
+          if (/per day|RPD/i.test(msg) && !this.swapped) {
+            this.swapped = true; S.groqModel = (S.groqModel || 'whisper-large-v3') === 'whisper-large-v3' ? 'whisper-large-v3-turbo' : 'whisper-large-v3';
+            const sel = document.getElementById('stWhModel'); if (sel) sel.value = S.groqModel; saveSettings(); toast(t('whisper_quota') + ' → ' + S.groqModel); return;
+          }
+          this.backoffUntil = Date.now() + (/per day|RPD/i.test(msg) ? 60000 : 6000); setStatus(t('whisper_quota'), false); return;
+        }
         if (r.status === 401 || r.status === 403) { this.fails = 9; throw new Error('key'); }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         // Groq's free tier allows 20 clips a minute and about 2000 a day: one clip every 3.2 s, slowing to one every
