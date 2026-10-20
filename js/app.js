@@ -526,14 +526,21 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   // Online engine (browser speech recognition). A fresh recogniser is created on every restart: Edge in particular
   // can stop delivering results silently, so a watchdog restarts it when nothing arrives for a while.
   const Cloud = {
-    rec: null, lang: '', timer: null, fails: 0,
+    rec: null, lang: '', timer: null, fails: 0, unsupported: new Set(), startTimer: null, stalled: false,
+    // Some devices (iPhone) only recognise a few languages: fall back to Indian English, which still catches
+    // Tamil/Malayalam words well enough for the phonetic matching used everywhere in this app.
+    pick(lang) { if (!this.unsupported.has(lang)) return lang; return ['en-IN', 'ta-IN', 'ml-IN', 'en-US'].find(l => !this.unsupported.has(l)) || 'en-US'; },
     start(lang) {
-      this.stop(); this.lang = lang; lastEventAt = Date.now();
+      this.stop(); lang = this.pick(lang); this.lang = lang; Listen.lang = lang; lastEventAt = Date.now();
       const rec = this.rec = new SR();
       rec.lang = lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = S.low ? 1 : 3;
-      const alive = () => { lastEventAt = Date.now(); };
+      const alive = () => { lastEventAt = Date.now(); clearTimeout(this.startTimer); };
       rec.onaudiostart = rec.onsoundstart = rec.onspeechstart = alive;
-      rec.onstart = () => { alive(); if (this.fails < 3) updateListenUI(); };
+      // If the recogniser never reports that it started (phone browsers do this after a while), try again,
+      // and after a few tries ask for a tap - a user gesture is what those browsers need to reopen the microphone.
+      clearTimeout(this.startTimer);
+      this.startTimer = setTimeout(() => { if (this.rec !== rec || !Listen.mode) return; this.fails++; if (this.fails >= 3) { this.stalled = true; updateListenUI(); setStatus(t('tap_resume'), false); } else this.start(this.lang); }, 5000);
+      rec.onstart = () => { alive(); clearTimeout(this.startTimer); this.stalled = false; if (this.fails < 3) updateListenUI(); };
       rec.onresult = e => {
         alive(); if (this.fails >= 3) { this.fails = 0; updateListenUI(); } this.fails = 0;
         let finals = '', interim = [], conf = 0, nconf = 0;
@@ -545,17 +552,26 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         onText(finals, interim, nconf ? conf / nconf : 0.75);
       };
       rec.onerror = e => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { Listen.stop(); toast(t('mic_blocked')); }
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          // Phones revoke the microphone when the screen locks or the app goes to the background: ask for a tap.
+          if (this.fails >= 1 || HOSTED) { this.stalled = true; clearTimeout(this.timer); updateListenUI(); setStatus(t('tap_resume'), false); }
+          else { Listen.stop(); toast(t('mic_blocked')); }
+          this.fails++;
+        }
+        else if (e.error === 'language-not-supported') { this.unsupported.add(this.lang); toast(t('lang_unsupported') + ': ' + langName(this.lang)); }
         else if (e.error === 'network') { this.fails++; if (this.fails >= 3) setStatus(navigator.onLine ? t('speech_service_down') : t('no_internet'), false); }
+        else if (e.error === 'audio-capture') { this.fails++; if (this.fails >= 2) { this.stalled = true; updateListenUI(); setStatus(t('tap_resume'), false); } }
       };
       rec.onend = () => {
-        if (this.rec !== rec || !Listen.mode) return;
+        if (this.rec !== rec || !Listen.mode || this.stalled) return;
         clearTimeout(this.timer);
-        this.timer = setTimeout(() => { if (this.rec === rec && Listen.mode) this.start(this.lang); }, Math.min(5000, 150 + this.fails * 1000));
+        this.timer = setTimeout(() => { if (this.rec === rec && Listen.mode && !this.stalled) this.start(this.lang); }, Math.min(5000, 150 + this.fails * 1000));
       };
-      try { rec.start(); } catch (e) {}
+      try { rec.start(); } catch (e) { this.fails++; if (this.fails >= 3) { this.stalled = true; updateListenUI(); setStatus(t('tap_resume'), false); } }
     },
-    stop() { clearTimeout(this.timer); if (this.rec) { const r = this.rec; this.rec = null; try { r.onend = null; r.onresult = null; r.abort(); } catch (e) {} } }
+    // Called from a tap on the listen button while stalled: restart with a fresh user gesture.
+    resume() { this.fails = 0; this.stalled = false; this.start(this.lang); },
+    stop() { clearTimeout(this.timer); clearTimeout(this.startTimer); this.stalled = false; if (this.rec) { const r = this.rec; this.rec = null; try { r.onend = null; r.onresult = null; r.abort(); } catch (e) {} } }
   };
 
   // Offline engine: cuts the microphone audio at natural pauses and sends each phrase to the local voice engines.
@@ -696,7 +712,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       this.lang = mode === 'songs' ? (song ? song.lang : 'ml-IN') : (S.vbLang === 'auto' ? (this.lastBibleLang || { ml: 'ml-IN', ta: 'ta-IN', en: 'en-IN' }[S.lang] || 'ml-IN') : S.vbLang);
       lastEventAt = Date.now(); hunt.i = 0; hunt.at = Date.now();
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
-      if (engine === 'local' || location.protocol !== 'file:') {   // the microphone also feeds language detection
+      if (engine === 'local' || (!HOSTED && location.protocol !== 'file:')) {   // the microphone also feeds language detection (laptop)
         this.waitingMic = true; updateListenUI();
         const ok = await Mic.start();
         this.waitingMic = false;
@@ -738,8 +754,9 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
     if (!auto) return;
     if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
-    const langs = huntLangs(); if (langs.length < 2) return;
-    const speaking = now - lastSpeechAt < 5000;
+    const langs = huntLangs().filter(l => Listen.engine !== 'cloud' || !Cloud.unsupported.has(l)); if (langs.length < 2) return;
+    // Without the microphone meter (phones) there is no way to know whether someone is speaking: keep rotating.
+    const speaking = Mic.stream ? now - lastSpeechAt < 5000 : true;
     const lastHit = Listen.mode === 'bible' ? hunt.lockedAt : Math.max(lastMatchAt, hunt.lockedAt);
     const locked = now - lastHit < 25000;
     const dwell = Listen.engine === 'cloud' ? 6000 : 10000;
@@ -764,7 +781,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function updateListenUI() {
     const on = !!Listen.mode, vb = S.listenMode === 'bible', cloud = S.net === 'online';
     const disabled = cloud && !SR;
-    for (const id of ['btnListen', 'btnListen2']) { const b = $(id); b.textContent = on ? t('listen_stop') : t('listen_start'); b.classList.toggle('on', on); b.classList.toggle('primary', !on); b.disabled = disabled; }
+    const stalled = on && Listen.engine === 'cloud' && Cloud.stalled;
+    for (const id of ['btnListen', 'btnListen2']) { const b = $(id); b.textContent = stalled ? t('listen_resume') : on ? t('listen_stop') : t('listen_start'); b.classList.toggle('on', on && !stalled); b.classList.toggle('primary', !on || stalled); b.disabled = disabled; }
     $('btnVB').textContent = Listen.mode === 'bible' ? t('listen_stop') : t('listen_bible'); $('btnVB').classList.toggle('on', Listen.mode === 'bible'); $('btnVB').classList.toggle('primary', Listen.mode !== 'bible'); $('btnVB').disabled = disabled;
     document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('sel', b.dataset.lm === S.listenMode));
     $('lmBible').hidden = !vb;
@@ -859,7 +877,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     if (Listen.mode !== 'songs') { box.hidden = true; return; }
     if (sc >= thr * .8) { noMatchSince = 0; box.hidden = true; return; }
     if (!noMatchSince) noMatchSince = Date.now();
-    if (Date.now() - noMatchSince > 15000) {
+    if (Date.now() - noMatchSince > 8000) {
       const q = ($('heard').textContent || '').trim();
       if (q.length > 8) { $('searchLink').href = 'https://www.google.com/search?q=' + encodeURIComponent(q + ' lyrics'); box.hidden = false; }
     }
@@ -1149,7 +1167,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setListenMode(b.dataset.lm));
     $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
     $('vbAuto2').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto').checked = S.vbAuto; saveSettings(); };
-    $('btnListen').onclick = toggleListen; $('btnListen2').onclick = toggleListen;
+    const listenClick = () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); else toggleListen(); };
+    $('btnListen').onclick = listenClick; $('btnListen2').onclick = listenClick;
     $('autoFollow').onchange = e => { S.autoFollow = e.target.checked; saveSettings(); };
     $('btnSuggestYes').onclick = () => { const id = suggestId, line = +$('suggest').dataset.line || 0; hideSuggest(); if (id) switchToSong(id, line); };
     $('btnSuggestNo').onclick = () => { hideSuggest(); };
