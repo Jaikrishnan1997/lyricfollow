@@ -79,6 +79,8 @@
     'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','athikaram','adhikaram','vasanam','vasanam','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
+  // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
+  for (const k of Object.keys(ORD)) { const n = Core.keyWords(k).replace(/\s+/g, ''); if (n && !ORD[n]) ORD[n] = ORD[k]; }
 
   function bookName(i, lang) { const b = BOOKS[i]; return (lang && b[lang]) || b.en; }
 

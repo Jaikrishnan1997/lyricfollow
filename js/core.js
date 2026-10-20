@@ -78,12 +78,49 @@
     }
     return best * .9;
   }
-  /** Trigram sets of the most recent sound, computed once per update (cheap on slow PCs). */
+  /** Trigram sets of the most recent sound, computed once per update (cheap on slow PCs).
+   *  `heard` may contain spaces (keyWords output): the words are kept for word-level matching. */
   function heardGrams(heard) {
     const out = [];
-    for (const [w, wt] of WINDOWS) { if (heard.length < w * .6) continue; const T = grams(heard.slice(-w)); if (T.size) out.push([T, wt]); }
-    out.sk = skel(heard.slice(-48));
+    const hk = heard.replace(/\s+/g, '');
+    for (const [w, wt] of WINDOWS) { if (hk.length < w * .6) continue; const T = grams(hk.slice(-w)); if (T.size) out.push([T, wt]); }
+    out.sk = skel(hk.slice(-48));
+    out.words = heard.indexOf(' ') >= 0 ? heard.trim().split(/\s+/).filter(x => x.length >= 2).slice(-20) : [];
     return out;
+  }
+  /* ---------- Word-level matching: robust to dropped or misheard words in a line ---------- */
+  function lev1w(a, b) {
+    if (a === b) return true;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    return a.slice(i + 1) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i) || a.slice(i) === b.slice(i + 1);
+  }
+  function wordMatch(h, lw) {
+    for (const w of lw) {
+      if (w === h) return 1;
+      if (w.length >= 4 && h.length >= 4 && (skel(w) === skel(h) || lev1w(w, h))) return .9;
+      if (w.length >= 5 && h.length >= 5 && w.startsWith(h.slice(0, 4)) && Math.abs(w.length - h.length) <= 2) return .7;
+    }
+    return 0;
+  }
+  function wordScoreK(hw, ln, lnPrev, K) {
+    K = Math.min(hw.length, K); if (!K) return 0;
+    let tot = 0, got = 0;
+    for (let i = hw.length - K; i < hw.length; i++) {
+      const wt = 1 + (i - (hw.length - K)) / K; tot += wt;                     // recent words count more
+      let m = wordMatch(hw[i], ln.w); if (m && ln.wu.has(hw[i])) m = Math.min(1.35, m * 1.5);   // words unique to this line count extra
+      if (!m && lnPrev && i < hw.length - 2) m = .35 * wordMatch(hw[i], lnPrev.w);          // the previous line's words at the start of this one
+      got += wt * m;
+    }
+    return Math.min(1, got / tot);
+  }
+  /** Share of the recently heard words that belong to a line (0..1). */
+  function wordScore(hw, ln, lnPrev) {
+    if (!hw || !hw.length || !ln.w) return 0;
+    let s = Math.max(wordScoreK(hw, ln, lnPrev, 7), .9 * wordScoreK(hw, ln, null, 3));
+    const last = hw[hw.length - 1];
+    if (last && last.length >= 4) for (const w of ln.wu) if (w === last || (w.length >= 5 && (skel(w) === skel(last) || lev1w(w, last)))) { s = Math.max(s, .62); break; }
+    return s;
   }
   function scoreG(HG, g, ln) {
     let s = 0;
@@ -94,8 +131,13 @@
   /** How much of the most recently heard sound belongs to a line (0..1). */
   function lineScore(heard, g) { return scoreG(heardGrams(heard), g); }
 
-  function prepLine(t) { const k = key(t), sk = skel(k); return { text: t, key: k, g: grams(k), sk, skb: bigrams(sk) }; }
-  function prepare(lines) { return lines.map(prepLine); }
+  function prepLine(t) { const k = key(t), sk = skel(k); return { text: t, key: k, g: grams(k), sk, skb: bigrams(sk), w: keyWords(t).split(/\s+/).filter(x => x.length >= 2), wu: new Set() }; }
+  function prepare(lines) {
+    const out = lines.map(prepLine), cnt = new Map();
+    for (const ln of out) for (const w of new Set(ln.w)) cnt.set(w, (cnt.get(w) || 0) + 1);
+    for (const ln of out) ln.wu = new Set(ln.w.filter(w => cnt.get(w) === 1));
+    return out;
+  }
 
   /** Best score of a whole song against what was heard. */
   function songScore(heard, lines) {
@@ -108,9 +150,9 @@
   function decide(st, lines, heard, thr) {
     const HG = heardGrams(heard);
     let best = { j: st.cur, s: 0 }, curS = 0;
-    if (HG.length) for (let j = 0; j < lines.length; j++) {
+    if (HG.length || HG.words.length) for (let j = 0; j < lines.length; j++) {
       const ln = lines[j]; if (ln.key.length < 3) continue;
-      const raw = scoreG(HG, ln.g, ln);
+      const raw = Math.max(HG.length ? scoreG(HG, ln.g, ln) : 0, .95 * wordScore(HG.words, ln, lines[j - 1]));
       let s = raw;
       const d = j - st.cur;
       if (d === 0) { s += .02; curS = raw; }
@@ -124,7 +166,13 @@
     st.raw = best.s;
     if (best.j === st.cur || best.s < thr) { st.pend = -1; st.hits = 0; return false; }
     if (st.pend === best.j) st.hits++; else { st.pend = best.j; st.hits = 1; }
-    if (st.hits >= 2 || best.s >= thr + .22) { st.cur = best.j; st.pend = -1; st.hits = 0; return true; }
+    const d = best.j - st.cur;
+    // The next line moves as soon as it is clearly heard; anything further away must be heard twice in a row
+    // (three times for a long jump) so the screen never skips around on one noisy phrase.
+    const ok = d === 1 ? (st.hits >= 2 || best.s >= thr + .1)
+      : Math.abs(d) <= 3 ? (st.hits >= 2 && best.s >= thr + .05) || best.s >= thr + .3
+      : (st.hits >= 3 && best.s >= thr + .05) || (st.hits >= 2 && best.s >= thr + .25);
+    if (ok) { st.cur = best.j; st.pend = -1; st.hits = 0; return true; }
     return false;
   }
 
@@ -214,7 +262,7 @@
       if (!hit) break;
       const v = hit[1];
       if (parts && !((total % 10 === 0 && total >= 20 && v < 10) || (total === 100 && v < 100))) break;
-      total += v; parts++; rest = rest.slice(hit[0].length).replace(/^(i|u|tu|ti|tt[iu]?)(?=[a-z])/, '');
+      total += v; parts++; rest = rest.slice(hit[0].length).replace(/^(iy|i|u|y|tu|ti|tt[iu]?)(?=[a-z])/, '');
       if (parts >= 3) break;
     }
     // Ordinals glued to the next word by speech recognisers ("padinaramvakyam") are accepted too.
@@ -234,6 +282,8 @@
     for (let ti = 0; ti < toks.length; ti++) {
       const t = toks[ti];
       if (/^\d+$/.test(t)) { out.push(+t); prevWord = false; continue; }
+      // Digits with an ordinal ending glued on ("3m" from Tamil 3ம், "16am", "5th").
+      const dm = t.match(/^(\d+)[a-z]{1,4}$/); if (dm) { out.push(+dm[1]); prevWord = false; continue; }
       const k = t.replace(/[^a-z]/g, '');
       let n = null;
       // A number word split in two by the speech model ("padina ramvakyam" = padinaram vakyam) is tried first.

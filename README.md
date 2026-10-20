@@ -111,3 +111,12 @@ Other free church software worth knowing: FreeShow, OpenLP and Quelea are comple
 Lyric Follow focuses on the AI following and Indian-language Bible, and can be used alongside them.
 
 The Malayalam and Tamil app text was written by Claude; please have a native speaker check it before wide use.
+
+## How the song follower decides (v30)
+
+Each song in the service is prepared once (per-line sound keys, trigrams, consonant skeletons and a word list, with the
+words unique to each line marked) — the primary index. The whole library has a trigram index — the secondary index — used
+to find which song is being sung; songs in today's service list get a head start. While singing, every recognised
+phrase is scored against the lines in two ways (sound trigrams and fuzzy word matches with recency weighting) and the
+screen moves to the next line as soon as it is clearly heard; a jump to any other line must be heard twice in a row
+(three times for a long jump), so one noisy phrase never makes the screen skip around.

@@ -549,7 +549,14 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         let finals = '', interim = [], conf = 0, nconf = 0;
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const r = e.results[i];
-          if (r.isFinal) { finals += ' ' + r[0].transcript; if (r[0].confidence > 0) { conf += r[0].confidence; nconf++; } }
+          if (r.isFinal) {
+            // Several guesses may arrive for a finished phrase: while singing, keep the one that fits the song best.
+            let pick = r[0];
+            if (r.length > 1 && Listen.mode === 'songs' && song && lines.length) {
+              let bs = -1; for (let a = 0; a < r.length; a++) { const sc = Core.songScore(Core.key(r[a].transcript), lines); if (sc > bs) { bs = sc; pick = r[a]; } }
+            }
+            finals += ' ' + pick.transcript; if (pick.confidence > 0) { conf += pick.confidence; nconf++; }
+          }
           else for (let a = 0; a < r.length; a++) interim.push(r[a].transcript);
         }
         onText(finals, interim, nconf ? conf / nconf : 0.75);
@@ -837,13 +844,13 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function songsChanged() { clearTimeout(ixTimer); ixTimer = setTimeout(rebuildSongIndex, 300); }
 
   function onSongSpeech(finals, interim) {
-    if (finals) heardKey = (heardKey + Core.key(finals)).slice(-400);
+    if (finals) heardKey = (heardKey + ' ' + Core.keyWords(finals)).slice(-400);
     // The offline model writes Malayalam/Tamil in English letters, so matches score a little lower.
     const thr = S.thr / 100 - (Listen.engine === 'local' ? .06 : 0);
     let moved = false;
     if (song && lines.length && S.autoFollow) {
       for (const alt of (interim.length ? interim : [''])) {
-        if (Core.decide(follow, lines, (heardKey + Core.key(alt)).slice(-400), thr)) { moved = true; break; }
+        if (Core.decide(follow, lines, (heardKey + ' ' + Core.keyWords(alt)).slice(-400), thr)) { moved = true; break; }
       }
     }
     const sc = song ? follow.score : 0;
@@ -852,7 +859,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     const pill = $('matchPill'); pill.textContent = Math.round(sc * 100) + '%';
     pill.className = 'pill ' + (sc >= thr + .15 ? 'good' : sc >= thr ? 'ok' : 'low');
     if (moved) { if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
-    if (S.autoFollow) detectOtherSong((heardKey + Core.key(interim[0] || '')).slice(-400), sc, thr, !!finals);
+    if (S.autoFollow) detectOtherSong((heardKey + ' ' + Core.keyWords(interim[0] || '')).slice(-400), sc, thr, !!finals);
   }
 
   // Finds the song being sung anywhere in the library (fast index), and jumps to it at the right line.
@@ -862,6 +869,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     lastDetectAt = now;
     // Look at the whole recent window and at the latest phrase alone, so a new song is not drowned by the old one.
     const cands = Core.songLookup(songIx, h, 4).concat(h.length > 160 ? Core.songLookup(songIx, h.slice(-160), 4) : []);
+    // Songs in today's service list are the likely ones: they get a small head start over the rest of the library.
+    for (const c of cands) if (service.includes(c.id)) c.score += .05;
     const best = cands.filter(x => !song || x.id !== song.id).sort((a, b) => b.score - a.score)[0];
     const need = Math.max(thr + .1, .62);
     if (best && best.score >= need && best.score > curScore + .1) {
@@ -918,13 +927,18 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function onBibleSpeech(finals, interim, conf) {
     if (finals) vbText = (vbText + ' ' + finals).slice(-400);
     const tail = (vbText + ' ' + (interim[0] || '')).slice(-90);
-    const r = Bible.parseRef(tail, { exactOnly: true, needChapter: true, needVerse: true });
+    const opts = { exactOnly: true, needChapter: true, needVerse: true };
+    // A reference said at the start of a long sentence ("John 3 16, for God so loved...") would fall off the
+    // 90-character tail, so the whole finished phrase is tried first.
+    let r = finals && finals.length > 90 ? Bible.parseRef(finals, opts) : null;
+    if (!r) r = Bible.parseRef(tail, opts);
     if (r) {
       // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
       const singing = songIx && Core.songLookup(songIx, Core.key(tail), 1).some(x => x.score >= .6);
       // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
       // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
-      const need = r.ch === r.v ? .85 : .72;
+      const indic = /[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
+      const need = r.ch === r.v ? .85 : indic ? .6 : .72;
       // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
       const bookOk = !r.fuzzy || Listen.engine === 'local';
       const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9));
