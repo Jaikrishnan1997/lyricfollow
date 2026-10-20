@@ -75,7 +75,7 @@
     18: SPOKEN[18] + ' சங்கீத சங்கீதப் സങ്കീർത്തന sankirtanam sankeerthanam sangeetham',
     19: (SPOKEN[19] || '') + ' സദൃശ സദൃശ്യ സദൃശ്യവാക്യം സദൃശവാക്യം സദൃശ്യവാക്യങ്ങളിൽ',
     42: SPOKEN[42] + ' യോഹന്നാനിൽ யோவானில் yohannan yovan',
-    44: SPOKEN[44] + ' റോമാ ரோமாபுரி roma',
+    44: SPOKEN[44] + ' റോമാ ரோமாபுரி roma roman',
     53: 'തിമോത്തി തിമൊഥെയൊസ് தீமோத்தி timothy',
     57: SPOKEN[57] + ' എബ്രായ എബ്രായലേഖനം எபிரேயர் ebraya',
     65: SPOKEN[65] + ' வெளிப்படுத்தல் வெளிப்படுத்துதல் വെളിപ്പാടു velippad'
@@ -85,6 +85,10 @@
   for (const [i, names] of Object.entries(SPOKEN)) names.split(' ').filter(Boolean).forEach(a => { addAlias(a, +i, true); SPOKENKEYS.add(kn(a)); });
   // Numbered books said with a number word ("ഒന്നാം കൊരിന്ത്യർ", "முதலாம் யோவான்", "first Peter") also answer to
   // their digit form; Timothy's spoken short form is registered for both letters.
+  // 1/2/3 John said with any spelling of John ("first jon", "1 jhon", "ഒന്നാം യോഹന്നാൻ").
+  ['jon', 'jhon', 'jaan', 'yohan', 'yohannan', 'yovan', 'ജോൺ', 'ஜான்', 'യോഹന്നാൻ', 'யோவான்'].forEach(a => { const k = kn(a); [1, 2, 3].forEach(n => { if (!ALIAS.has(n + k)) ALIAS.set(n + k, 60 + n); FULLNAMES.add(n + k); }); });
+  // English recognisers mishear "Kings" after the number: "2 Kays", "2 Canes", "1 Keens".
+  ['kays', 'canes', 'kins', 'keens', 'kinks', 'kingz'].forEach(a => { const k = kn(a); ALIAS.set('1' + k, 10); ALIAS.set('2' + k, 11); FULLNAMES.add('1' + k); FULLNAMES.add('2' + k); });
   ['തിമോത്തി', 'timothy', 'timoti', 'timotti'].forEach(a => { const k = kn(a); ALIAS.set('1' + k, 53); ALIAS.set('2' + k, 54); FULLNAMES.add('1' + k); FULLNAMES.add('2' + k); });
   // Words that only decorate a book name in speech: "പുസ്തകം" (book), "ലേഖനം" (letter), "സുവിശേഷം"/"சுவிசேஷம்" (gospel),
   // "நிருபம்" (epistle), "எழுதிய/எழுதின" (written), "gospel of", "book of".
@@ -112,9 +116,9 @@
 
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
   const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','വാക്യത്തിൽ','அதிகாரம்','வசனம்','வசனங்கள்','अध्याय','पद','आयत',
-    'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','athikaram','adhikaram','vasanam','vasanam','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
+    'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','adhayam','athayam','adhyam','athikaram','adhikaram','vasanam','vasanam','adhyay','adhayam','athayam','adhyam','vakkam','vakam','vakem','vaakkam'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
   const CH_CUE = new Set(['chapter','chapters','ch','അദ്ധ്യായം','അധ്യായം','അദ്ധ്യായത്തിൽ','அதிகாரம்','अध्याय','adhyayam','athyayam','adyayam','adhyaayam','athikaram','adhikaram','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
-  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','வசனம்','வசனங்கள்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','வசனம்','வசனங்கள்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam','vakkam','vakam','vakem','vaakkam'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
   function cueKind(tok) {
     if (!tok) return '';
     const k = tok.replace(/[^a-z]/g, ''); if (!k) return '';
@@ -220,14 +224,20 @@
     toks = toks.reduce((a, t) => { if (/^(m|am|aam|avatu|vatu|atu)$/.test(t) && /^\d+$/.test(a[a.length - 1] || '')) a[a.length - 1] += t; else a.push(t); return a; }, []);
     // Number word before a numbered book ("രണ്ടാം രാജാക്കന്മാർ", "இரண்டாம் கொரிந்தியர்", "second Kings", "II Kings") -> digit.
     for (let i = 0; i + 1 < toks.length; i++) {
-      if (/^\d/.test(toks[i]) && !/^[123](st|nd|rd)?$/.test(toks[i])) continue;
-      let n = /^[123](st|nd|rd)?$/.test(toks[i]) ? +toks[i][0] : ORD[toks[i]] ? +ORD[toks[i]] : BOOKORD.get(toks[i]);
+      if (/^\d/.test(toks[i]) && !/^[123](st|nd|rd|nt|rt)?$/.test(toks[i])) continue;
+      let n = /^[123](st|nd|rd|nt|rt)?$/.test(toks[i]) ? +toks[i][0] : ORD[toks[i]] ? +ORD[toks[i]] : BOOKORD.get(toks[i]);
       if (n == null) { const ns = Core.numbers(toks[i]); n = ns.length === 1 && ns[0] <= 3 ? ns[0] : null; }
       if (n == null) continue;
       for (let len = 1; len <= 2 && i + len < toks.length; len++) {
         // Only full book names count here: "first time" must not become "1 tim" (1 Timothy).
         const k = n + toks.slice(i + 1, i + 1 + len).join(''), st = stemBook(k);
         if (st && (FULLNAMES.has(st) || SPOKENKEYS.has(st) || st.length >= 6)) { toks[i] = String(n); break; }
+        // A slightly misheard numbered book ("1 jhon", "2nd corundians"): nearest numbered book name, same number.
+        if (len === 1 && k.length >= 6) {
+          let best = null, bd = 9;
+          for (const [a] of ALIAS_LIST) { if (a[0] !== String(n) || !/^\d[a-z]+$/.test(a) || Math.abs(a.length - k.length) > 2) continue; const d = lev(a, k); if (d < bd) { bd = d; best = a; } }
+          if (best && bd <= (k.length >= 8 ? 2 : 1)) { toks[i] = String(n); toks[i + 1] = best.slice(1); break; }
+        }
       }
     }
     // Words said twice ("യോഹന്നാൻ യോഹന്നാൻ", "പതിമൂന്നാം പതിമൂന്നാം") count once; a number said twice ("Hebrews 7 7 28",
@@ -251,9 +261,13 @@
         const after = Core.numbers(toks.slice(nx).join(' ')); if (after.length < 2 && !(after.length === 1 && after[0] >= 100)) continue;
         // The word before the numbers, or that word glued to the previous one ("yo kanan" = yohanan).
         const cands = [[toks[i], i]]; if (i > 0 && !/\d/.test(toks[i - 1])) cands.push([toks[i - 1] + toks[i], i - 1]);
-        let best = null;
-        for (const [w, st] of cands) { if (w.length < 5) continue;
-          for (const [a, b] of ALIAS_LIST) { if (a.length < 5 || /\d/.test(a) || Math.abs(a.length - w.length) > 2) continue; const d = lev(a, w); if (d <= (w.length >= 6 ? 2 : 1) && (!best || d < best.d)) best = { b, d, st }; } }
+        const num = i > 0 && /^[123]$/.test(toks[i - 1]);       // "2 Canes" / "2 Kays" = 2 Kings: compare with numbered books
+        if (num) cands.push([toks[i - 1] + toks[i], i - 1]);
+        let best = null, tie = false;
+        for (const [w, st] of cands) { if (w.length < 5) continue; const dig = /^\d/.test(w);
+          for (const [a, b] of ALIAS_LIST) { if (a.length < 5 || /\d/.test(a) !== dig || (dig && a[0] !== w[0]) || Math.abs(a.length - w.length) > 2) continue; const d = lev(a, w);
+            if (d <= (dig ? (w.length >= 7 ? 2 : 1) : w.length >= 6 ? 2 : 1) && (!best || d < best.d)) { tie = false; best = { b, d, st }; } else if (best && d === best.d && b !== best.b) tie = true; } }
+        if (best && tie && /^\d/.test(toks[best.st])) best = null;
         if (best) { f = { book: best.b, start: best.st, end: i + 1, score: 0 }; break; }
       }
       if (!f) return null;
