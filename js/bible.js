@@ -68,11 +68,47 @@
     42:'ஜான் ஜோன் யோவான் ജോൺ ജോൺസ് യോഹന്നാന്റെ', 43:'ஆக்ட்ஸ் ആക്ട്സ്', 44:'ரோமன்ஸ் റോമൻസ്', 45:'கொரிந்தியன்ஸ்', 57:'ஹீப்ரூஸ் ഹീബ്രൂസ്',
     58:'ஜேம்ஸ் ജെയിംസ്', 65:'ரெவலேஷன் റെവലേഷൻ വെളിപാട്'
   };
+  // More spoken forms collected from how people actually say the books (Malayalam, Tamil and English letters).
+  Object.assign(SPOKEN, {
+    0: (SPOKEN[0] || '') + ' ulpatti ulpathi aatiyakamam',
+    17: 'yop yopu iyyob ഇയ്യോബിന്റെ',
+    18: SPOKEN[18] + ' சங்கீத சங்கீதப் സങ്കീർത്തന sankirtanam sankeerthanam sangeetham',
+    19: (SPOKEN[19] || '') + ' സദൃശ സദൃശ്യ സദൃശ്യവാക്യം സദൃശവാക്യം സദൃശ്യവാക്യങ്ങളിൽ',
+    42: SPOKEN[42] + ' യോഹന്നാനിൽ யோவானில் yohannan yovan',
+    44: SPOKEN[44] + ' റോമാ ரோமாபுரி roma',
+    53: 'തിമോത്തി തിമൊഥെയൊസ് தீமோத்தி timothy',
+    57: SPOKEN[57] + ' എബ്രായ എബ്രായലേഖനം எபிரேயர் ebraya',
+    65: SPOKEN[65] + ' வெளிப்படுத்தல் வெளிப்படுத்துதல் വെളിപ്പാടു velippad'
+  });
+  const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n))));
   const SPOKENKEYS = new Set();
-  for (const [i, names] of Object.entries(SPOKEN)) names.split(' ').forEach(a => { addAlias(a, +i, true); SPOKENKEYS.add(kn(a)); });
+  for (const [i, names] of Object.entries(SPOKEN)) names.split(' ').filter(Boolean).forEach(a => { addAlias(a, +i, true); SPOKENKEYS.add(kn(a)); });
+  // Numbered books said with a number word ("ഒന്നാം കൊരിന്ത്യർ", "முதலாம் யோவான்", "first Peter") also answer to
+  // their digit form; Timothy's spoken short form is registered for both letters.
+  ['തിമോത്തി', 'timothy', 'timoti', 'timotti'].forEach(a => { const k = kn(a); ALIAS.set('1' + k, 53); ALIAS.set('2' + k, 54); FULLNAMES.add('1' + k); FULLNAMES.add('2' + k); });
+  // Words that only decorate a book name in speech: "പുസ്തകം" (book), "ലേഖനം" (letter), "സുവിശേഷം"/"சுவிசேஷம்" (gospel),
+  // "நிருபம்" (epistle), "எழுதிய/எழுதின" (written), "gospel of", "book of".
+  const NOISE = new Set(['പുസ്തകം', 'പുസ്തകത്തിൽ', 'ലേഖനം', 'ലേഖനത്തിൽ', 'സുവിശേഷം', 'സുവിശേഷത്തിൽ', 'புஸ்தகம்', 'புத்தகம்', 'சுவிசேஷம்', 'சுவிசேஷத்தில்', 'நிருபம்', 'நிருபத்தில்',
+    'எழுதிய', 'எழுதின', 'தீர்க்கதரிசி', 'gospel', 'book', 'letter', 'epistle', 'pustakam', 'pusthakam', 'lekhanam', 'suvisesham', 'suvishesham', 'nirupam'].map(kn));
+  const FILLER = new Set(['അതായത്', 'പിന്നെ', 'അതാവത്', 'அதாவது', 'அந்த', 'இந்த', 'uh', 'um', 'the', 'that', 'okay', 'ok', 'so', 'is'].map(kn));
+  // "first/second/third" in the three languages, as said before a book name.
+  const BOOKORD = new Map([['മുതലാം', 1], ['முதலாம்', 1], ['முதல்', 1], ['மூதலாம்', 1]].map(([w, n]) => [kn(w), n]));
+  // Case and possessive endings that hang on a book name in speech ("യോഹന്നാന്റെ", "റോമർക്കുള്ള", "ஆதியாகமத்தில்", "ரோமருக்கு").
+  const SUFFIXES = ['ukkulla', 'kkulla', 'kulla', 'ukula', 'kula', 'arkku', 'ukku', 'kku', 'uku', 'ku', 'inte', 'nte', 'yute', 'ute', 'tile', 'til', 'ttil', 'yil', 'il', 'atil', 'in', 'e', 'um', 'ai', 'utaiya', 'ate'];
+  function stemBook(k) {
+    if (ALIAS.has(k)) return k;
+    for (const v of ['u', 'a', 'e']) if (ALIAS.has(k + v)) return k + v;                   // "യിരെമ്യാവ്" = "യിരെമ്യാവു"
+    if (/[aeiu]$/.test(k) && ALIAS.has(k.slice(0, -1))) return k.slice(0, -1);
+    for (const suf of SUFFIXES) if (k.length - suf.length >= 3 && k.endsWith(suf)) {
+      const st = k.slice(0, -suf.length); if (ALIAS.has(st)) return st;
+      if (ALIAS.has(st + 'm')) return st + 'm';           // "ஆதியாகமத்தில்" -> atiyakamat + til -> atiyakamam
+      if (st.endsWith('t') && ALIAS.has(st.slice(0, -1) + 'm')) return st.slice(0, -1) + 'm';
+      if (ALIAS.has(st + 'r')) return st + 'r';
+    }
+    return null;
+  }
   const ALIAS_LIST = [...ALIAS.entries()];
   // Full book names (any language). In speech, short abbreviations like "is", "am", "ps" are too easy to hear by accident.
-  const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n))));
 
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
   const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','വാക്യത്തിൽ','அதிகாரம்','வசனம்','வசனங்கள்','अध्याय','पद','आयत',
@@ -103,7 +139,9 @@
       const EN = /^(chapter|chapters|ch|verse|verses|versus|v|vs)$/;
       let next = toks[i + span]; if (next && !cueKind(next) && /^(am|aam|vatu|avatu|m)$/.test(next.replace(/[^a-z]/g, ''))) next = toks[i + span + 1];
       const prevTok = toks[i - 1] || '';
-      const kind = (cueKind(prevTok) && EN.test(prevTok.replace(/[^a-z]/g, ''))) ? cueKind(prevTok) : (cueKind(next) || cueKind(prevTok));
+      // A Malayalam/Tamil cue word belongs to the number before it, so it never labels the number that follows it.
+      const prevEn = cueKind(prevTok) && EN.test(prevTok.replace(/[^a-z]/g, ''));
+      const kind = prevEn ? cueKind(prevTok) : (cueKind(next) || '');
       out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind });
       i += span - 1;
     }
@@ -134,7 +172,8 @@
         const k = toks.slice(i, i + len).join('');
         if (k.length < 2 || /^\d+$/.test(k)) continue;
         if (exactOnly && k.length < 4 && !FULLNAMES.has(k) && !SPOKENKEYS.has(k)) continue;
-        let hit = ALIAS.has(k) ? { b: ALIAS.get(k), exact: true } : null;
+        const sk = ALIAS.has(k) ? k : (k.length >= 4 ? stemBook(k) : null);
+        let hit = sk ? { b: ALIAS.get(sk), exact: true } : null;
         if (!hit && !exactOnly && k.length >= 3 && !/\d$/.test(k)) {
           let cand = null;
           for (const [a, b] of ALIAS_LIST) if (a.startsWith(k) && (!cand || a.length < cand.a.length || (a.length === cand.a.length && b < cand.b))) cand = { a, b };
@@ -169,14 +208,40 @@
   /** Parse "John 3:16", "jn 3 16-18", "യോഹന്നാൻ 3:16", "யோவான் மூன்றாம் அதிகாரம் பதினாறாம் வசனம்". */
   function parseRef(text, opts) {
     opts = opts || {};
-    const toks = Core.keyWords(text).split(/\s+/).filter(Boolean).map(t => ORD[t] || t);
+    // Decoration words ("book", "gospel", "ലേഖനം"...) and fillers ("ആ", "ഈ", "அதாவது", "uh", "the") are dropped.
+    let toks = Core.keyWords(text).split(/\s+/).filter(Boolean).filter(t => !NOISE.has(t) && !FILLER.has(t) && !/^[aeiou]{1,2}$/.test(t));
+    toks = toks.filter((t, i) => !(t === 'of' && i === 0));
+    // "3-ാം" / "3-ஆம்" arrive as "3 m" / "3 am": glue the ordinal ending back onto its number.
+    toks = toks.reduce((a, t) => { if (/^(m|am|aam|avatu|vatu|atu)$/.test(t) && /^\d+$/.test(a[a.length - 1] || '')) a[a.length - 1] += t; else a.push(t); return a; }, []);
+    // Number word before a numbered book ("രണ്ടാം രാജാക്കന്മാർ", "இரண்டாம் கொரிந்தியர்", "second Kings", "II Kings") -> digit.
+    for (let i = 0; i + 1 < toks.length; i++) {
+      if (/^\d/.test(toks[i]) && !/^[123](st|nd|rd)?$/.test(toks[i])) continue;
+      let n = /^[123](st|nd|rd)?$/.test(toks[i]) ? +toks[i][0] : ORD[toks[i]] ? +ORD[toks[i]] : BOOKORD.get(toks[i]);
+      if (n == null) { const ns = Core.numbers(toks[i]); n = ns.length === 1 && ns[0] <= 3 ? ns[0] : null; }
+      if (n == null) continue;
+      for (let len = 1; len <= 2 && i + len < toks.length; len++) {
+        // Only full book names count here: "first time" must not become "1 tim" (1 Timothy).
+        const k = n + toks.slice(i + 1, i + 1 + len).join(''), st = stemBook(k);
+        if (st && (FULLNAMES.has(st) || SPOKENKEYS.has(st) || st.length >= 6)) { toks[i] = String(n); break; }
+      }
+    }
+    // Words said twice ("യോഹന്നാൻ യോഹന്നാൻ", "പതിമൂന്നാം പതിമൂന്നാം") count once; a number said twice ("Hebrews 7 7 28",
+    // "Isaiah 5 5 5") counts once when another number still follows (after an optional chapter/verse word).
+    toks = toks.filter((t, i) => {
+      if (/^\d+$/.test(t) && toks[i + 1] && toks[i + 1] !== t && toks[i + 1].replace(/\D+$/, '') === t) return false;   // "3 3ஆம்"
+      if (i === 0 || t !== toks[i - 1]) return true;
+      if (!/^\d+$/.test(t)) return false;
+      let j = i + 1; while (j < toks.length && cueKind(toks[j])) j++;
+      return !(j < toks.length && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
+    });
     if (!toks.length) return null;
     let f = findBook(toks, opts.exactOnly);
     // Speech: a badly spelled book name right before "chapter verse" numbers ("vohmar 8 28" = Romans 8:28).
     if (!f && opts.exactOnly) {
       for (let i = toks.length - 2; i >= 0; i--) {
-        if (/\d/.test(toks[i]) || toks[i].length < 3 || !Core.numbers(toks[i + 1]).length) continue;   // must sit right before the numbers
-        const after = Core.numbers(toks.slice(i + 1).join(' ')); if (after.length < 2 && !(after.length === 1 && after[0] >= 100)) continue;
+        let nx = i + 1; while (nx < toks.length && cueKind(toks[nx])) nx++;          // "യിരെമ്യാവ് chapter 23"
+        if (/\d/.test(toks[i]) || toks[i].length < 3 || cueKind(toks[i]) || nx >= toks.length || !Core.numbers(toks[nx]).length) continue;   // must sit right before the numbers
+        const after = Core.numbers(toks.slice(nx).join(' ')); if (after.length < 2 && !(after.length === 1 && after[0] >= 100)) continue;
         // The word before the numbers, or that word glued to the previous one ("yo kanan" = yohanan).
         const cands = [[toks[i], i]]; if (i > 0 && !/\d/.test(toks[i - 1])) cands.push([toks[i - 1] + toks[i], i - 1]);
         let best = null;

@@ -51,7 +51,7 @@
   /** Phonetic key of one word or phrase, spaces kept (use keyNS for no spaces). */
   /** Speech models sometimes repeat a word many times ("nin nin nin nin"): keep one. */
   function collapseRepeats(s) {
-    return String(s || '').replace(/\b(\S+)(?:[\s,.-]+\1\b){2,}/giu, '$1').replace(/\b(\S+\s+\S+)(?:[\s,.-]+\1\b){2,}/giu, '$1');
+    return String(s || '').replace(/\b(?!\d+\b)(\S+)(?:[\s,.-]+\1\b){2,}/giu, '$1').replace(/\b(\S+\s+\S+)(?:[\s,.-]+\1\b){2,}/giu, '$1');
   }
   function keyWords(s) {
     s = collapseRepeats(s);
@@ -223,6 +223,7 @@
     ['ഇരുപത്',20],['മുപ്പത്',30],['നാല്പത്',40],['നാൽപ്പത്',40],['അമ്പത്',50],['അൻപത്',50],['അറുപത്',60],['എഴുപത്',70],['എൺപത്',80],['തൊണ്ണൂറ്',90],['നൂറ്',100],
     ['வன்',1],['டூ',2],['த்ரீ',3],['ஃபோர்',4],['போர்',4],['ஃபைவ்',5],['பைவ்',5],['சிக்ஸ்',6],['செவன்',7],['எய்ட்',8],['நைன்',9],['டென்',10],['டுவென்டி',20],['ட்வென்டி',20],['தர்ட்டி',30],
     ['വൺ',1],['ടു',2],['ത്രീ',3],['ഫോർ',4],['ഫൈവ്',5],['സിക്സ്',6],['സെവൻ',7],['എയ്റ്റ്',8],['നൈൻ',9],['ടെൻ',10],['ട്വന്റി',20],['തേർട്ടി',30],
+    ['ரெண்டு',2],['ரெண்டாவது',2],['ஒம்பது',9],['ഒൻപത്',9],['ஒண்ணு',1],['மூணு',3],['நாலு',4],['அஞ்சு',5],['ஒன்னு',1],
     ['ஒன்று',1],['ஒன்றாம்',1],['இரண்டு',2],['மூன்று',3],['நான்கு',4],['ஐந்து',5],['ஆறு',6],['ஏழு',7],['எட்டு',8],['ஒன்பது',9],['பத்து',10],
     ['பதினொன்று',11],['பன்னிரண்டு',12],['பதிமூன்று',13],['பதினான்கு',14],['பதினைந்து',15],['பதினாறு',16],['பதினேழு',17],['பதினெட்டு',18],['பத்தொன்பது',19],
     ['இருபது',20],['முப்பது',30],['நாற்பது',40],['ஐம்பது',50],['அறுபது',60],['எழுபது',70],['எண்பது',80],['தொண்ணூறு',90],['நூறு',100]
@@ -253,7 +254,7 @@
     for (const [w, v] of NUMWORDS) { const k = skel(key(w)); if (k.length >= 4 && !m.has(k)) m.set(k, v); }
     NUMSK = [...m.entries()].sort((a, b) => b[0].length - a[0].length); return NUMSK;
   }
-  const SUFFIX = /^(u|am|ame|amatte|amate|amat|avatu|vatu|atu|i|e|um|il|tu|ti|amtu)?$/;
+  const SUFFIX = /^(u|am|ame|amatte|amate|amat|avatu|avat|vatu|vat|atu|at|i|e|um|il|tu|ti|amtu|amattu|ataam|amatil)?$/;
   function wordNumberExact(k) {   // exact stem match only (no skeleton or one-letter fuzz)
     const hit = numKeys().find(([s]) => k.startsWith(s)); if (!hit) return null;
     const rest = k.slice(hit[0].length); return SUFFIX.test(rest) ? hit[1] : null;

@@ -1142,7 +1142,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const speaking = Mic.stream ? now - lastSpeechAt < 5000 : true;
     const lastHit = Listen.mode === 'bible' ? hunt.lockedAt : Math.max(lastMatchAt, hunt.lockedAt);
     const locked = now - lastHit < 25000;
-    const dwell = Listen.engine === 'cloud' ? 6000 : 10000;
+    const dwell = Listen.engine === 'cloud' ? (Listen.mode === 'bible' ? 4000 : 6000) : 10000;
     if (!locked && speaking && (now - hunt.at > dwell || hunt.misses >= 2)) {
       hunt.misses = 0; hunt.at = now;
       const cur = langs.indexOf(Listen.lang); hunt.i = (cur + 1) % langs.length;
@@ -1183,15 +1183,37 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   function setListenMode(m) {
     S.listenMode = m; saveSettings();
     if (m === 'bible') {
-      Track.pause();
+      Track.pause(); ensureVersions();          // Bible text ready before the first verse is heard
       // Preacher: the song leaves the screen; the last verse comes back, or the background until a verse is heard.
       if (screen.kind === 'song' || screen.kind === 'idle') { if (lastBible) { screen.kind = 'bible'; screen.bible = lastBible; screen.bgOnly = false; } else screen.bgOnly = true; output(); renderSlides(); }
     }
     if (m === 'songs' && song && screen.kind === 'bible') { screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
     if (Listen.mode && Listen.mode !== m) { if (m === 'bible') vbText = ''; Listen.start(m); } else updateListenUI();
   }
+  // Which language the preacher is speaking, from the words themselves: chapter/verse words and book names differ
+  // between Malayalam, Tamil and English, and they are recognisable even when the recogniser is set to the wrong one
+  // (it then writes them phonetically). Lets "auto" lock on the right language at the first reference instead of
+  // rotating through the languages.
+  const LANG_MARKERS = {
+    'ml-IN': ['അദ്ധ്യായം', 'അധ്യായം', 'അദ്ധ്യായത്തിൽ', 'വാക്യം', 'വാക്യത്തിൽ', 'യോഹന്നാൻ', 'മത്തായി', 'സങ്കീർത്തനം', 'ഉല്പത്തി', 'യെശയ്യാവ്', 'എബ്രായർ', 'ലേഖനം', 'വായിക്കാം', 'നമുക്ക്'],
+    'ta-IN': ['அதிகாரம்', 'அதிகாரத்தில்', 'வசனத்தில்', 'யோவான்', 'மத்தேயு', 'சங்கீதம்', 'ஆதியாகமம்', 'ஏசாயா', 'எபிரெயர்', 'நிருபம்', 'வாசிப்போம்', 'நாம்', 'ஆவது'],
+    'en-IN': ['chapter', 'verse', 'verses', 'gospel', 'psalm', 'let us', 'turn to', 'open your']
+  };
+  const LANG_KEYS = Object.fromEntries(Object.entries(LANG_MARKERS).map(([l, ws]) => [l, ws.map(w => Core.keyWords(w).replace(/\s+/g, ' ').trim())]));
+  function speechLang(text) {
+    const k = ' ' + Core.keyWords(text) + ' ', score = {};
+    for (const [l, ws] of Object.entries(LANG_KEYS)) score[l] = ws.reduce((n, w) => n + (w.length >= 3 && (l === 'ta-IN' && w === 'avatu' ? /avatu /.test(k) : k.includes(' ' + w)) ? 1 : 0), 0);
+    if (/[a-z]+avatu /.test(k)) score['ta-IN'] += 1;          // Tamil ordinals ("மூன்றாவது")
+    const best = Object.entries(score).sort((a, b) => b[1] - a[1]);
+    return best[0][1] >= 1 && best[0][1] > best[1][1] ? best[0][0] : null;
+  }
   function onText(finals, interim, conf) {
     lastSpeechAt = Date.now();
+    if (Listen.mode === 'bible' && S.vbLang === 'auto' && Listen.engine === 'cloud' && (finals || interim[0])) {
+      const l = speechLang(finals || interim[0]);
+      if (l && l !== Listen.lang) { hunt.lockedAt = Date.now(); Listen.setLang(l); toast(t('lang_detected') + ': ' + langName(l)); }
+      else if (l) hunt.lockedAt = Date.now();
+    }
     const lockBefore = hunt.lockedAt, matchBefore = lastMatchAt;
     const show = (finals || interim[0] || '').trim();
     if (show) { $('heard').textContent = show; $('vbHeard').textContent = show; }
