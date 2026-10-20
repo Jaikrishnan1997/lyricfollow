@@ -1203,7 +1203,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       cand.sort((a, b) => Math.abs(mains.indexOf(a) - ci - .4) - Math.abs(mains.indexOf(b) - ci - .4));
       const pos = Core.place(Core.keyWords(text).split(/\s+/), lines, cand); if (!pos) return;
       const mj = mains.indexOf(pos.j);
-      if (mj > ci + 1 && pos.sc < 2.5) return;                         // two or more lines ahead needs 3+ matching words
+      if (mj > ci + 1 && pos.sc < 2.5 && Date.now() - Svc.movedAt < 9000) return;   // 2+ lines ahead needs 3+ matching words (unless stuck)
       // singing speed (seconds per word) from the movement between two clips
       const gw = mains.slice(0, mj).reduce((a, i) => a + (lines[i].w || []).length, 0) + pos.p;
       if (this.lastPos && gw > this.lastPos.gw) { const v = (clipEnd - this.lastPos.t) / 1000 / (gw - this.lastPos.gw); if (v > .12 && v < 3) this.spw = this.spw * .6 + v * .4; }
@@ -1236,7 +1236,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    *  - another service song clearly sung (two clips running) while the open one no longer fits: it changes song.
    * Otherwise it stays with the song until it ends - shared lines and repeated choruses never switch it. */
   const Svc = {
-    ix: null, key: '', other: { id: null, n: 0 }, back: { line: -1, n: 0 }, log: [], okId: null, okAt: 0,
+    ix: null, key: '', other: { id: null, n: 0 }, back: { line: -1, n: 0 }, log: [], okId: null, okAt: 0, movedAt: 0, seenCur: -2,
     index() {
       const key = service.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|');
       if (key !== this.key) { this.key = key; this.ix = Core.serviceIndex(service.map(id => songById(id)).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) }))); }
@@ -1244,6 +1244,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     track(text) {
       if (!S.autoFollow || !service.length) return;
+      if (follow.cur !== this.seenCur) { this.seenCur = follow.cur; this.movedAt = Date.now(); }
       const res = Core.serviceFind(this.index(), Core.keyWords(text).split(/\s+/), 4); const top = res[0]; if (!top) return;
       const mine = song && res.find(r => r.id === song.id);
       this.log.push([Math.round(performance.now() / 100) / 10, (songById(top.id) || {}).title?.slice(0, 10), top.line, +top.score.toFixed(2), mine ? +mine.score.toFixed(2) : null, this.other.n]); if (this.log.length > 60) this.log.shift();
@@ -1266,7 +1267,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         return;
       }
       if (mine && top.score >= .5) this.other = { id: null, n: 0 };
-      if (top.score < .6) return;
+      const stuckNow = Date.now() - this.movedAt > 9000;
+      if (top.score < (stuckNow ? .45 : .6)) return;
       this.okId = song.id; this.okAt = Math.max(this.okAt, Date.now()); this.mineAt = Date.now();   // the audio confirms the open song
       // Repeated lines (chorus): of the equally good copies take the first one at or after the current place.
       const good = top.all.filter(x => x[1] >= top.score - .05).map(x => x[0]).sort((a, b) => a - b);
@@ -1275,9 +1277,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // two clips running (or one long, unmistakable clip). Seen live: a single "இயேசுவைத் துதியுங்கள்" (in two
       // lines) jumped a whole verse ahead, and Whisper - given the lyrics there as its hint - kept "confirming" it.
       const nWords = Core.keyWords(text).split(/\s+/).filter(w => w.length >= 2).length;
+      // Stuck: the screen has not moved for 9 s while the song goes on (Whisper missed a few lines, seen live: it
+      // stayed on line 3 through the chorus and into verse 2). Then the nearest matching line ahead is taken -
+      // repeated lines included - once two clips running point ahead.
+      const stuck = Date.now() - this.movedAt > 9000;
       if (line >= follow.cur + 2) {
-        if (good.length === 1 && nWords >= 3) {
-          this.fwd = this.fwd && this.fwd.line === line ? { line, n: this.fwd.n + 1 } : { line, n: 1 };
+        if ((good.length === 1 && nWords >= 3) || (stuck && nWords >= 2)) {
+          const near = this.fwd && Math.abs(this.fwd.line - line) <= 2;
+          this.fwd = near ? { line, n: this.fwd.n + 1 } : { line, n: 1 };
           if (this.fwd.n >= 2 || (top.score >= .95 && nWords >= 5)) { this.fwd = null; this.back = { line: -1, n: 0 }; Lead.go(line); }
         }
         return;
