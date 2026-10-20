@@ -52,7 +52,7 @@
   function saveSettings() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-      try { const st = await Store.get('settings'); if (st && (st.keysAt || 0) > (S.keysAt || 0)) { for (const k of KEYS) if (k in st) S[k] = st[k]; S.keysAt = st.keysAt; showKeys(); } } catch (e) {}
+      try { const kr = await Store.get('keys'); if (kr) { let ch = false; for (const k of KEYS) if (k in kr && kr[k] !== S[k]) { S[k] = kr[k]; ch = true; } if (ch) showKeys(); } } catch (e) {}
       Store.set('settings', S).catch(() => {});
       try { settingsBus && settingsBus.postMessage(JSON.parse(JSON.stringify(S))); } catch (e) {}
     }, 300);
@@ -2096,14 +2096,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
     Track.loadCatalog().then(() => { Track.describe(); if (song && song.yt) $('trackName').textContent = Track.chapterName(song.yt) || song.yt.id; });
     $('stWhOn').checked = !!S.groq; $('stWhKey').value = S.groqKey || ''; $('stWhModel').value = S.groqModel || 'whisper-large-v3'; $('stWhBible').checked = !!S.groqBible;
-    const whRe = () => { S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    const saveKeys = () => { S.keysAt = Date.now(); const kr = {}; for (const k of KEYS) kr[k] = S[k]; Store.set('keys', kr).catch(() => {}); };
+    const whRe = () => { saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stWhOn').onchange = e => { S.groq = e.target.checked; whRe(); };
     $('stWhKey').onchange = e => { S.groqKey = e.target.value.trim(); whRe(); };
     $('stWhModel').onchange = e => { S.groqModel = e.target.value || 'whisper-large-v3'; whRe(); };
     $('stWhBible').onchange = e => { S.groqBible = e.target.checked; whRe(); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
-    $('stGemOn').onchange = e => { S.gemini = e.target.checked; S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
-    $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); S.keysAt = Date.now(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stGemModel').onchange = e => { S.geminiModel = e.target.value.trim() || 'gemini-2.5-flash-lite'; saveSettings(); };
     $('stLow').onchange = e => { S.low = e.target.checked; saveSettings(); document.body.classList.toggle('low', S.low); const st2 = projWin && !projWin.closed && projWin.document.getElementById('stage'); if (st2 && st2._lf) st2._lf.bgKey = null; if ($('preview')._lf) $('preview')._lf.bgKey = null; output(); };
     $('btnExport').onclick = exportBackup;
@@ -2121,6 +2122,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const saved = await Store.get('settings').catch(() => null);
     if (saved) {
       S = Object.assign({}, DEF, saved, { theme: Object.assign({}, DEF.theme, saved.theme) });
+      // API keys live in their own record, written only when a key is typed in: an older tab saving its whole
+      // settings can then never put an old key back (seen live, repeatedly, with the Groq key).
+      try { const kr = await Store.get('keys'); if (kr) for (const k of KEYS) if (k in kr) S[k] = kr[k]; } catch (e) {}
       if ((saved.v || 0) < 3) { S.autoSwitch = true; S.net = 'offline'; S.v = 3; saveSettings(); }
       if ((saved.v || 0) < 4) { S.vbLang = 'auto'; S.v = 4; saveSettings(); }
       // v5: the online recogniser is the primary engine (best accuracy in all three languages); verses show automatically.
