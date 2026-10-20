@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 5,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -51,6 +51,18 @@
     const ls = [], sl = [];
     blocks.forEach((b, si) => { const idx = []; b.forEach(x => { idx.push(ls.length); ls.push({ text: x, slide: si }); }); sl.push(idx); });
     Core.prepare(ls.map(l => l.text)).forEach((p, i) => Object.assign(ls[i], p));
+    // Many song sheets put a transliteration (or translation) right under each line. Such a pair is one sung line:
+    // the second line becomes an alternative spelling of the first, not a separate step for the follower.
+    const indic = t => /[\u0900-\u0DFF]/.test(t), latin = t => /[a-z]/i.test(t) && !indic(t);
+    for (let i = 1; i < ls.length; i++) {
+      const a = ls[i - 1], b = ls[i];
+      if (a.slide !== b.slide || a.alt || !(indic(a.text) && latin(b.text) || latin(a.text) && indic(b.text))) continue;
+      const main = indic(a.text) ? a : b, other = main === a ? b : a;
+      if (other.key.length < 3) continue;
+      main.alts = (main.alts || []).concat([{ key: other.key, g: other.g, sk: other.sk, skb: other.skb, w: other.w, wu: other.wu }]);
+      other.alt = true; other.key = ''; other.g = new Set(); other.w = []; other.wu = new Set(); other.main = main === a ? i - 1 : i;
+      if (main === b) { b.slideFirst = i - 1; }
+    }
     return { ls, sl };
   }
   const prepCache = new Map();
@@ -96,7 +108,7 @@
       p.kind = 'lyrics';
       const cur = lines[follow.cur];
       if (S.mode === 'pair') { p.lines = [{ t: cur.text, on: true }]; if (lines[follow.cur + 1]) p.lines.push({ t: lines[follow.cur + 1].text, on: false }); }
-      else p.lines = slides[cur.slide].map(i => ({ t: lines[i].text, on: S.mode === 'plain' || i === follow.cur }));
+      else p.lines = slides[cur.slide].map(i => ({ t: lines[i].text, on: S.mode === 'plain' || i === follow.cur || (lines[i].alt && lines[i].main === follow.cur) }));
       return p;
     }
     p.bg = S.bgChurch; p.kind = screen.bgOnly ? 'blank' : 'idle'; p.idle = S.church;
@@ -147,7 +159,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function jumpLine(i) {
     if (!lines.length) return;
     screen.kind = 'song'; screen.bgOnly = false; screen.autoBlank = false;
-    follow.cur = Math.max(0, Math.min(lines.length - 1, i)); follow.pend = -1; heardKey = ''; lastMatchAt = Date.now();
+    i = Math.max(0, Math.min(lines.length - 1, i)); if (lines[i] && lines[i].alt) i = lines[i].main;
+    follow.cur = i; follow.pend = -1; heardKey = ''; lastMatchAt = Date.now();
     renderSlides(); output();
   }
   function jumpSlide(dir) {
@@ -710,11 +723,90 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   };
   setInterval(() => LangID.tick(), 1000);
 
+  // Gemini engine (optional): the microphone audio is sent in short clips to Google's Gemini model with the
+  // current song's lyrics and the service list as context. The model answers with the words heard, the lyric line
+  // being sung and any Bible reference - it understands Malayalam, Tamil, English and mixtures of them, and sung
+  // words in a noisy hall far better than plain speech recognition. Needs the user's own API key (free tier).
+  const Gemini = {
+    timer: null, busy: false, fails: 0, lastText: '', clipSec: 5, backoffUntil: 0, lastSent: 0,
+    start() { this.stop(); this.lastSent = Date.now(); this.tick(); },
+    stop() { clearTimeout(this.timer); this.timer = null; },
+    tick() {
+      if (!Listen.mode || Listen.engine !== 'gemini') return;
+      this.timer = setTimeout(() => this.tick(), 500);
+      const now = Date.now();
+      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.clipSec * 1000 || !Mic.stream) return;
+      const sec = (now - this.lastSent) / 1000 + .4;       // small overlap so words on a clip edge are not lost
+      const a = Mic.last(Math.min(sec, 9)); this.lastSent = now;
+      let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
+      if (!a.length || Math.sqrt(e / a.length) < .004) return;      // silence: nothing to send
+      this.send(a);
+    },
+    wav(a) {
+      const buf = new ArrayBuffer(44 + a.length * 2), v = new DataView(buf);
+      const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+      str(0, 'RIFF'); v.setUint32(4, 36 + a.length * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, a.length * 2, true);
+      for (let i = 0; i < a.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, a[i])) * 32767, true);
+      let b = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 8192) b += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+      return btoa(b);
+    },
+    prompt() {
+      const mode = Listen.mode;
+      const lyric = song && mode === 'songs' ? lines.map((l, i) => l.alt ? null : `${i}: ${l.text}${lines[i + 1] && lines[i + 1].alt ? ' / ' + lines[i + 1].text : ''}`).filter(Boolean).join('\n') : '';
+      const titles = service.map(id => (songById(id) || {}).title).filter(Boolean).join(' | ');
+      return `You transcribe a church service in India. People sing or speak in Malayalam, Tamil or English, often mixed, in a noisy hall with music.
+Listen to the audio clip and return JSON only: {"text": words heard in their original script (empty string if no clear words), "line": number, "song": string|null, "ref": string|null}.
+"line": if the clip is sung from the CURRENT SONG below, the number of the lyric line being sung (the latest line heard), else -1. Lines may be sung with small differences; match by sound.
+"song": if the clip clearly is one of the SERVICE SONGS (by title or lyrics) but not the current song, its title, else null.
+"ref": if a Bible reference is spoken (book, chapter and verse in any language, e.g. "യോഹന്നാൻ 3:16", "யோவான் மூன்றாம் அதிகாரம் 16", "John chapter 3 verse 16"), write it in English as "Book chapter:verse", else null.
+Mode now: ${mode === 'bible' ? 'PREACHING (expect Bible references and readings)' : 'SINGING'}.
+SERVICE SONGS: ${titles || '(none)'}
+CURRENT SONG: ${song && mode === 'songs' ? song.title : '(none)'}
+${lyric ? 'LYRIC LINES:\n' + lyric : ''}
+Previous clip's words: ${this.lastText || '(none)'}`;
+    },
+    async send(a) {
+      this.busy = true;
+      const model = S.geminiModel || 'gemini-2.5-flash-lite';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.geminiKey)}`;
+      const body = { contents: [{ parts: [{ text: this.prompt() }, { inline_data: { mime_type: 'audio/wav', data: this.wav(a) } }] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 300 } };
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (r.status === 429) { this.backoffUntil = Date.now() + 15000; setStatus(t('gemini_quota'), false); return; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json(); this.fails = 0;
+        const txt = (((j.candidates || [])[0] || {}).content || {}).parts?.map(p => p.text).join('') || '';
+        let out = {}; try { out = JSON.parse(txt); } catch (e) { out = { text: txt }; }
+        this.apply(out);
+      } catch (e) {
+        this.fails++; if (this.fails >= 3) { toast(t('gemini_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+      } finally { this.busy = false; }
+    },
+    apply(out) {
+      if (!Listen.mode) return;
+      lastEventAt = Date.now();
+      const text = String(out.text || '').trim();
+      if (text) { this.lastText = text.slice(-120); onText(text, [], 0.9); }
+      if (Listen.mode === 'songs') {
+        const ln = Number(out.line);
+        if (song && Number.isInteger(ln) && ln >= 0 && ln < lines.length && !lines[ln].alt && ln !== follow.cur) {
+          follow.cur = ln; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
+          if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
+        }
+        if (out.song && S.autoSwitch) { const id = service.find(x => (songById(x) || {}).title === out.song); if (id && (!song || id !== song.id)) switchToSong(id, 0); }
+      }
+      if (out.ref) { const r = Bible.parseRef(String(out.ref), { exactOnly: true, needChapter: true, needVerse: true }); if (r) { if (Listen.mode === 'songs') setListenMode('bible'); pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
+      setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Gemini`, true);
+    }
+  };
+
   const Listen = {
     mode: null, lang: '', engine: null,
     async start(mode) {
       mode = mode || S.listenMode;
-      let engine = S.net === 'online' ? 'cloud' : 'local';
+      let engine = S.net === 'online' ? (S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
       // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
       // cannot reach them, so listening uses the device's own online recogniser here.
       if (engine === 'local' && HOSTED) { toast(t('local_hosted')); S.net = 'online'; saveSettings(); renderNet(); engine = 'cloud'; }
@@ -726,18 +818,18 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
       // Laptop: the microphone also feeds the level meter and language detection. iPhone/iPad: keeping the
       // microphone open makes Safari treat the page as "already capturing", so the recogniser may restart itself.
-      if (engine === 'local' || (!HOSTED && location.protocol !== 'file:') || IOS) {
+      if (engine === 'local' || engine === 'gemini' || (!HOSTED && location.protocol !== 'file:') || IOS) {
         this.waitingMic = true; updateListenUI();
         const ok = await Mic.start();
         this.waitingMic = false;
-        if (!ok && engine === 'local') { this.mode = null; updateListenUI(); toast(t('mic_blocked')); return; }
+        if (!ok && engine !== 'cloud') { this.mode = null; updateListenUI(); toast(t('mic_blocked')); return; }
       }
       if (!this.mode) return;
-      if (engine === 'cloud') Cloud.start(this.lang); else Local.start(this.lang);
+      if (engine === 'cloud') Cloud.start(this.lang); else if (engine === 'gemini') Gemini.start(); else Local.start(this.lang);
       updateListenUI();
     },
-    setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else Local.start(lang); updateListenUI(); },
-    stopEngines() { Cloud.stop(); Local.stop(); },
+    setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else if (this.engine === 'local') Local.start(lang); updateListenUI(); },
+    stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); },
     stop() { this.mode = null; this.stopEngines(); LangID.stop(); Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
   };
 
@@ -766,7 +858,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     const now = Date.now();
     if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > 12000) Cloud.start(Cloud.lang);
     const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
-    if (!auto) return;
+    if (!auto || Listen.engine === 'gemini') return;      // Gemini understands every language at once
     if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
     const langs = huntLangs().filter(l => Listen.engine !== 'cloud' || !Cloud.unsupported.has(l)); if (langs.length < 2) return;
     // Without the microphone meter (phones) there is no way to know whether someone is speaking: keep rotating.
@@ -801,11 +893,12 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('sel', b.dataset.lm === S.listenMode));
     $('lmBible').hidden = !vb;
     $('autoFollow').closest('label').hidden = vb;
-    document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
+    const gem = cloud && S.gemini && S.geminiKey;
+    document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
     if (Listen.mode && Listen.waitingMic) setStatus(t('mic_wait'), false);
     else if (Listen.mode) {
       if (Listen.engine === 'local' && !Local.ok) setStatus(t('local_connecting'), false);
-      else setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · ${langName(Listen.lang)}`, true);
+      else setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · ${Listen.engine === 'gemini' ? 'Gemini' : langName(Listen.lang)}`, true);
     } else setStatus(disabled ? t('need_chrome') : t('not_listening'), false);
     $('matchPill').hidden = Listen.mode !== 'songs';
     if (Listen.mode !== 'songs') { $('matchPill').textContent = ''; $('matchPill').className = 'pill'; }
@@ -938,7 +1031,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
       // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
       const indic = /[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
-      const need = r.ch === r.v ? .85 : indic ? .6 : .72;
+      const need = r.ch === r.v ? .85 : indic ? .4 : .72;
       // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
       const bookOk = !r.fuzzy || Listen.engine === 'local';
       const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9));
@@ -1270,6 +1363,10 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
+    $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
+    $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
+    $('stGemModel').onchange = e => { S.geminiModel = e.target.value.trim() || 'gemini-2.5-flash-lite'; saveSettings(); };
     $('stLow').onchange = e => { S.low = e.target.checked; saveSettings(); document.body.classList.toggle('low', S.low); const st2 = projWin && !projWin.closed && projWin.document.getElementById('stage'); if (st2 && st2._lf) st2._lf.bgKey = null; if ($('preview')._lf) $('preview')._lf.bgKey = null; output(); };
     $('btnExport').onclick = exportBackup;
     $('importFile').onchange = e => { if (e.target.files[0]) importBackup(e.target.files[0]); e.target.value = ''; };
@@ -1312,7 +1409,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   }
   // Test hook: lets automated checks feed recognised text without a microphone.
   window.LF_DEBUG = {
-    feed(text, isFinal) { onText(isFinal ? text : '', isFinal ? [] : [text]); },
+    feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
+    async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
     state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang })

@@ -142,7 +142,7 @@
   /** Best score of a whole song against what was heard. */
   function songScore(heard, lines) {
     const HG = heardGrams(heard); let best = 0;
-    for (const ln of lines) if (ln.key.length >= 3) best = Math.max(best, scoreG(HG, ln.g, ln));
+    for (const ln of lines) { if (ln.key.length >= 3) best = Math.max(best, scoreG(HG, ln.g, ln)); if (ln.alts) for (const a of ln.alts) best = Math.max(best, scoreG(HG, a.g, a)); }
     return best;
   }
 
@@ -152,7 +152,9 @@
     let best = { j: st.cur, s: 0 }, curS = 0;
     if (HG.length || HG.words.length) for (let j = 0; j < lines.length; j++) {
       const ln = lines[j]; if (ln.key.length < 3) continue;
-      const raw = Math.max(HG.length ? scoreG(HG, ln.g, ln) : 0, .95 * wordScore(HG.words, ln, lines[j - 1]));
+      let prev = j - 1; while (prev >= 0 && lines[prev].alt) prev--;
+      let raw = Math.max(HG.length ? scoreG(HG, ln.g, ln) : 0, .95 * wordScore(HG.words, ln, lines[prev]));
+      if (ln.alts) for (const a of ln.alts) raw = Math.max(raw, HG.length ? scoreG(HG, a.g, a) : 0, .95 * wordScore(HG.words, a, null));
       let s = raw;
       const d = j - st.cur;
       if (d === 0) { s += .02; curS = raw; }
@@ -182,6 +184,7 @@
     list.forEach((s, si) => s.lines.forEach((ln, li) => {
       if (ln.key.length < 3) return;
       for (const x of ln.g) { let a = map.get(x); if (!a) map.set(x, a = []); a.push(si * 4096 + li); }
+      if (ln.alts) for (const alt of ln.alts) for (const x of alt.g) { let a = map.get(x); if (!a) map.set(x, a = []); if (a[a.length - 1] !== si * 4096 + li) a.push(si * 4096 + li); }
     }));
     return { list, map };
   }

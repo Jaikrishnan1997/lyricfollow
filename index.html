@@ -210,6 +210,14 @@
         <label class="check"><input type="checkbox" id="stLow"> <span data-i18n="low_end"></span></label>
       </div>
       <div class="panel">
+        <h3 data-i18n="gemini_title">AI listening (Gemini)</h3>
+        <p class="hint" data-i18n="gemini_hint"></p>
+        <label class="check"><input type="checkbox" id="stGemOn"> <span data-i18n="gemini_on"></span></label>
+        <label class="field"><span data-i18n="gemini_key">Gemini API key</span><input type="password" id="stGemKey" autocomplete="off" placeholder="AIza…"></label>
+        <label class="field"><span data-i18n="gemini_model">Model</span><input id="stGemModel" list="gemModels" placeholder="gemini-2.5-flash-lite"><datalist id="gemModels"><option value="gemini-2.5-flash-lite"></option><option value="gemini-2.5-flash"></option><option value="gemini-3.1-flash-lite"></option><option value="gemini-2.0-flash"></option></datalist></label>
+        <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+      </div>
+      <div class="panel">
         <h3 data-i18n="backup">Backup and sharing</h3>
         <p class="hint" data-i18n="backup_hint"></p>
         <label class="check"><input type="checkbox" id="bkMedia"> <span data-i18n="include_media"></span></label>

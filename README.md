@@ -120,3 +120,13 @@ to find which song is being sung; songs in today's service list get a head start
 phrase is scored against the lines in two ways (sound trigrams and fuzzy word matches with recency weighting) and the
 screen moves to the next line as soon as it is clearly heard; a jump to any other line must be heard twice in a row
 (three times for a long jump), so one noisy phrase never makes the screen skip around.
+
+## Optional: Gemini AI listening (Online mode)
+
+Settings → *AI listening (Gemini)*: paste your own Gemini API key (free at https://aistudio.google.com/apikey) and tick
+*Use Gemini*. Short microphone clips are then sent to Gemini together with the current song's lyrics and the service
+list; it returns the words heard, the lyric line being sung and any Bible reference. This understands Malayalam, Tamil,
+English and mixtures, and sung words in a noisy hall, far better than the browser's speech recogniser. The key never
+leaves your browser. One clip is sent about every 5 seconds while there is sound; the free tier has a daily request cap
+(shown in AI Studio), so a long service may need the paid tier (a few rupees per service). If Gemini stops answering,
+the app falls back to the browser recogniser automatically.
