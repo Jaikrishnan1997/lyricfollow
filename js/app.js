@@ -277,7 +277,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     let s = id ? songById(id) : null;
     if (s) Object.assign(s, data, { updated: now });
     else { s = Object.assign({ id: uid(), bg: '', created: now, updated: now }, data); songs.push(s); }
-    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', yt: s.yt || null, created: s.created || now, updated: s.updated });
+    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', yt: s.yt || null, src: s.src || '', created: s.created || now, updated: s.updated });
     songsChanged();
     if (song && song.id === s.id) loadSong(s.id, { keepScreen: true });
     return s;
@@ -820,6 +820,59 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (toService) saveService();
       rebuildSongIndex(); renderService(); renderSongList();
       st.textContent = `${added} ${t('bulk_done')} · ${dupes} ${t('bulk_dupes')}`;
+    }
+  };
+
+  // Free song collections from Wikisource (public domain / CC BY-SA). Fetched by the browser from the MediaWiki API
+  // when the user asks; each song keeps its page link as the source.
+  const Packs = {
+    busy: false,
+    async api(host, params) { const r = await fetch(`https://${host}/w/api.php?format=json&origin=*&${params}`); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); },
+    async category(host, name) {
+      let all = [], cont = '';
+      for (let i = 0; i < 60; i++) {
+        const j = await this.api(host, `action=query&list=categorymembers&cmtitle=${encodeURIComponent(name)}&cmlimit=500&cmtype=page${cont ? '&cmcontinue=' + encodeURIComponent(cont) : ''}`);
+        all = all.concat(j.query.categorymembers.map(m => m.title)); if (!j.continue) break; cont = j.continue.cmcontinue;
+      }
+      return all;
+    },
+    /** Wikitext of a hymn page -> plain lyric text (verses separated by blank lines). */
+    clean(wt) {
+      let x = wt.replace(/<!--[\s\S]*?-->/g, '');
+      // drop templates ({{header ...}} etc., including nested braces)
+      let out = '', depth = 0; for (let i = 0; i < x.length; i++) { if (x.startsWith('{{', i)) { depth++; i++; continue; } if (x.startsWith('}}', i) && depth) { depth--; i++; continue; } if (!depth) out += x[i]; } x = out;
+      const poems = [...x.matchAll(/<poem[^>]*>([\s\S]*?)<\/poem>/g)].map(m => m[1]);
+      if (poems.length) x = poems.join('\n\n');
+      x = x.replace(/^==.*==\s*$/gm, '').replace(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g, '$1').replace(/\[https?:[^\s\]]*\s?([^\]]*)\]/g, '$1').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/'{2,}/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+      x = x.split('\n').map(l => l.replace(/^[:*#;]+\s*/, '').replace(/^\d+[.)]\s*/, '').trim()).filter(l => !/^(https?:|\[\[|Category:|വർഗ്ഗം:)/i.test(l)).join('\n');
+      x = x.replace(/^\((?:ട്യൂൺ|tune|രാഗം|Tune)[^)]*\)\s*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
+      return x;
+    },
+    async install(which) {
+      if (this.busy) return; this.busy = true;
+      const st = $('packStatus'); const host = which === 'ml' ? 'ml.wikisource.org' : 'en.wikisource.org';
+      const cats = which === 'ml' ? ['വർഗ്ഗം:സമ്പൂർണ്ണ ഗാനങ്ങൾ', 'വർഗ്ഗം:വി. നാഗൽ രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:യുസ്തൂസ് യോസഫ് രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:മോശവത്സലം രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:കെ.വി. സൈമൺ രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:റവ. ടി. കോശി രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:സാധു കൊച്ചു കുഞ്ഞുപദേശി രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:പി.വി. തൊമ്മി രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:റ്റി. ജെ വർക്കി രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:എം.ഇ. ചെറിയാൻ രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:അന്നമ്മ മാമ്മൻ രചിച്ച കീർത്തനങ്ങൾ', 'വർഗ്ഗം:ക്രിസ്തീയ കീർത്തനങ്ങൾ'] : ['Category:Individual Christian hymns'];
+      let added = 0, skipped = 0;
+      try {
+        st.textContent = t('loading');
+        let titles = []; for (const c of cats) titles = titles.concat(await this.category(host, c));
+        titles = [...new Set(titles)].filter(x => !/^(ക്രിസ്തീയഗീതങ്ങൾ|ഗീതങ്ങൾ \d|കേരളോപകാരി|The |A |An )/.test(x) || which === 'en').filter(x => !/\/|Songbook|Hymnal|Journal|catechism|Poetical Works/i.test(x));
+        const seen = new Set(songs.map(s => Bulk.dupKey(s)));
+        for (let k = 0; k < titles.length; k += 20) {
+          st.textContent = `${Math.min(k + 20, titles.length)} / ${titles.length} · ${added} ${t('packs_done')}`;
+          const j = await this.api(host, `action=query&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(titles.slice(k, k + 20).join('|'))}`);
+          for (const pg of Object.values(j.query.pages)) {
+            const wt = pg.revisions ? pg.revisions[0].slots.main['*'] : ''; if (!wt || /^#REDIRECT/i.test(wt)) continue;
+            const lyrics = this.clean(wt); if (lyrics.split('\n').filter(Boolean).length < 3 || lyrics.length > 6000) continue;
+            const title = pg.title.replace(/\s*\(.*?\)\s*$/, '');
+            const key = Bulk.dupKey({ title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
+            await saveSong({ title, lang: Bulk.lang(lyrics), bg: '', lyrics, src: `https://${host}/wiki/${encodeURIComponent(pg.title.replace(/ /g, '_'))}` }, null); added++;
+          }
+        }
+        rebuildSongIndex(); renderSongList();
+        st.textContent = `${added} ${t('packs_done')} · ${skipped} ${t('packs_skip')}`;
+      } catch (e) { st.textContent = (navigator.onLine ? 'Wikisource: ' + e.message : t('no_internet')); }
+      this.busy = false;
     }
   };
 
@@ -1553,6 +1606,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stThr').oninput = e => { S.thr = +e.target.value; $('stThrVal').textContent = S.thr + '%'; saveSettings(); };
     $('stBlank').onchange = e => { S.blankAfter = +e.target.value; saveSettings(); };
     $('stAutoSwitch').onchange = e => { S.autoSwitch = e.target.checked; saveSettings(); };
+    $('packMl').onclick = () => Packs.install('ml'); $('packEn').onclick = () => Packs.install('en');
     $('bulkFiles').onchange = e => { const fs = [...e.target.files]; if (fs.length) Bulk.importFiles(fs, $('bulkService').checked); e.target.value = ''; };
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
     $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };
