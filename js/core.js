@@ -251,6 +251,50 @@
     return [...best.values()].sort((a, b) => b.score - a.score).slice(0, limit || 3);
   }
 
+  /* ---------- Today's service index: every line and word of the service songs ----------
+   * Built once when the service list changes (a few ms). Words are weighted by how rare they are across all the
+   * service songs (common ones like "துதியுங்கள்", "Hallelujah" count little, a song's own words count a lot),
+   * and indexed by spelling and by consonant skeleton, so Tamil/Malayalam script and English-letter spellings meet.
+   * songs: [{id, lines: prepared lines (with .w, .alt, .alts, .main)}] */
+  function serviceIndex(songs) {
+    const rows = [], df = new Map(), post = new Map();
+    const add = (k, r) => { let a = post.get(k); if (!a) post.set(k, a = new Set()); a.add(r); };
+    songs.forEach((sg, si) => sg.lines.forEach((ln, li) => {
+      if (ln.alt || !ln.w || !ln.w.length) return;
+      const words = new Set(ln.w.concat(...(ln.alts || []).map(a => a.w || [])).filter(w => w.length >= 2));
+      const keys = new Set(); for (const w of words) { keys.add(w); const k = skel(w); if (k.length >= 3) keys.add('~' + k); }
+      const r = rows.length; rows.push({ s: si, id: sg.id, line: li, keys, n: ln.w.length });
+      for (const k of keys) { add(k, r); df.set(k, (df.get(k) || 0) + 1); }
+    }));
+    const N = rows.length || 1, idf = k => Math.log(1 + N / (df.get(k) || 1));
+    for (const r of rows) { let t = 0; for (const k of r.keys) if (k[0] !== '~') t += idf(k); r.total = t || 1; }
+    return { rows, post, idf, songs: songs.map(s => s.id) };
+  }
+  /** Which service song and line the heard words belong to: [{id, line, score}] best first (one per song).
+   *  score ~ share of the line's own (rare) words that were heard, 0..1. */
+  function serviceFind(ix, heardWords, limit) {
+    if (!ix || !ix.rows.length) return [];
+    const hw = heardWords.filter(w => w.length >= 2).slice(-10), acc = new Map();
+    // Heard words that are in no service song (talk, other songs) weigh fully against every line.
+    const maxIdf = Math.log(1 + ix.rows.length);
+    let heardTot = 0; for (const w of new Set(hw)) heardTot += ix.post.has(w) ? ix.idf(w) : ix.post.has('~' + skel(w)) ? .8 * ix.idf('~' + skel(w)) : maxIdf;
+    for (const w of new Set(hw)) {
+      const seen = new Set();
+      for (const k of [w, '~' + skel(w)]) {
+        const a = ix.post.get(k); if (!a) continue;
+        const wt = k[0] === '~' ? .8 * ix.idf(k) : ix.idf(k);
+        for (const r of a) { if (seen.has(r)) continue; seen.add(r); acc.set(r, (acc.get(r) || 0) + wt); }
+      }
+    }
+    const bySong = new Map();
+    for (const [r, v] of acc) {
+      const row = ix.rows[r], hc = Math.min(1, v / (heardTot || 1)), lc = Math.min(1, v / row.total);
+      const sc = Math.sqrt(hc * Math.max(lc, Math.min(1, hc * .8)));      // explains what was heard, and covers the line (or its part)
+      const b = bySong.get(row.id); if (!b || sc > b.score) bySong.set(row.id, { id: row.id, line: row.line, score: sc, all: (b ? b.all : []).concat([[row.line, sc]]) }); else b.all.push([row.line, sc]);
+    }
+    return [...bySong.values()].sort((a, b) => b.score - a.score).slice(0, limit || 3);
+  }
+
   /* ---------- Spoken numbers (English, Malayalam, Tamil) ---------- */
   const NUMWORDS = [
     ['one',1],['two',2],['three',3],['four',4],['five',5],['six',6],['seven',7],['eight',8],['nine',9],['ten',10],
@@ -346,6 +390,6 @@
     return out;
   }
 
-  const Core = { wordMatch, place, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);

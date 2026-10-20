@@ -1200,6 +1200,55 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
+  /* Today's service, indexed line by line and word by word (Core.serviceIndex), rebuilt whenever the service list or
+   * one of its songs changes. Every recognised clip is looked up in it:
+   *  - nothing open yet (or the wrong song open): the service song being sung is opened at the line being sung;
+   *  - the right song open but the screen two or more lines behind: it catches up at once;
+   *  - another service song clearly sung (two clips running) while the open one no longer fits: it changes song.
+   * Otherwise it stays with the song until it ends - shared lines and repeated choruses never switch it. */
+  const Svc = {
+    ix: null, key: '', other: { id: null, n: 0 }, back: { line: -1, n: 0 }, log: [],
+    index() {
+      const key = service.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|');
+      if (key !== this.key) { this.key = key; this.ix = Core.serviceIndex(service.map(id => songById(id)).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) }))); }
+      return this.ix;
+    },
+    track(text) {
+      if (!S.autoFollow || !service.length) return;
+      const res = Core.serviceFind(this.index(), Core.keyWords(text).split(/\s+/), 4); const top = res[0]; if (!top) return;
+      const mine = song && res.find(r => r.id === song.id);
+      this.log.push([Math.round(performance.now() / 100) / 10, (songById(top.id) || {}).title?.slice(0, 10), top.line, +top.score.toFixed(2), mine ? +mine.score.toFixed(2) : null, this.other.n]); if (this.log.length > 60) this.log.shift();
+      if (!song || (top.id !== song.id && follow.cur < 0 && top.score >= .6)) { if (top.score >= .6) this.open(top.id, top.line); return; }
+      if (top.id !== song.id) {
+        const fits = mine ? mine.score : 0;
+        // Clearly another song: it fits well and much better than the open one (praise songs share many words).
+        // Two such clips within 10 s switch (one is enough when it is unmistakable); a weaker clip in between does
+        // not reset the count - only a clip where the open song fits as well does.
+        const now = Date.now(), clear = top.score >= .6 && (fits < .35 || top.score - fits >= .25);
+        if (this.other.id === top.id && now - this.other.at < 10000 && top.score >= .5 && top.score - fits >= .15) this.other = { id: top.id, n: this.other.n + 1, at: now };
+        else if (clear) this.other = { id: top.id, n: 1, at: now };
+        else if (fits >= top.score - .05 || now - (this.other.at || 0) > 10000) this.other = { id: null, n: 0 };
+        if (this.other.id === top.id && (this.other.n >= 2 || (top.score >= .85 && fits < .3))) this.open(top.id, top.line);
+        return;
+      }
+      if (mine && top.score >= .5) this.other = { id: null, n: 0 };
+      if (top.score < .6) return;
+      // Repeated lines (chorus): of the equally good copies take the first one at or after the current place.
+      const good = top.all.filter(x => x[1] >= top.score - .05).map(x => x[0]).sort((a, b) => a - b);
+      const ahead = good.find(i => i >= follow.cur), line = ahead != null ? ahead : good[good.length - 1];
+      if (line >= follow.cur + 2 && good.length <= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); return; }
+      if (ahead == null && line <= follow.cur - 3) {                     // song started again / a verse repeated
+        this.back = this.back.line === line ? { line, n: this.back.n + 1 } : { line, n: 1 };
+        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
+      } else this.back = { line: -1, n: 0 };
+    },
+    open(id, line) {
+      this.other = { id: null, n: 0 }; this.back = { line: -1, n: 0 };
+      if (song && song.id === id) { Lead.go(line); return; }
+      loadSong(id, { line }); toast(t('sounds_like') + ': ' + songById(id).title);
+    }
+  };
+
   const Whisper = {
     timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null,
     start() { this.stop(); this.lastSent = Date.now(); this.tick(); },
@@ -1215,7 +1264,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       this.send(a, now);
     },
     lang() {
-      const l = Listen.mode === 'songs' ? (song ? song.lang : Listen.lang) : (S.vbLang === 'auto' ? '' : S.vbLang);
+      // No song open yet: let Whisper detect the language; the service index finds the song.
+      const l = Listen.mode === 'songs' ? (song ? song.lang : '') : (S.vbLang === 'auto' ? '' : S.vbLang);
       return String(l || '').slice(0, 2);
     },
     prompt() {
@@ -1223,8 +1273,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // Before the song has started only its first line is given: with more, Whisper "hears" later lyric words in
       // the noise before the singing (seen live: it jumped to line 4 during the intro).
       const main = lines.filter(l => !l.alt);
-      // ...plus the opening line of each song in today's service, so whichever of them is started is written right.
-      if (follow.cur < 0) return [main[0] && main[0].text, ...service.filter(id => id !== song.id).map(id => { const sg = songById(id); return sg ? (sg.lyrics.split('\n').find(x => x.trim()) || '') : ''; })].filter(Boolean).join(' · ').slice(0, 400);
+      // (Not the opening lines of every service song: seen live, Whisper then writes those lines over talk and music.)
+      if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
       return main.slice(Math.max(0, at - 1), at + 4).map(l => l.text).join(' ').slice(0, 400);
     },
@@ -1249,7 +1299,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
-        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') Lead.heard(text, clipEnd || Date.now()); }
+        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
       } catch (e) {
         this.fails++;
@@ -2045,13 +2095,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
+    close() { loadSong(null); },
     whisper: () => ({ engine: Listen.engine, left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
   };
   init();
 })();
