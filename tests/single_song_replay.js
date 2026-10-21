@@ -3,7 +3,7 @@
 const Core = require('../js/core.js'), Tidy = require('../js/tidy.js'), fs = require('fs');
 const all = ['songs-ta-fgs', 'songs-church'].flatMap(f => require('../vendor/' + f + '.json').songs);
 function parse(text) { const blocks = text.replace(/\r/g, '').split(/\n\s*\n/).map(b => b.split('\n').map(l => l.trim()).filter(Boolean)).filter(b => b.length); const ls = []; blocks.forEach((b, si) => b.forEach(x => ls.push({ text: x, slide: si }))); Core.prepare(ls.map(l => l.text)).forEach((p, i) => Object.assign(ls[i], p)); return ls; }
-const al = all.find(s => s.title.startsWith('அல்லேலூயா கர்த்தரையே'));
+const al = require('../vendor/songs-church.json').songs.find(s => s.title.startsWith('அல்லேலூயா கர்த்தரையே'));
 const b = al.lyrics.split(/\n\s*\n/), once = [b[0], b[1], b[2], b[4], b[6], b[8]].join('\n\n');
 const others = ['எந்தன் நாவில் புதுபாட்டு', 'அழகாய் நிற்கும்', 'அழைத்தீரே', 'துதி கனம்'].map(t => all.find(s => s.title.startsWith(t))).map(s => ({ id: s.title, lines: parse(s.lyrics) }));
 const run = JSON.parse(fs.readFileSync(__dirname + '/live_single_alleluya.json', 'utf8'));

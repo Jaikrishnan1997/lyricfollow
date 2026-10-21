@@ -1497,32 +1497,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     for (const i of order) for (const L of langs) { const nm = Bible.bookName(i, L); if (nm && !out.includes(nm) && out.length < 50) out.push(nm.slice(0, 64)); }
     return out;
   }
-  const svTermsCache = new Map();
   function sarvamTerms() {
-    if (Listen.mode === 'bible') return bibleTerms();
-    if (Listen.mode !== 'songs') return [];
-    const words = sg => {
-      const k = sg.id + ':' + (sg.updated || 0); if (svTermsCache.has(k)) return svTermsCache.get(k);
-      const cnt = new Map();
-      for (const l of prepared(sg)) { if (l.alt) continue; for (const w of l.text.split(/\s+/)) { const c = w.replace(/[^\p{L}\p{M}]/gu, ''); if (c.length >= 3) cnt.set(c, (cnt.get(c) || 0) + 1); } }
-      const out = [...cnt.keys()].sort((a, b) => b.length - a.length); svTermsCache.set(k, out); return out;
-    };
-    // The open song, confirmed: only the words of the next lines (and the one before), nearest first. With the whole
-    // song's words Sarvam wrote words of far verses over the music ("அக்கினியே", "எழும்பினார்" in the first verse),
-    // and those pulled the screen to the wrong verse (seen live: 28 s on verse 4 while verse 2 was sung).
-    if (song && Svc.okId === song.id && Date.now() - Svc.okAt < 15000) {
-      const out = [], from = Math.max(0, follow.cur - 1);
-      for (let i = from; i < lines.length && i <= from + 7 && out.length < 50; i++) {
-        const l = lines[i]; if (!l || l.alt) continue;
-        for (const w of l.text.split(/\s+/)) { const c = w.replace(/[^\p{L}\p{M}]/gu, ''); if (c.length >= 3 && !out.includes(c) && out.length < 50) out.push(c); }
-      }
-      return out.length ? out : words(song).slice(0, 50);
-    }
-    const list = service.map(songById).filter(Boolean); if (song && !list.includes(song)) list.push(song);
-    if (!list.length) return [];
-    const per = Math.max(4, Math.floor(50 / list.length)), out = [];
-    for (const sg of list) for (const w of words(sg).slice(0, per)) if (out.length < 50 && !out.includes(w)) out.push(w);
-    return out;
+    // Singing: no key words. Measured on a live recording (22 Oct, Alleluya + Enthan): with the song's words as key
+    // words Sarvam writes those words over music it cannot make out ("தேவனைத் துதியுங்கள்" for 110 s, "எழும்பினார்",
+    // "அக்கினியே" in the wrong verse) and the screen follows them; without, it writes what is sung, misspelt but in order.
+    return Listen.mode === 'bible' ? bibleTerms() : [];
   }
 
   const Whisper = {

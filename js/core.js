@@ -640,6 +640,11 @@
           if (cPos !== -9 && c >= cPos - 1 && c <= cPos + 1) { here = true; break; }
           // the same line three times says where only when the screen is far from it
           if (c === a && !(cPos !== -9 && Math.abs(c - cPos) >= 3)) continue;
+          // far from the screen (or before the song has started, away from its beginning): good words in two of the
+          // clips, not one or two common ones a clip ("உங்க" took the screen from the chorus to verse 3)
+          // and the clips must say where: chorus words fit every copy of the chorus ("அல்லேலூயா" - 5 places), and the
+          // newest clip itself has to be a good fit
+          if (id === st.song && (cPos === -9 ? c > 3 : Math.abs(c - cPos) > 4) && (rows.filter(x => x.top >= .7 && x.ps.length <= 2).length < 2 || rows.reduce((t, x) => t + x.n, 0) < 3 || rows[2].top < .75)) continue;
           // of several runs, the one nearest the screen (ahead first)
           if (ok == null || (cPos !== -9 && Math.abs(c - cPos - .5) < Math.abs(ok - cPos - .5))) ok = c;
           if (cPos === -9) break;
@@ -813,6 +818,7 @@
       if (!hm || hm.p === c || !hm.again || hm.post < .5 || mine.sc[hm.p].s < .2) return null;
       const d = c < 0 ? hm.p + 1 : hm.p - c;
       if (Math.abs(d) > 6 && hm.post < .7) return null;
+      if (d < -2 && mine.sc[hm.p].s < .5) return null;      // back over lines on a garbled clip ("திறக்கிறீயும்" -> verse 1)
       st.pend = null; st.last = { p: hm.p, t: now }; if (st.hmm) st.hmm.c = hm.p;
       return { song: st.song, line: ix.idx[hm.p], why: 'hmm' };
     };
@@ -831,7 +837,7 @@
     let ok;
     if (c >= 0 && d > 1 && d <= Math.min(4, exp + 1) && s >= .45) ok = true;
     else if (stuck && d > 1 && d <= 8 && s >= .5 && n >= 2) ok = true;            // the screen has not moved for 10 s
-    else if (c < 0) ok = (best <= 1 && s >= .5) || (conf && s >= .55 && n >= 2);  // before the song: its start
+    else if (c < 0) ok = (best <= 1 && s >= .3) || (conf && s >= .55 && n >= 2 && (best <= 3 || (s >= .85 && n >= 3)));  // before the song: its start (the operator opened it)
     else if (d === 1) ok = s >= .4;
     else if (d === 2) ok = (s >= .45 && n >= 2) || (conf && s >= .38) || (s >= .85 && n >= 1);   // one clear word of the line after next ("சூரியனே")
     else if (d <= 4 && d > 0) ok = (s >= .55 && n >= 2) || (conf && s >= .42 && n >= 1);
@@ -866,6 +872,6 @@
     return r;
   }
 
-  const Core = { novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
