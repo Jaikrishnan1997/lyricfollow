@@ -1385,23 +1385,26 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (this.st.mineTop >= .45) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, now); Svc.mineAt = now; this.offSince = 0; }
         else if (this.st.words >= 3 && this.st.mineTop < .3) { if (!this.offSince) this.offSince = now; if (now - this.offSince > 6000) Svc.okAt = 0; }
       }
-      if (!r) {
-        // Nothing in today's service fits: look through the whole library (a song the leader started that is not
-        // on today's list). Found -> opened and added to today's list; the service songs are tried first always.
-        if (Lib.ix && this.st.words >= 3 && this.st.mineTop < .65 && this.st.otherTop < .65) {
-          const skip = new Set(service); if (song) skip.add(song.id);
-          const lr = Core.libStep(Lib.ix, this.lst, text, skip, now, Math.max(this.st.mineTop, this.st.otherTop));
-          this.log.push([Math.round(performance.now() / 100) / 10, 'lib', this.lst.libTop ? (songById(this.lst.libTop.id) || {}).title + ' ' + this.lst.libTop.s.toFixed(2) : '', lr ? 'FOUND' : '']);
-          if (lr && songById(lr.song)) {
-            this.offSince = 0; this.fitAt = now; Svc.okId = lr.song; Svc.okAt = 0; Svc.mineAt = now;
-            if (S.autoSwitch === false) showSuggest(lr.song, lr.line);
-            else { if (!service.includes(lr.song)) { service.push(lr.song); saveService(); } loadSong(lr.song, { line: lr.line }); toast(t('found_library') + ': ' + songById(lr.song).title); }
-          }
+      // Nothing in today's service fits well: look through the whole library (a song the leader started that is not
+      // on today's list). Found -> opened and added to today's list; the service songs are tried first always.
+      if (Lib.ix && this.st.words >= 2 && !(r && r.why === 'song') && this.st.mineTop < .9 && this.st.otherTop < .9) {
+        const skip = new Set(service); if (song) skip.add(song.id);
+        const ev = Math.max(0, ...Object.values(this.st.ev || {}));
+        const lr = Core.libStep(Lib.ix, this.lst, text, skip, now, Math.max(this.st.mineTop, this.st.otherTop), ev);
+        const lt = this.lst.libTop;
+        // a library song fits better than the open one: clips at the quick pace until that is settled
+        if (lt && lt.s - Math.max(this.st.mineTop, this.st.otherTop) >= .1) this.libAt = now;
+        this.log.push([Math.round(performance.now() / 100) / 10, 'lib', lt ? (songById(lt.id) || {}).title + ' ' + lt.s.toFixed(2) : '', lr ? 'FOUND' : (this.lst.libLev ? 'ev ' + this.lst.libLev[1] + ' vs ' + ev.toFixed(2) : '')]);
+        if (lr && songById(lr.song)) {
+          this.offSince = 0; this.fitAt = now; Svc.okId = lr.song; Svc.okAt = 0; Svc.mineAt = now; this.st.ev = {};
+          if (S.autoSwitch === false) showSuggest(lr.song, lr.line);
+          else { if (!service.includes(lr.song)) { service.push(lr.song); saveService(); } loadSong(lr.song, { line: lr.line }); toast(t('found_library') + ': ' + songById(lr.song).title); }
+          return;
         }
-        return;
       }
-      this.lst = {};
+      if (!r) return;
       if (!song || r.song !== song.id) {
+        this.lst = {};
         // No lyrics hint for the new song until its own singing confirms it (Trk sets okAt again when a clip fits it
         // well). Seen live: after a switch on weak evidence, the new song's lines in the hint made Whisper write
         // them ("Anbin manatha…") over a different song, and the wrong song confirmed itself.
@@ -1572,7 +1575,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // switch is pending. The laptop has no limit and keeps its own pace.
     interval(p) {
       if (p && p.kind === 'laptop') return this.clipSec;
-      const sure = this.goodRun >= 2 && follow.cur >= 0 && !(Trk.st && Trk.st.sw) && Date.now() - Svc.okAt < 15000;
+      const sure = this.goodRun >= 2 && follow.cur >= 0 && !(Trk.st && Trk.st.sw) && Date.now() - Svc.okAt < 15000 && Date.now() - (Trk.libAt || 0) > 10000;
       if (!sure) return 3.2;
       // never longer than about one sung line, so no line is skipped (line length from the measured singing speed)
       const n = (i => (lines[i] && lines[i].w ? lines[i].w.length : 4))(follow.cur), dur = Math.max(2, n) * Lead.spw + .6;

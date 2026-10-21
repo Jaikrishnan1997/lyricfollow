@@ -545,12 +545,13 @@
     const idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
     return { gix, idf, N, grp: new Map(songs.map(s => [s.id, s.grp || s.id])), byId: new Map(songs.map(s => [s.id, s])), six: new Map() };
   }
-  // floor: how well the best song of today's list fits this clip - a library song must fit clearly better.
-  function libStep(L, st, text, skip, now, floor) {
-    now = now || Date.now(); floor = floor || 0;
-    st.lib = (st.lib || []).filter(h => now - h.at < 20000);
+  // floor: how well the best song of today's list fits this clip; floorEv: how well it has fitted over the last
+  // clips (its running evidence) - a library song must fit clearly better.
+  function libStep(L, st, text, skip, now, floor, floorEv) {
+    now = now || Date.now(); floor = floor || 0; floorEv = floorEv || 0;
+    st.lib = (st.lib || []).filter(h => now - h.at < 30000);
     const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)), big = hw.filter(w => w.length >= 3);
-    if (!L || big.length < 3) return null;
+    if (!L || big.length < 2) return null;
     // another copy of a song on today's list (same first line) is that song, not a new one
     const out = [], seen = new Set(skip ? [...skip].map(id => L.grp.get(id)).filter(Boolean) : []);
     for (const c of songLookup(L.gix, key(text), 10)) {
@@ -564,13 +565,30 @@
       if (out.length >= 4) break;
     }
     out.sort((a, b) => b.s - a.s);
-    // the next best song with a different line (the same line in another copy of the song is no competition)
+    // Running evidence per library song over the last clips (as for the service songs): a song that shares common
+    // words with today's song ("இயேசு ராஜா", "துதியுங்கள்", both from Psalm 148) shows itself over several clips
+    // of its own lines, while any one clip fits both. Seen live: 30 s of துதி கனம் with அல்லேலூயா கர்த்தரையே open.
+    st.lev = st.lev || {};
+    for (const g in st.lev) { st.lev[g] *= .65; if (st.lev[g] < .03) delete st.lev[g]; }
+    for (const x of out) st.lev[x.g] = (st.lev[x.g] || 0) + x.s * .35;
     const a = out[0]; if (!a) return null; const b = out.find(x => x !== a && x.k !== a.k);
     const m = a.s - (b ? b.s : 0);
     st.lib.push({ g: a.g, s: a.s, n: a.n, m, at: now }); st.libTop = a;
     st.lib[st.lib.length - 1].f = floor;
     const hits = st.lib.filter(h => h.g === a.g && h.s >= Math.max(.5, h.f + .2) && h.n >= 2);
-    if ((hits.length >= 2 && hits.some(h => h.m >= .15)) || (a.s >= .8 && a.n >= 3 && m >= .3 && a.s >= floor + .3)) { st.lib = []; return { song: a.id, line: a.line, why: 'library', score: a.s }; }
+    if ((hits.length >= 2 && hits.some(h => h.m >= .15)) || (a.s >= .8 && a.n >= 3 && m >= .3 && a.s >= floor + .3)) { st.lib = []; st.lev = {}; return { song: a.id, line: a.line, why: 'library', score: a.s }; }
+    // the same library song fitting clearly better than today's songs in 3 of the last 4 clips
+    const last4 = st.lib.slice(-4), ahead = last4.filter(h => h.g === a.g && h.s - h.f >= .1 && h.n >= 1);
+    if (a.s >= .6 && ahead.length >= 3 && ahead.reduce((t, h) => t + h.s - h.f, 0) / ahead.length >= .13) {
+      st.lib = []; st.lev = {}; return { song: a.id, line: a.line, why: 'library', score: a.s };
+    }
+    // over several clips: clearly ahead of today's song and of every other library song
+    const ranked = Object.entries(st.lev).sort((x, y) => y[1] - x[1]), lead = ranked[0];
+    if (lead && lead[0] === a.g && lead[1] >= .5 && lead[1] >= floorEv + .12 && (!ranked[1] || lead[1] >= ranked[1][1] + .15) &&
+        st.lib.filter(h => h.g === a.g && h.s >= .5 && h.n >= 2).length >= 2) {
+      st.lib = []; st.lev = {}; return { song: a.id, line: a.line, why: 'library', score: a.s };
+    }
+    st.libLev = lead ? [lead[0], +lead[1].toFixed(2)] : null;
     return null;
   }
   const FILLER = new Set(['nan', 'varukiren', 'vanakam', 'nanti', 'cari', 'aiya', 'enental', 'parkalam']);
