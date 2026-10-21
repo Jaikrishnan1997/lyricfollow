@@ -161,8 +161,20 @@ API key and paste it in **Settings → Song listening → Sarvam API key**. Then
   service songs until the song is confirmed). Groq, Cloudflare and the laptop stay as automatic backups (also when the
   Sarvam credit runs out).
 - **Preacher (Bible):** live streaming recognition from Sarvam (Malayalam, Tamil, English, mixed; automatic language
-  when "auto" is chosen), feeding the verse finder; the browser recogniser takes over if Sarvam stops.
-Price: ₹30 per hour of audio. Singing clips overlap, so a 3-hour service costs roughly ₹100–130.
+  when "auto" is chosen), feeding the verse finder, with the Bible book names and the words for chapter/verse of the
+  preaching language as key words; the browser recogniser takes over if Sarvam stops.
+Price: ₹30 per hour of audio **sent** (billed by the second). To keep that low:
+- only the sound since the last clip is sent (0.8 s overlap while unsure, none while following with confidence);
+- nothing is sent in a silent room; during music breaks (no words in the last clips) one short clip every 4.5–6 s;
+- during talk or prayer (no song line for 25 s) one 4 s clip every 6 s until a song line is heard again;
+- the preacher stream sends nothing after 1.5 s without a voice (the 0.4 s before the voice returns is sent with it).
+Settings shows the minutes and rupees used today and this month, and takes an optional **daily limit** (minutes):
+after it, the free services (Groq, Cloudflare, laptop) take over until the next day. A 2-hour service with about an
+hour of singing costs roughly ₹30–45.
+- **Songs not in today's list:** when no song of the service fits what is sung, the whole library is searched (letter
+  index finds a few candidates in ~20 ms, each checked word by word); the same song on top in two clips (or one very
+  clear clip) opens it and adds it to today's list. Tested on 849 bundled songs: found in about 2 clips, no false
+  switches on recorded talk.
 
 ## Whisper all day for free (Online mode)
 
@@ -205,4 +217,4 @@ A song can carry a YouTube link with a start time (song editor → *Backing trac
 Thalaimuraigalin Sangeetham (Tamil) / Thalamurakalude Sangeetham (Malayalam) episodes by LightHouse Records, whose
 chapter times are bundled in `vendor/yt-tracks.json`). *Match all my songs automatically* attaches tracks to songs whose
 titles sound like an episode chapter. On the Live tab the track plays through the official embedded YouTube player
-(internet needed; nothing is downloaded), with play/stop, volume, a Music (small 200 px player) / Video (large player) choice, and an option to start it whenever a song opens. YouTube's terms require the player to stay visible, so "music only" is the smallest allowed player rather than a hidden one.
+(internet needed; nothing is downloaded), with play/stop, volume and a Music (small 200 px player) / Video (large player) choice. The track never starts by itself: opening a song, a song switched automatically by the listener, or a song restored at start-up only loads its track, paused - it plays only when ▶ is pressed. YouTube's terms require the player to stay visible, so "music only" is the smallest allowed player rather than a hidden one.

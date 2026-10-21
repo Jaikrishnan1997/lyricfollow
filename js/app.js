@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -1082,7 +1082,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (this.apiAsked) return; this.apiAsked = true;
       window.onYouTubeIframeAPIReady = () => {
         this.player = new YT.Player('ytHost', { width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
-          events: { onReady: () => { this.ready = true; this.player.setVolume(S.trackVol); if (this.cur) this.cue(this.cur, this.pendingPlay); },
+          events: { onReady: () => { this.ready = true; this.player.setVolume(S.trackVol); if (this.cur) this.cue(this.cur, false); },
                     onStateChange: e => { this.renderButtons(e.data); } } });
       };
       const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; sc.onerror = () => { $('trackHint').textContent = t('no_internet'); }; document.head.appendChild(sc);
@@ -1092,13 +1092,15 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (yt && this.cur && this.cur.id === yt.id && (this.cur.start || 0) === (yt.start || 0)) { this.cur = yt; $('trackBox').hidden = false; return; }
       this.cur = yt || null; $('trackBox').hidden = !yt;
       if (!yt) { if (this.ready) try { this.player.stopVideo(); } catch (e) {} return; }
-      $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkAuto').checked = !!S.trackAuto; $('trkVol').value = S.trackVol; $('trkSize').value = S.trackSize || 'compact'; $('ytWrap').classList.toggle('compact', (S.trackSize || 'compact') === 'compact');
-      this.api(); if (this.ready) this.cue(yt, S.trackAuto); else this.pendingPlay = !!S.trackAuto;
+      $('trackName').textContent = this.chapterName(yt) || yt.id; $('trkVol').value = S.trackVol; $('trkSize').value = S.trackSize || 'compact'; $('ytWrap').classList.toggle('compact', (S.trackSize || 'compact') === 'compact');
+      // A new backing track is only loaded, paused: it never starts by itself (song opened, auto-switched or
+      // restored) - it plays only when Play is pressed.
+      this.api(); if (this.ready) this.cue(yt, false);
     },
     cue(yt, play) {
       this.cues = (this.cues || 0) + 1;
       const o = { videoId: yt.id, startSeconds: yt.start || 0 }; if (yt.end) o.endSeconds = yt.end;
-      try { if (play && userGesture) this.player.loadVideoById(o); else this.player.cueVideoById(o); } catch (e) {}
+      try { this.player.cueVideoById(o); } catch (e) {}
     },
     play() { if (!this.ready) return; try { const st = this.player.getPlayerState(); if (st === 1) this.player.pauseVideo(); else this.player.playVideo(); } catch (e) {} },
     stop() { if (this.ready) try { this.player.stopVideo(); if (this.cur) this.cue(this.cur, false); } catch (e) {} },
@@ -1362,11 +1364,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    * either direction - singers repeat lines, go back to the first line between the others (1,2,1,3,1,4…), sing the
    * chorus again or move to another song of the service. Lead still adds the timing (next line as one ends). */
   const Trk = {
-    key: '', T: null, st: { song: null, cur: -1 }, offSince: 0, log: [], backOnce: -1,
+    key: '', T: null, st: { song: null, cur: -1 }, lst: {}, offSince: 0, log: [], backOnce: -1,
     index() {
       const ids = service.slice(); if (song && !ids.includes(song.id)) ids.push(song.id);
-      const key = ids.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|');
-      if (key !== this.key) { this.key = key; this.T = Core.trackIndex(ids.map(songById).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) }))); }
+      const key = ids.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|') + (Lib.ix ? '+lib' + Lib.ver : '');
+      if (key !== this.key) { this.key = key; this.T = Core.trackIndex(ids.map(songById).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) })), Lib.ix); }
       return this.T;
     },
     heard(text) {
@@ -1374,14 +1376,31 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const T = this.index(); if (!T.songs.length) return;
       this.st.song = song ? song.id : null; this.st.cur = follow.cur;
       const c0 = follow.cur, r = Core.trackStep(T, this.st, text), now = Date.now();
+      if (!song && this.st.otherTop >= .42) this.fitAt = now;
       this.log.push([Math.round(performance.now() / 100) / 10, c0, text.slice(0, 40), r ? r.line + ' ' + r.why : '', +this.st.mineTop.toFixed(2)]); if (this.log.length > 60) this.log.shift();
       if (song) {
         // The singing fits the open song: keep giving Whisper its lyrics. Clearly another song for 6 s: stop, so
         // Whisper writes what is sung (with the open song's lyrics as the hint it writes that song's words instead).
-        if (this.st.mineTop >= .45) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, now); Svc.mineAt = now; this.offSince = 0; }
+        if (this.st.mineTop >= .45 || this.st.otherTop >= .42) this.fitAt = now;
+      if (this.st.mineTop >= .45) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, now); Svc.mineAt = now; this.offSince = 0; }
         else if (this.st.words >= 3 && this.st.mineTop < .3) { if (!this.offSince) this.offSince = now; if (now - this.offSince > 6000) Svc.okAt = 0; }
       }
-      if (!r) return;
+      if (!r) {
+        // Nothing in today's service fits: look through the whole library (a song the leader started that is not
+        // on today's list). Found -> opened and added to today's list; the service songs are tried first always.
+        if (Lib.ix && this.st.words >= 3 && this.st.mineTop < .65 && this.st.otherTop < .65) {
+          const skip = new Set(service); if (song) skip.add(song.id);
+          const lr = Core.libStep(Lib.ix, this.lst, text, skip, now, Math.max(this.st.mineTop, this.st.otherTop));
+          this.log.push([Math.round(performance.now() / 100) / 10, 'lib', this.lst.libTop ? (songById(this.lst.libTop.id) || {}).title + ' ' + this.lst.libTop.s.toFixed(2) : '', lr ? 'FOUND' : '']);
+          if (lr && songById(lr.song)) {
+            this.offSince = 0; this.fitAt = now; Svc.okId = lr.song; Svc.okAt = 0; Svc.mineAt = now;
+            if (S.autoSwitch === false) showSuggest(lr.song, lr.line);
+            else { if (!service.includes(lr.song)) { service.push(lr.song); saveService(); } loadSong(lr.song, { line: lr.line }); toast(t('found_library') + ': ' + songById(lr.song).title); }
+          }
+        }
+        return;
+      }
+      this.lst = {};
       if (!song || r.song !== song.id) {
         // No lyrics hint for the new song until its own singing confirms it (Trk sets okAt again when a clip fits it
         // well). Seen live: after a switch on weak evidence, the new song's lines in the hint made Whisper write
@@ -1402,8 +1421,45 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   /* Key words for Sarvam (up to 50 per clip): the open song's own words once the singing has confirmed it, otherwise
    * a share from every song of today's service - so the right lyric words are spelt and recognised through the music.
    * Words, not whole lines: Sarvam does not write them out on its own the way Whisper repeats a prompt. */
+  /* Sarvam is paid by the second of audio sent (Rs 30 an hour): what was sent today and this month is counted
+   * here and shown in Settings, with an optional daily limit after which the free services take over. */
+  const SvUse = {
+    n: 0, u: null,
+    get() {
+      let u = this.u; if (!u) { try { u = JSON.parse(localStorage.getItem('lf-sv-use') || '{}'); } catch (e) { u = {}; } }
+      const d = new Date(), day = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(), mon = d.getFullYear() + '-' + (d.getMonth() + 1);
+      if (u.day !== day) { u.day = day; u.today = 0; } if (u.mon !== mon) { u.mon = mon; u.month = 0; }
+      return (this.u = u);
+    },
+    add(sec) {
+      if (!(sec > 0)) return; const u = this.get(); u.today += sec; u.month += sec;
+      try { localStorage.setItem('lf-sv-use', JSON.stringify(u)); } catch (e) {}
+      if (++this.n % 8 === 0) this.render();
+      if (this.over() && !this.warned) { this.warned = true; toast(t('sv_cap_hit')); }
+    },
+    over() { return (+S.sarvamCap || 0) > 0 && this.get().today >= S.sarvamCap * 60; },
+    render() {
+      const el = $('svUse'); if (!el) return; const u = this.get();
+      const f = sec => sec < 3600 ? Math.round(sec / 60) + ' min' : (sec / 3600).toFixed(1) + ' h', rs = sec => '₹' + (sec / 3600 * 30).toFixed(sec < 3600 ? 1 : 0);
+      el.textContent = `${t('sv_today')}: ${f(u.today)} (${rs(u.today)}) · ${t('sv_month')}: ${f(u.month)} (${rs(u.month)})`;
+    }
+  };
+  /* Key words for the preacher: book names in the language being preached (most preached books first) and the
+   * words for chapter and verse, so Sarvam spells them the way the verse finder knows them. */
+  function bibleTerms() {
+    // the language chosen for the preacher; "auto": Tamil and Malayalam names side by side
+    const lg = S.vbLang !== 'auto' ? String(S.vbLang).slice(0, 2) : '';
+    const langs = lg === 'ta' || lg === 'ml' ? [lg] : lg === 'en' ? ['en'] : ['ta', 'ml'];
+    const cue = { ml: ['അധ്യായം', 'വാക്യം'], ta: ['அதிகாரம்', 'வசனம்'], en: ['chapter', 'verse'] };
+    const pop = [42, 39, 18, 44, 41, 40, 43, 0, 22, 19, 57, 65, 48, 45, 58, 49, 1, 23];
+    const order = pop.concat([...Array(66).keys()].filter(i => i >= 39 && !pop.includes(i)), [...Array(39).keys()].filter(i => !pop.includes(i)));
+    const out = [].concat(...langs.map(l => cue[l]));
+    for (const i of order) for (const L of langs) { const nm = Bible.bookName(i, L); if (nm && !out.includes(nm) && out.length < 50) out.push(nm.slice(0, 64)); }
+    return out;
+  }
   const svTermsCache = new Map();
   function sarvamTerms() {
+    if (Listen.mode === 'bible') return bibleTerms();
     if (Listen.mode !== 'songs') return [];
     const words = sg => {
       const k = sg.id + ':' + (sg.updated || 0); if (svTermsCache.has(k)) return svTermsCache.get(k);
@@ -1420,18 +1476,41 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
 
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null,
-    start() { this.stop(); this.fails = 0; this.goodRun = 0; this.clipSec = 3.2; this.lastSent = Date.now(); this.tick(); },
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null, quiet: 0, sentTo: 0,
+    start() { this.stop(); this.fails = 0; this.goodRun = 0; this.quiet = 0; this.sentTo = 0; this.clipSec = 3.2; this.lastSent = Date.now(); Trk.fitAt = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
       if (!Listen.mode || Listen.engine !== 'whisper') return;
       this.timer = setTimeout(() => this.tick(), 300);
       const now = Date.now();
-      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.interval(this.cur || this.pick()) * 1000 || !Mic.stream) return;
-      const a = Mic.last(4.5); this.lastSent = now;
+      if (this.busy || now < this.backoffUntil || !Mic.stream) return;
+      const plan = this.plan(this.cur || this.pick());
+      if (now - this.lastSent < plan.every * 1000) return;
+      // Only the sound since the last clip (plus a little overlap, so a word cut at the edge is still heard whole):
+      // the paid services charge by the second sent, and the same audio sent twice is paid twice.
+      const fresh = this.sentTo ? (Mic.total - this.sentTo) / Mic.rate : plan.len;
+      const a = Mic.last(Math.max(3, Math.min(plan.len, fresh + plan.overlap))); this.lastSent = now; this.sentTo = Mic.total;
       let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
-      if (!a.length || Math.sqrt(e / a.length) < .004) return;
+      const r = a.length ? Math.sqrt(e / a.length) : 0;
+      // Nothing to hear: a silent room (the clip no louder than the room's own hum) is not sent at all.
+      const c = Mic.chunks || [], fl = c.length > 20 ? c.map(x => x.rms).sort((x, y) => x - y)[Math.floor(c.length * .2)] : 0;
+      if (r < .004 || (fl < .01 && r < fl * 1.5)) { this.quiet++; return; }
       this.send(a, now);
+    },
+    /* How often a clip goes out and how long it is ({every, len, overlap} in seconds):
+     *  unsure / a switch pending - every 3.2 s, the new 3.2 s + 0.8 s overlap
+     *  following with confidence  - about once a sung line (up to 6 s), the last 4.5 s (the line timing fills the gap)
+     *  music only (no words in the last clips) - every 4.5 s, then 6 s; 3.5 s clips
+     *  talk / prayer, no song line for 25 s - every 6 s, 4 s clips, until a song line is heard again
+     * The laptop costs nothing and keeps its own pace with the full 4.5 s window. */
+    plan(p) {
+      if (p && p.kind === 'laptop') return { every: this.clipSec, len: 4.5, overlap: 4.5 };
+      if (Listen.mode !== 'songs') return { every: 3.2, len: 4.5, overlap: 1 };
+      if (this.quiet >= 3) return { every: 6, len: 3.5, overlap: 0 };
+      if (this.quiet >= 1) return { every: 4.5, len: 3.5, overlap: 0 };
+      if (Date.now() - (Trk.fitAt || 0) > 25000) return { every: 6, len: 4, overlap: 0 };
+      const every = this.interval(p);
+      return every > 3.3 ? { every, len: 4.5, overlap: 0 } : { every: 3.2, len: 4.5, overlap: .8 };
     },
     lang() {
       // No song open yet: the main language of today's service (seen live: left to guess, Whisper wrote Tamil
@@ -1468,7 +1547,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
      * this laptop (no limit). A service that says "limit reached" is skipped until its limit has passed (kept across
      * reloads); Offline mode uses the laptop only. */
     providers() {
-      const groqOk = S.groq && /^gsk_/.test(S.groqKey || ''), cfOk = /^https:\/\//.test(S.cfUrl || ''), svOk = S.sarvam !== false && (S.sarvamKey || '').length > 10;
+      const groqOk = S.groq && /^gsk_/.test(S.groqKey || ''), cfOk = /^https:\/\//.test(S.cfUrl || ''), svOk = S.sarvam !== false && (S.sarvamKey || '').length > 10 && !SvUse.over();
       const groq = ['whisper-large-v3', 'whisper-large-v3-turbo'];
       if (S.groqModel === 'whisper-large-v3-turbo') groq.reverse();
       const list = [];
@@ -1540,6 +1619,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         if (r.status === 401 || r.status === 402 || r.status === 403) { this.block(p.id, 3600000); if (p.kind !== 'laptop') toast(p.name + ': ' + t('key_or_credit')); return; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json(); this.fails = 0; this.sent++;
+        if (p.kind === 'sarvam') SvUse.add(a.length / 16000);
         lastEventAt = Date.now();
         const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
         let text = (p.kind === 'groq' && j.segments ? segs.map(sg => sg.text).join(' ') : j.text || j.transcript || '').trim();
@@ -1554,6 +1634,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // during the intro moved the screen on, the hint moved on with it, and so on through the song). Such a clip
         // never moves the screen; the singing of a new line (not in the hint) does.
         const echo = !!(text && pr && Listen.mode === 'songs' && Core.echoOf(text, pr));
+        this.quiet = text && Core.keyWords(text).replace(/\s+/g, '').length >= 4 ? 0 : this.quiet + 1;
         if (text && Listen.mode && !echo) {
           this.realAt = Date.now(); onText(text, [], .85);
           if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); this.goodRun = Trk.st.mineTop >= .6 ? (this.goodRun || 0) + 1 : 0; }
@@ -1579,35 +1660,53 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    * browser over a WebSocket (key as the sub-protocol), Malayalam/Tamil/English and mixed speech; partial and final
    * text go to the verse finder like the browser recogniser's. */
   const SarvamLive = {
-    ws: null, timer: null, sentTo: 0, fails: 0,
+    ws: null, timer: null, sentTo: 0, fails: 0, voiceAt: 0, idleAt: 0, noKt: false,
     start(lang) {
       this.stop();
+      if (SvUse.over()) { this.fail(t('sv_cap_hit')); return; }
       const code = S.vbLang === 'auto' ? 'auto' : (lang || S.vbLang || 'ml-IN');
       const q = new URLSearchParams({ model: 'saaras:v4', language_code: code, sample_rate: '16000', encoding: 'linear16', endpointing: 'vad' });
+      // Bible book names and the chapter/verse words as key words (dropped again if this endpoint refuses them).
+      const kt = this.noKt ? [] : bibleTerms(); if (kt.length) q.set('keyterms', JSON.stringify(kt));
+      this.ktTry = kt.length > 0; this.got = false; this.openAt = Date.now();
       let ws; try { ws = this.ws = new WebSocket('wss://api.sarvam.ai/speech-to-text-realtime/ws?' + q, ['api-subscription-key.' + S.sarvamKey]); } catch (e) { this.fail(); return; }
       this.sentTo = Mic.total || 0;
       ws.onopen = () => { this.fails = 0; setStatus(t('listen_for_bible') + ' · Sarvam', true); clearInterval(this.timer); this.timer = setInterval(() => this.pump(), 250); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         lastEventAt = Date.now();
-        if (m.event === 'transcript.partial' && m.text) onText('', [m.text], .85);
-        else if (m.event === 'transcript.final' && m.text) onText(m.text, [], .9);
-        else if (m.event === 'error') { this.fails++; }
+        if (m.event === 'transcript.partial' && m.text) { this.got = true; onText('', [m.text], .85); }
+        else if (m.event === 'transcript.final' && m.text) { this.got = true; onText(m.text, [], .9); }
+        else if (m.event === 'error') { this.fails++; if (this.ktTry && !this.got && /keyterm|param|invalid/i.test(JSON.stringify(m))) this.noKt = true; }
       };
       ws.onclose = e => {
         clearInterval(this.timer); this.timer = null;
         if (this.ws !== ws || !(Listen.mode && Listen.engine === 'sarvam')) return;
         this.ws = null; this.fails++;
+        // closed straight away with key words in the request, before any text: try again without them
+        if (this.ktTry && !this.got && Date.now() - this.openAt < 5000 && !this.noKt) { this.noKt = true; this.fails = Math.max(0, this.fails - 1); }
         // key refused / no credit (4001/4003/1008) or repeated drops: the browser recogniser takes over
         if (this.fails >= 3 || [4001, 4003, 1008].includes(e.code)) this.fail();
         else setTimeout(() => { if (Listen.mode && Listen.engine === 'sarvam') this.start(Listen.lang); }, 1500);
       };
     },
-    fail() { this.stop(); toast('Sarvam: ' + t('key_or_credit')); Listen.engine = SR ? 'cloud' : null; if (SR && Listen.mode) Cloud.start(Listen.lang); updateListenUI(); },
+    fail(why) { this.stop(); toast(why || ('Sarvam: ' + t('key_or_credit'))); Listen.engine = SR ? 'cloud' : null; if (SR && Listen.mode) Cloud.start(Listen.lang); updateListenUI(); },
     pump() {
       const ws = this.ws; if (!ws || ws.readyState !== 1 || !Mic.stream) return;
       const to = Mic.total; if (to - this.sentTo < Mic.rate * .2) return;
-      const a = Mic.slice(Math.max(this.sentTo, to - Mic.rate * 2), to); this.sentTo = to;
+      if (SvUse.over()) { this.fail(t('sv_cap_hit')); return; }
+      const from = Math.max(this.sentTo, to - Mic.rate * 2); let a = Mic.slice(from, to); this.sentTo = to;
+      // Pauses cost money too: after 1.5 s without a voice nothing is sent (a 0.1 s quiet frame every 5 s keeps the
+      // connection open), and when the preacher speaks again the 0.4 s just before is sent with it.
+      let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
+      const r = a.length ? Math.sqrt(e / a.length) : 0, c = Mic.chunks || [];
+      const fl = c.length > 20 ? c.map(x => x.rms).sort((x, y) => x - y)[Math.floor(c.length * .2)] : 0, now = Date.now();
+      if (r >= Math.max(.006, fl * 2)) { if (now - this.voiceAt > 1500) a = Mic.slice(from - Math.round(Mic.rate * .4), to); this.voiceAt = now; }
+      else if (now - this.voiceAt > 1500) {
+        if (now - this.idleAt < 5000) return;
+        this.idleAt = now; a = new Float32Array(1600);
+      }
+      SvUse.add(a.length / 16000);
       // Sarvam takes at most 32,000 bytes (1 s) per frame (seen live: "chunk_too_large" after a slow moment): 0.5 s frames.
       for (let o = 0; o < a.length; o += 8000) {
         const part = a.subarray(o, Math.min(a.length, o + 8000));
@@ -1807,10 +1906,21 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const end = Math.min(all.length, i + 40);
       for (; i < end; i++) list.push({ id: all[i].id, lines: prepared(all[i]) });
       if (i < all.length) (window.requestIdleCallback || (f => setTimeout(f, 0)))(step, { timeout: 200 });
-      else songIx = Core.songIndex(list);
+      else { songIx = Core.songIndex(list); rebuildLib(); }
     };
-    if (!songIx) { for (const s of all) list.push({ id: s.id, lines: prepared(s) }); songIx = Core.songIndex(list); i = all.length; return; }
+    if (!songIx) { for (const s of all) list.push({ id: s.id, lines: prepared(s) }); songIx = Core.songIndex(list); i = all.length; rebuildLib(); return; }
     step();
+  }
+  // The whole-library index for the Whisper/Sarvam path (word-by-word check of the few songs the letter index
+  // finds); built a moment after the letter index, in idle time.
+  const Lib = { ix: null, run: 0, ver: 0 };
+  function rebuildLib() {
+    const run = ++Lib.run;
+    (window.requestIdleCallback || (f => setTimeout(f, 50)))(() => {
+      if (run !== Lib.run) return;
+      const list = songs.map(s => { const ls = prepared(s), f = ls.find(l => !l.alt); return { id: s.id, grp: f ? Core.key(f.text).slice(0, 40) : s.id, lines: ls }; });
+      try { Lib.ix = Core.libIndex(list); Lib.ver++; } catch (e) { Lib.ix = null; }
+    }, { timeout: 3000 });
   }
   let ixTimer;
   function songsChanged() { clearTimeout(ixTimer); ixTimer = setTimeout(rebuildSongIndex, 300); }
@@ -2355,7 +2465,6 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('bulkFiles').onchange = e => { const fs = [...e.target.files]; if (fs.length) Bulk.importFiles(fs, $('bulkService').checked); e.target.value = ''; };
     $('trkPlay').onclick = () => Track.play(); $('trkStop').onclick = () => Track.stop();
     $('trkVol').oninput = e => { S.trackVol = +e.target.value; saveSettings(); if (Track.ready) Track.player.setVolume(S.trackVol); };
-    $('trkAuto').onchange = e => { S.trackAuto = e.target.checked; saveSettings(); };
     $('trkSize').onchange = e => { S.trackSize = e.target.value; saveSettings(); $('ytWrap').classList.toggle('compact', S.trackSize === 'compact'); };
     $('sfYt').addEventListener('input', () => Track.describe()); $('sfYtPick').onclick = () => Track.openPicker(true);
     $('trkPickClose').onclick = () => { $('trackPicker').hidden = true; }; $('trkAutoMatch').onclick = () => Track.autoMatch();
@@ -2374,6 +2483,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stSvKey').value = S.sarvamKey || ''; $('stSvOn').checked = S.sarvam !== false;
     $('stSvKey').onchange = e => { S.sarvamKey = e.target.value.trim(); whRe(); };
     $('stSvOn').onchange = e => { S.sarvam = e.target.checked; whRe(); };
+    $('stSvCap').value = S.sarvamCap || ''; $('stSvCap').onchange = e => { S.sarvamCap = Math.max(0, Math.round(+e.target.value || 0)); SvUse.warned = false; saveSettings(); };
+    SvUse.render();
     $('stWhReset').onclick = () => { try { localStorage.removeItem('lf-wh-block'); } catch (e) {} Whisper._bl = {}; toast(t('wh_reset_done')); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
     $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
@@ -2434,13 +2545,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
     lines: () => lines.map((l, i) => i + (l.alt ? '~ ' : ' ') + l.text),
-    whisper: () => ({ engine: Listen.engine, provider: Whisper.cur && Whisper.cur.id, blocked: Whisper.blocked(), every: Whisper.interval(Whisper.cur), left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
+    whisper: () => ({ engine: Listen.engine, provider: Whisper.cur && Whisper.cur.id, blocked: Whisper.blocked(), every: Whisper.interval(Whisper.cur), plan: Whisper.plan(Whisper.cur), quiet: Whisper.quiet, libN: Lib.ix ? Lib.ix.N : 0, songsN: songs.length, svUse: SvUse.get(), fitAgo: Date.now() - (Trk.fitAt || 0), left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60), trk: Trk.log.slice(-40) })
+    state: () => ({ cur: follow.cur, song: song && song.title, svc: service.map(id => (songById(id) || {}).title), screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60), trk: Trk.log.slice(-40) })
   };
   init();
 })();

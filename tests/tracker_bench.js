@@ -14,7 +14,10 @@ function parse(text) {
 }
 const songs = SERVICE.map((s, i) => ({ id: 'S' + i, title: s.title, lines: parse(s.lyrics) }));
 songs.forEach(s => { s.main = s.lines.map((l, i) => l.alt ? -1 : i).filter(i => i >= 0); s.slides = []; s.main.forEach(i => { const sl = s.lines[i].slide; (s.slides[sl] = s.slides[sl] || []).push(i); }); s.slides = s.slides.filter(Boolean); });
-const T = Core.trackIndex(songs.map(s => ({ id: s.id, lines: s.lines })));
+// LIB=1: word weights from the whole bundled library too, as the app does once its library index is built
+let LIB = null;
+if (process.env.LIB) { const all = ['songs-ta-fgs', 'songs-church', 'songs-ml-wikisource', 'songs-en-wikisource'].flatMap(f => require('../vendor/' + f + '.json').songs); LIB = Core.libIndex(all.map((s, i) => { const ls = parse(s.lyrics); Core.prepare(ls.map(l => l.text)).forEach((p, j) => Object.assign(ls[j], p)); return { id: 'L' + i, lines: ls }; })); }
+const T = Core.trackIndex(songs.map(s => ({ id: s.id, lines: s.lines })), LIB);
 // ---- noise ----
 let seed = 1; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 const GROUPS = [['த', 'ட', 'க'], ['ல', 'ள', 'ழ'], ['ர', 'ற'], ['ந', 'ன', 'ண'], ['ச', 'ஜ', 'ஸ'], ['ப', 'வ', 'ம'], ['ா', ''], ['ி', 'ீ'], ['ு', 'ூ'], ['ெ', 'ே', 'ை']];

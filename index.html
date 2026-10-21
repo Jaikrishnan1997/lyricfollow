@@ -54,7 +54,6 @@
             <input type="range" id="trkVol" min="0" max="100" value="70" title="Volume">
             <select id="trkSize" title="Player size"><option value="compact" data-i18n="track_compact">Music (small player)</option><option value="normal" data-i18n="track_video">Video (large player)</option></select>
           </div>
-          <label class="check"><input type="checkbox" id="trkAuto"> <span data-i18n="track_auto">Play when a song opens</span></label>
           <p class="hint" id="trackHint" data-i18n="track_hint"></p>
         </div>
       </aside>
@@ -266,6 +265,8 @@
         <p class="hint" data-i18n="sv_hint"></p>
         <label class="check"><input type="checkbox" id="stSvOn"> <span data-i18n="sv_on">Use Sarvam first</span></label>
         <label class="field"><span data-i18n="sv_key">Sarvam API key</span><input type="text" class="secret" id="stSvKey" name="lf-sarvam-token" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore></label>
+        <label class="field"><span data-i18n="sv_cap">Daily limit in minutes (0 = no limit)</span><input type="number" id="stSvCap" min="0" step="10" inputmode="numeric"></label>
+        <p class="hint" id="svUse"></p>
         <p class="hint"><a href="https://dashboard.sarvam.ai" target="_blank" rel="noopener">dashboard.sarvam.ai</a></p>
         <h4 data-i18n="cf_title">More free Whisper: your Cloudflare Worker</h4>
         <p class="hint" data-i18n="cf_hint"></p>

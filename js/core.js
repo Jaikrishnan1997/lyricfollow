@@ -446,8 +446,10 @@
       for (let k = 0; k < lw.length; k++) { if (used.has(k)) continue; const v = wsimP(h, lw[k]); if (v > bs) { bs = v; bw = [lw[k]]; bk = [k]; } }
       for (let k = 0; k + 1 < lw.length; k++) { if (used.has(k) || used.has(k + 1)) continue; const v = wsimC(h, lw[k] + lw[k + 1]); if (v > bs) { bs = v; bw = [lw[k], lw[k + 1]]; bk = [k, k + 1]; } }
       if (bs >= .55 && bk) bk.forEach(k => used.add(k));
-      if (!bw) { tot += 1; continue; }
-      const wt = bw ? Math.max(.3, Math.min(...bw.map(ix.idf))) : 1;
+      // A heard word that is not in the line counts fully against it (not with the weight of whichever line word it
+      // resembles least badly - seen live: "அல்லேலூயா கர்த்தரையே ஏகமாய்த்" fitted "நாள் வரையில் அல்லேலூயா" at .67).
+      if (!bw || bs < .55) { tot += 1; continue; }
+      const wt = Math.max(.3, Math.min(...bw.map(ix.idf)));
       tot += wt; if (bs >= .55) { m += wt * bs; if (wt >= 1) n++; }   // n: matched words that say something (not "துதியுங்கள்")
     }
     // A few common words ("தேவனைத் துதியுங்கள்" ends half the lines) are not enough evidence for a line on their own.
@@ -506,10 +508,15 @@
    * all the songs count little). Inside the open song the nearest lines are preferred - the next line most, a
    * slide's first line and the song's top a little - and the further a jump, the more evidence it needs.
    * Another song takes over only when it fits clearly better twice running (or once, unmistakably). */
-  function trackIndex(songs) {   // songs: [{id, lines:[{text, alt, slide}]}]
+  // lib (optional): the whole library's word weights (libIndex). A word common in worship songs everywhere
+  // ("அல்லேலூயா", "இயேசு") then counts little even when today's list has only one song with it - seen live: with
+  // one song on the list its "அல்லேலூயா" was a rare word, and another song's "அல்லேலூயா ..." moved the screen.
+  function trackIndex(songs, lib) {   // songs: [{id, lines:[{text, alt, slide}]}]
     const all = []; songs.forEach(sg => sg.lines.forEach(l => { if (l && !l.alt) all.push(seqWords(l.text)); }));
     const df = new Map(); for (const ws of all) for (const w of new Set(ws)) df.set(w, (df.get(w) || 0) + 1);
-    const N = all.length, idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    const N = all.length, own = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    const k = lib && lib.N ? Math.log(N + 1) / Math.log(lib.N + 1) : 0;
+    const idf = k ? (w => Math.min(own(w), Math.max(k * lib.idf(w), .3))) : own;
     return { songs: songs.map(sg => ({ id: sg.id, ix: seqIndex(sg.lines, idf) })) };
   }
   function prior(ix, c, p) {
@@ -525,6 +532,47 @@
    *  Returns {song, line, why} when something should change, else null. */
   // Words Whisper writes over unclear audio and music in Tamil/Malayalam ("நான்", "வருகிறேன்", "வணக்கம்", "நன்றி",
   // "சரி", "ஐயா", "ஏனென்றால்"): seen live opening and switching songs on their own, so they are not evidence.
+  /* ---------- The whole song library, for songs that are not in today's service ----------
+   * Two steps per clip: the letter-gram index finds the few songs that share the most with what was heard (all
+   * ~850 songs in ~15 ms), then each is checked word by word like the service songs are (same sound-alike word
+   * matching, words weighted by how rare they are across the whole library). A song is opened only when the same
+   * song comes out on top in two clips (or one very clear clip), well ahead of the next song - talk and prayer
+   * between songs match a different random song every clip. songs: [{id, grp, lines: prepared lines}] - grp: the
+   * same song in two packs counts as one. */
+  function libIndex(songs) {
+    const gix = songIndex(songs), df = new Map(); let N = 0;
+    for (const s of songs) for (const l of s.lines) { if (!l || l.alt) continue; N++; for (const w of new Set(seqWords(l.text))) df.set(w, (df.get(w) || 0) + 1); }
+    const idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    return { gix, idf, N, grp: new Map(songs.map(s => [s.id, s.grp || s.id])), byId: new Map(songs.map(s => [s.id, s])), six: new Map() };
+  }
+  // floor: how well the best song of today's list fits this clip - a library song must fit clearly better.
+  function libStep(L, st, text, skip, now, floor) {
+    now = now || Date.now(); floor = floor || 0;
+    st.lib = (st.lib || []).filter(h => now - h.at < 20000);
+    const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)), big = hw.filter(w => w.length >= 3);
+    if (!L || big.length < 3) return null;
+    // another copy of a song on today's list (same first line) is that song, not a new one
+    const out = [], seen = new Set(skip ? [...skip].map(id => L.grp.get(id)).filter(Boolean) : []);
+    for (const c of songLookup(L.gix, key(text), 10)) {
+      if (skip && skip.has(c.id)) continue;
+      const g = L.grp.get(c.id); if (seen.has(g)) continue; seen.add(g);
+      let ix = L.six.get(c.id);
+      if (!ix) { ix = seqIndex(L.byId.get(c.id).lines, L.idf); L.six.set(c.id, ix); if (L.six.size > 400) L.six.delete(L.six.keys().next().value); }
+      let top = 0, topN = 0, p0 = 0;
+      for (let p = 0; p < ix.W.length; p++) { const r = seqScore(ix, hw, p); if (r.s > top) { top = r.s; topN = r.n; p0 = p; } }
+      out.push({ id: c.id, g, line: ix.idx[p0], k: ix.K[p0], s: top, n: topN });
+      if (out.length >= 4) break;
+    }
+    out.sort((a, b) => b.s - a.s);
+    // the next best song with a different line (the same line in another copy of the song is no competition)
+    const a = out[0]; if (!a) return null; const b = out.find(x => x !== a && x.k !== a.k);
+    const m = a.s - (b ? b.s : 0);
+    st.lib.push({ g: a.g, s: a.s, n: a.n, m, at: now }); st.libTop = a;
+    st.lib[st.lib.length - 1].f = floor;
+    const hits = st.lib.filter(h => h.g === a.g && h.s >= Math.max(.5, h.f + .2) && h.n >= 2);
+    if ((hits.length >= 2 && hits.some(h => h.m >= .15)) || (a.s >= .8 && a.n >= 3 && m >= .3 && a.s >= floor + .3)) { st.lib = []; return { song: a.id, line: a.line, why: 'library', score: a.s }; }
+    return null;
+  }
   const FILLER = new Set(['nan', 'varukiren', 'vanakam', 'nanti', 'cari', 'aiya', 'enental', 'parkalam']);
   function trackStep(T, st, text, now) {
     const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)); if (!hw.filter(w => w.length >= 3).length) return null;
@@ -606,6 +654,6 @@
     return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
   }
 
-  const Core = { trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
