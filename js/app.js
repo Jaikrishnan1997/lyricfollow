@@ -1385,7 +1385,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // the noise before the singing (seen live: it jumped to line 4 during the intro).
       const main = lines.filter(l => !l.alt);
       // (Not the opening lines of every service song: seen live, Whisper then writes those lines over talk and music.)
-      if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
+      // Before the song starts: no hint. Seen live: with the first line as the hint, the singing of that line looked
+      // exactly like Whisper repeating its hint, was set aside, and the first line was never shown.
+      if (follow.cur < 0) return '';
       // The current line only - never lines ahead (nor the line before: a singer going back to it must not look
       // like Whisper repeating its hint). Seen live: with the next two lines in the
       // hint, Whisper wrote them out over music breaks, the screen moved on, the hint moved on with it, and the
