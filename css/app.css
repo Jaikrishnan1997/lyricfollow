@@ -199,6 +199,7 @@ body.low *{transition:none!important;animation:none!important}
 .results .clearbtn{width:auto;border:1px solid var(--line);padding:4px 10px;min-height:30px;font-size:13px;color:var(--muted);margin-top:4px}
 
 .results button.unsure .rref::after{content:' ?';color:var(--warn)}
+.results button.ai .rref::before{content:'✦ ';color:var(--accent)}
 .searchhelp{background:var(--soft);border-color:var(--line)}
 .searchhelp a{color:var(--accent);font-weight:600}
 

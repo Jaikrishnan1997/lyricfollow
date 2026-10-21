@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -464,7 +464,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
 
   /* ---------- heard references (voice Bible) ---------- */
   const heardRefs = []; let lastRefAt = 0;
-  function pushHeardRef(r, src, sure) {
+  function pushHeardRef(r, src, sure, listOnly) {
     const k = refKey(r);
     const prev = heardRefs.find(x => refKey(x.r) === k);
     lastRefAt = Date.now(); if (sure) hunt.lockedAt = lastRefAt;
@@ -477,7 +477,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     heardRefs.unshift({ r, src, at: Date.now(), sure: !!sure }); heardRefs.length = Math.min(heardRefs.length, 10);
     renderHeardRefs();
     if (S.vbAuto && sure) { showBible(r); hideAsk(); }
-    else if (!sure && Listen.mode === 'bible') askRef(r);
+    else if (!sure && Listen.mode === 'bible' && !listOnly) askRef(r);
+    else if (listOnly) return;
     else toast(Bible.refLabel(r, 'en'));
   }
   // Unsure reference: a big "Did the preacher say Matthew 5:1?" with Show (Enter) / Ignore (Esc) - one tap, never stuck.
@@ -514,7 +515,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function renderHeardRefs() {
     for (const id of ['heardRefs', 'heardRefs2']) {
       const ol = $(id); ol.innerHTML = '';
-      heardRefs.forEach(h => { const li = refButton(h.r); if (!h.sure) li.querySelector('button').classList.add('unsure'); ol.appendChild(li); });
+      heardRefs.forEach(h => { const li = refButton(h.r); const b = li.querySelector('button'); if (!h.sure) b.classList.add('unsure'); if (h.src === 'ai') { b.classList.add('ai'); b.title = t('ai_found'); } ol.appendChild(li); });
       if (heardRefs.length) { const li = el('li'); const b = el('button', 'clearbtn', t('clear_history')); b.onclick = () => { heardRefs.length = 0; renderHeardRefs(); }; li.appendChild(b); ol.appendChild(li); }
     }
     $('heardRefsBox').hidden = !heardRefs.length;
@@ -1441,10 +1442,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (this.over() && !this.warned) { this.warned = true; toast(t('sv_cap_hit')); }
     },
     over() { return (+S.sarvamCap || 0) > 0 && this.get().today >= S.sarvamCap * 60; },
+    addAi(rs) { const u = this.get(); if (u.aiDay !== u.day) { u.aiDay = u.day; u.aiToday = 0; } if (u.aiMon !== u.mon) { u.aiMon = u.mon; u.aiMonth = 0; } u.aiToday += rs; u.aiMonth += rs; try { localStorage.setItem('lf-sv-use', JSON.stringify(u)); } catch (e) {} this.render(); },
+    aiOver() { const u = this.get(); return (+S.vbAiCap || 0) > 0 && u.aiDay === u.day && u.aiToday >= +S.vbAiCap; },
     render() {
       const el = $('svUse'); if (!el) return; const u = this.get();
       const f = sec => sec < 3600 ? Math.round(sec / 60) + ' min' : (sec / 3600).toFixed(1) + ' h', rs = sec => '₹' + (sec / 3600 * 30).toFixed(sec < 3600 ? 1 : 0);
-      el.textContent = `${t('sv_today')}: ${f(u.today)} (${rs(u.today)}) · ${t('sv_month')}: ${f(u.month)} (${rs(u.month)})`;
+      const ai = u.aiDay === u.day ? u.aiToday : 0, aim = u.aiMon === u.mon ? u.aiMonth : 0;
+      el.textContent = `${t('sv_today')}: ${f(u.today)} (${rs(u.today)}) · ${t('sv_month')}: ${f(u.month)} (${rs(u.month)})` +
+        (ai || aim ? ` · ${t('ai_verse')}: ₹${ai.toFixed(2)} / ₹${aim.toFixed(2)}` : '');
     }
   };
   /* Key words for the preacher: book names in the language being preached (most preached books first) and the
@@ -2024,7 +2029,57 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     };
   })();
 
+  /* ---------- Bible level 3: which passage is the preacher retelling or explaining? (Sarvam 105B) ----------
+   * Only when no reference was said and no verse was read out: the last ~25 seconds of what was said go to Sarvam's
+   * language model, which names the passage (or none). Measured live: 10 of 10 stories, paraphrases and quotes
+   * named right in Tamil and Malayalam, talk and prayer answered "none", ~0.3 s an answer. Its answer is only
+   * offered (list + "Did the preacher say...?"), never put on the screen by itself - except a passage of today's
+   * plan named with certainty. About Rs 0.005 an answer, at most one every 8 s; daily limit in Settings. */
+  const VerseAI = {
+    buf: '', words: 0, lastAt: 0, busy: false, last: null,
+    on() { return S.vbAI !== false && (S.sarvamKey || '').length > 10 && Listen.mode === 'bible' && !SvUse.aiOver(); },
+    heard(text) {
+      if (!text) return;
+      this.buf = (this.buf + ' ' + text).replace(/\s+/g, ' ').slice(-420); this.words += text.trim().split(/\s+/).length;
+      const now = Date.now();
+      if (!this.on() || this.busy || this.words < 10 || now - this.lastAt < 8000 || now - lastRefAt < 6000) return;
+      this.ask();
+    },
+    async ask() {
+      this.busy = true; this.lastAt = Date.now(); this.words = 0;
+      const plan = planList().map(p => Bible.refLabel({ book: p.book, ch: p.ch, v: p.v || 1, ve: p.ve || p.v || 1 }, 'en').replace(/:1$/, '')).join('; ');
+      const onScreen = screen.kind === 'bible' && screen.bible ? Bible.refLabel(screen.bible, 'en') : '';
+      const sys = 'A preacher is speaking (Tamil, Malayalam or English). From the transcript of his last few sentences, name the Bible verse(s) he is reading, quoting, retelling or explaining right now. ' +
+        'Answer only JSON: {"ref":"Book chapter:verse[-verse]" or null,"sure":0..1}. English book names. null when he is not talking about one specific passage (greetings, prayer, announcements, his own testimony, general teaching).' +
+        (plan ? ' Today\'s sermon passages: ' + plan + '.' : '') + (onScreen ? ' On the screen now: ' + onScreen + '.' : '');
+      try {
+        const r = await fetch('https://api.sarvam.ai/v1/chat/completions', { method: 'POST', headers: { 'api-subscription-key': S.sarvamKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'sarvam-105b', reasoning_effort: null, temperature: 0, max_tokens: 60, messages: [{ role: 'system', content: sys }, { role: 'user', content: this.buf.trim() }] }) });
+        if (r.status === 401 || r.status === 402 || r.status === 403) { this.lastAt = Date.now() + 300000; return; }
+        if (!r.ok) return;
+        const j = await r.json(), u = j.usage || {};
+        SvUse.addAi(((+u.prompt_tokens || 400) * 15 + (+u.completion_tokens || 30) * 60) / 1e6);
+        const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+        const m = txt.match(/\{[\s\S]*\}/); if (!m) return;
+        let o; try { o = JSON.parse(m[0]); } catch (e) { return; }
+        if (!o || !o.ref || !(+o.sure >= .5)) return;
+        const p = Bible.parseRef(String(o.ref), {}); if (!p || !Bible.validRef(p.book, p.ch, p.v)) return;
+        const ref = { book: p.book, ch: p.ch, v: p.v, ve: Math.max(p.v, p.ve || p.v) };
+        const sb = screen.kind === 'bible' && screen.bible;
+        if (sb && sb.book === ref.book && sb.ch === ref.ch && ref.v <= (sb.ve || sb.v) && ref.ve >= sb.v) return;   // already showing it
+        this.log = (this.log || []).concat([[new Date().toLocaleTimeString(), this.buf.slice(-80), o.ref, o.sure]]).slice(-20);
+        const k = refKey(ref), again = this.last && this.last.k === k && Date.now() - this.last.at < 60000;
+        this.last = { k, at: Date.now() };
+        if (+o.sure >= .85 && inPlan(ref)) pushHeardRef(ref, 'ai', true);
+        else pushHeardRef(ref, 'ai', false, again || +o.sure < .8);
+      } catch (e) { /* offline or refused: the free steps carry on */ }
+      finally { this.busy = false; }
+    }
+  };
+
   function onBibleSpeech(finals, interim, conf) {
+    // after the free steps below have had their go at this phrase (a reference or a read-out verse needs no AI)
+    if (finals) setTimeout(() => VerseAI.heard(finals), 500);
     if (finals) vbText = (vbText + ' ' + finals).slice(-400);
     const tail = (vbText + ' ' + (interim[0] || '')).slice(-90);
     const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: planBooks() };
@@ -2054,8 +2109,16 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const en = S.versions.find(v => (Bible.VERSIONS.find(x => x.id === v) || {}).lang === 'en') || 'kjv';
       // Offline speech may write Malayalam/Tamil in English letters, so search the spoken language's Bible too.
       const vids = lang === 'ml' ? ['mal1910'] : lang === 'ta' ? ['tamov'] : Listen.engine === 'local' ? [en, (Listen.lang || '').startsWith('ta') ? 'tamov' : 'mal1910'] : [en];
-      Promise.all(vids.map(v => BibleBG.call('quote', v, vbText.slice(-160), 1).catch(() => [])))
-        .then(all => { const q = all.map(r => r && r[0]).filter(Boolean).sort((a, b) => b.score - a.score)[0]; if (q && q.score >= .6) pushHeardRef({ book: q.book, ch: q.ch, v: q.v, ve: q.v }, 'quote', q.score >= .7); })
+      Promise.all(vids.map(v => BibleBG.call('quote', v, vbText.slice(-400), 3).catch(() => [])))
+        .then(all => {
+          // The verse heard in order counts first: most of a verse's words in its own order is it being read out.
+          const qs = [].concat(...all.map(r => r || [])).sort((a, b) => (b.ord || 0) - (a.ord || 0) || b.score - a.score), q = qs[0];
+          if (!q || q.score < .6) return;
+          // On screen only when most of the verse was heard in order (an explanation that shares a few of its words
+          // never takes over the screen); a planned chapter needs less. Otherwise it is offered in the list.
+          const sure = (q.ordN >= 5 && q.ord >= .6) || (q.ordN >= 4 && q.ord >= .8) || (inPlan(q) && q.ordN >= 3 && q.ord >= .45);
+          pushHeardRef({ book: q.book, ch: q.ch, v: q.v, ve: q.v }, 'quote', sure, !sure);
+        })
         .catch(() => {}).finally(() => { quoteBusy = false; });
     }
   }
@@ -2487,6 +2550,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stSvKey').onchange = e => { S.sarvamKey = e.target.value.trim(); whRe(); };
     $('stSvOn').onchange = e => { S.sarvam = e.target.checked; whRe(); };
     $('stSvCap').value = S.sarvamCap || ''; $('stSvCap').onchange = e => { S.sarvamCap = Math.max(0, Math.round(+e.target.value || 0)); SvUse.warned = false; saveSettings(); };
+    $('stVbAi').checked = S.vbAI !== false; $('stVbAi').onchange = e => { S.vbAI = e.target.checked; saveSettings(); };
+    $('stVbAiCap').value = S.vbAiCap == null ? 20 : S.vbAiCap; $('stVbAiCap').onchange = e => { S.vbAiCap = Math.max(0, +e.target.value || 0); saveSettings(); };
     SvUse.render();
     $('stWhReset').onclick = () => { try { localStorage.removeItem('lf-wh-block'); } catch (e) {} Whisper._bl = {}; toast(t('wh_reset_done')); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
@@ -2548,7 +2613,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
     lines: () => lines.map((l, i) => i + (l.alt ? '~ ' : ' ') + l.text),
-    whisper: () => ({ engine: Listen.engine, provider: Whisper.cur && Whisper.cur.id, blocked: Whisper.blocked(), every: Whisper.interval(Whisper.cur), plan: Whisper.plan(Whisper.cur), quiet: Whisper.quiet, libN: Lib.ix ? Lib.ix.N : 0, songsN: songs.length, svUse: SvUse.get(), fitAgo: Date.now() - (Trk.fitAt || 0), left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
+    whisper: () => ({ engine: Listen.engine, provider: Whisper.cur && Whisper.cur.id, blocked: Whisper.blocked(), every: Whisper.interval(Whisper.cur), plan: Whisper.plan(Whisper.cur), quiet: Whisper.quiet, ai: VerseAI.log || [], libN: Lib.ix ? Lib.ix.N : 0, songsN: songs.length, svUse: SvUse.get(), fitAgo: Date.now() - (Trk.fitAt || 0), left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },

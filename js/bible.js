@@ -434,7 +434,19 @@
       const s = h / Math.min(ix.nwords[i], ws.length);
       if (s >= .5) out.push(Object.assign(unpack(ix.refs[i]), { score: s, hits: h }));
     }
-    return out.sort((a, b) => b.score - a.score || b.hits - a.hits).slice(0, limit || 3);
+    out.sort((a, b) => b.score - a.score || b.hits - a.hits);
+    // How much of the verse was heard IN ORDER (longest common run of words, a word heard once counting once):
+    // a verse read out keeps its word order; an explanation that only shares some of its words does not.
+    // ord: share of the verse's words, ordN: how many.
+    const hw = Core.keyWords(heard).split(' ').filter(w => w.length >= 3).slice(-45);
+    const eq = (a, b) => a === b || (a.length >= 5 && b.length >= 5 && a.slice(0, 5) === b.slice(0, 5));
+    for (const q of out.slice(0, 8)) {
+      const vw = Core.keyWords(verse(id, q.book, q.ch, q.v)).split(' ').filter(w => w.length >= 3);
+      const m = vw.length, n = hw.length, dp = new Array(n + 1).fill(0);
+      for (let a = 1; a <= m; a++) { let prev = 0; for (let b = 1; b <= n; b++) { const t = dp[b]; dp[b] = eq(vw[a - 1], hw[b - 1]) ? prev + 1 : Math.max(dp[b], dp[b - 1]); prev = t; } }
+      q.ordN = dp[n]; q.ord = m ? dp[n] / m : 0;
+    }
+    return out.slice(0, limit || 3);
   }
 
   // Books preached from most often come first when several names fit.
