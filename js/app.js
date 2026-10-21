@@ -1608,9 +1608,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const ws = this.ws; if (!ws || ws.readyState !== 1 || !Mic.stream) return;
       const to = Mic.total; if (to - this.sentTo < Mic.rate * .2) return;
       const a = Mic.slice(Math.max(this.sentTo, to - Mic.rate * 2), to); this.sentTo = to;
-      const pcm = new Int16Array(a.length); for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; }
-      const u8 = new Uint8Array(pcm.buffer); let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-      try { ws.send(JSON.stringify({ event: 'audio_input', audio: btoa(bin) })); } catch (e) {}
+      // Sarvam takes at most 32,000 bytes (1 s) per frame (seen live: "chunk_too_large" after a slow moment): 0.5 s frames.
+      for (let o = 0; o < a.length; o += 8000) {
+        const part = a.subarray(o, Math.min(a.length, o + 8000));
+        const pcm = new Int16Array(part.length); for (let i = 0; i < part.length; i++) { const v = Math.max(-1, Math.min(1, part[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; }
+        const u8 = new Uint8Array(pcm.buffer); let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+        try { ws.send(JSON.stringify({ event: 'audio_input', audio: btoa(bin) })); } catch (e) {}
+      }
     },
     stop() {
       clearInterval(this.timer); this.timer = null; const ws = this.ws; this.ws = null;
