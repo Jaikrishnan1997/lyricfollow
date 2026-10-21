@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, micNs: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -546,7 +546,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     async start() {
       if (this.stream) return true;
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: S.micNs !== false, autoGainControl: true, channelCount: 1 } });
       } catch (e) { this.stream = null; return false; }
       const AC = window.AudioContext || window.webkitAudioContext;
       try { this.ac = new AC({ sampleRate: 16000 }); } catch (e) { this.ac = new AC(); }
@@ -581,6 +581,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       this.raf = requestAnimationFrame(tick);
       return true;
     },
+    ns(on) { const tr = this.stream && this.stream.getAudioTracks()[0]; if (tr) return tr.applyConstraints({ echoCancellation: false, noiseSuppression: !!on, autoGainControl: true }).then(() => tr.getSettings().noiseSuppression).catch(() => null); return Promise.resolve(null); },
     /** The phrase being sung right now: from the last pause to now. {from, to, ended} in sample counts. */
     phrase() {
       const c = this.chunks; if (!c || c.length < 4) return null;
@@ -1683,7 +1684,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
           this.fails = 0;
           if (p.kind === 'laptop' && this.local && !this.providers().some(q => q.kind !== 'laptop')) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); return; }
           if (p.kind === 'laptop') LocalWh.ok = false; else this.block(p.id, 120000);
-          if (!this.pick() && !this.local) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+          if (!this.pick() && !this.local) { toast(t('whisper_failed')); Listen.fellAt = Date.now(); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
         }
       } finally { this.busy = false; }
     }
@@ -1719,7 +1720,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // closed straight away with key words in the request, before any text: try again without them
         if (this.ktTry && !this.got && Date.now() - this.openAt < 5000 && !this.noKt) { this.noKt = true; this.fails = Math.max(0, this.fails - 1); }
         // key refused / no credit (4001/4003/1008) or repeated drops: the browser recogniser takes over
-        if (this.fails >= 3 || [4001, 4003, 1008].includes(e.code)) this.fail();
+        if ([4001, 4003, 1008].includes(e.code)) this.fail(); else if (this.fails >= 3) { this.fail(); Listen.fellAt = Date.now(); }
         else setTimeout(() => { if (Listen.mode && Listen.engine === 'sarvam') this.start(Listen.lang); }, 1500);
       };
     },
@@ -1770,7 +1771,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
       // Offline singing: Whisper on this laptop (whisper.cpp) when it is installed - it follows like Online.
       if (engine === 'local' && mode === 'songs' && await LocalWh.check()) engine = 'whisper';
-      Whisper.local = engine === 'whisper' && S.net !== 'online'; Whisper.cur = null;
+      Whisper.local = engine === 'whisper' && S.net !== 'online'; Whisper.cur = null; this.fellAt = 0;
       this.stopEngines();
       this.mode = mode; this.engine = engine;
       // The song on screen when listening starts was chosen by the operator (or kept from last time): it is trusted
@@ -1823,6 +1824,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // A recogniser that has delivered nothing for a long while is restarted. Singing over music often gives no words
     // for a stretch, and every restart loses a second of audio, so the singing mode waits longer.
     if (Listen.engine === 'cloud' && Cloud.rec && now - lastEventAt > (Listen.mode === 'songs' ? 25000 : 12000)) Cloud.start(Cloud.lang);
+    // Fell back to the browser recogniser because Sarvam could not be reached (network drop, server busy): try
+    // Sarvam again every 2 minutes - the browser one does not follow singing (seen live: stuck on it all evening).
+    if (Listen.engine === 'cloud' && Listen.fellAt && now - Listen.fellAt > 125000 && navigator.onLine !== false && !Listen.waitingMic) { Listen.fellAt = 0; Listen.start(Listen.mode); return; }
     const auto = Listen.mode === 'bible' ? S.vbLang === 'auto' : S.autoSwitch;
     if (!auto || Listen.engine === 'gemini' || Listen.engine === 'whisper') return;      // these understand every language at once
     if (!LangID.disabled && LangID.ws && LangID.ws.readyState === 1) return;      // offline detector decides
@@ -2632,6 +2636,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stSvOn').onchange = e => { S.sarvam = e.target.checked; whRe(); };
     $('stSvCap').value = S.sarvamCap || ''; $('stSvCap').onchange = e => { S.sarvamCap = Math.max(0, Math.round(+e.target.value || 0)); SvUse.warned = false; saveSettings(); };
     $('stFast').checked = S.followFast !== false; $('stFast').onchange = e => { S.followFast = e.target.checked; saveSettings(); };
+    // the browser's own noise filter on the microphone: changed on the running microphone at once
+    $('stNs').checked = S.micNs !== false; $('stNs').onchange = e => { S.micNs = e.target.checked; saveSettings(); Mic.ns(S.micNs); };
     $('stVbAi').checked = S.vbAI !== false; $('stVbAi').onchange = e => { S.vbAI = e.target.checked; saveSettings(); };
     $('stVbAiCap').value = S.vbAiCap == null ? 20 : S.vbAiCap; $('stVbAiCap').onchange = e => { S.vbAiCap = Math.max(0, +e.target.value || 0); saveSettings(); };
     SvUse.render();
@@ -2691,6 +2697,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
   // Test hook: lets automated checks feed recognised text without a microphone.
   window.LF_DEBUG = {
+    ns(on) { return Mic.ns(on); },
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },

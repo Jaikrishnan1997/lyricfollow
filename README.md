@@ -87,6 +87,27 @@ Mac/Linux: run `python3 -m http.server 8765` in this folder and open `http://loc
    For the preacher, set the speaker's language (Malayalam, Tamil or English). English book names spoken
    in a Tamil/Malayalam sermon ("ஜான் 3 வெர்சஸ் 16", "ജോൺ 3 16") are understood too.
 
+### Claps, shouting and noise (measured, Oct 2026)
+
+Real live clips of Alleluya (captured by the app over laptop speakers) were sent to Sarvam as they are, with hand
+claps mixed in, and with claps plus a shouting crowd ("Praise the Lord!", "Hallelujah!", "ആമേൻ!") mixed in - then
+through each noise remover. Words of the song that came back, from 27 clips (2 minutes):
+
+| | as heard | clap remover | RNNoise | vocal separation (UVR MDX, 66 MB) |
+|---|---|---|---|---|
+| clean | **26** | 24 | - | 24 |
+| claps (as loud as the singing) | **20** | 12 | 1 | 7 |
+| claps + shouting crowd | 3 | 5 | 3 | 3 |
+| same, crowd 6 dB quieter | 5 | 3 | 1 | 5 |
+
+- Sarvam copes with claps by itself; every remover made it worse (they cut the singing too).
+- A shouting crowd is speech, and the recogniser prefers speech to singing: it writes down the shouts. No filter can
+  take them out, vocal separation included (the crowd is voices too).
+- So the one fix that works is the **mixer feed** (step 2 above): the singer's mic from the desk carries no claps and
+  no crowd. With that feed, turn off *Browser noise filter on the microphone* in Settings.
+- The follower ignores what crowds shout and what the recogniser writes for bare music ("Praise the Lord", "Amen",
+  "Thank you", "ஸ்தோத்திரம்", "music"...) unless a song of today's service has that word.
+
 Keyboard: ← → line (or verse) · PgUp/PgDn slide · B black · C background only · A auto follow · L listen.
 A presentation clicker works too.
 

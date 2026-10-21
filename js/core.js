@@ -545,6 +545,22 @@
     }
     return per;
   }
+  // Heard words that fit a line of another song well and that the open song has nowhere at all (not even a word
+  // like them): "ஆனந்தம் கொள்ளுவேன்" while Alleluya is open. Shared words ("அல்லேலூயா") keep the open song's score
+  // up, so the plain score gap hides how clear such a clip is (seen live: 24 s late into the next song).
+  function novelFit(mineSg, oSg, p, hw) {
+    if (!mineSg) return 9;
+    const mv = mineSg.ix.voc1 || (mineSg.ix.voc1 = [...new Set(mineSg.ix.W.flat())]);
+    const lw = oSg.ix.W[p]; let n = 0;
+    for (const h of new Set(hw)) {
+      if (h.length < 4) continue;
+      let bs = 0, bw = null; for (const w of lw) { const v = wsimP(h, w); if (v > bs) { bs = v; bw = w; } }
+      if (bs < .75 || oSg.ix.idf(bw) < 1) continue;
+      if (mv.some(w => wsimP(h, w) >= .7)) continue;
+      n++;
+    }
+    return n;
+  }
   function prior(ix, c, p) {
     const d = p - c;
     if (c < 0) return p === 0 ? .06 : ix.first[p] ? .02 : -.04;
@@ -653,7 +669,7 @@
   function libStep(L, st, text, skip, now, floor, floorEv) {
     now = now || Date.now(); floor = floor || 0; floorEv = floorEv || 0;
     st.lib = (st.lib || []).filter(h => now - h.at < 30000);
-    const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)), big = hw.filter(w => w.length >= 3);
+    const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w) && !SHOUT.has(w)), big = hw.filter(w => w.length >= 3);
     if (!L || big.length < 2) return null;
     // another copy of a song on today's list (same first line) is that song, not a new one
     const out = [], seen = new Set(skip ? [...skip].map(id => L.grp.get(id)).filter(Boolean) : []);
@@ -707,8 +723,18 @@
     return words.length >= 4 || !prev ? text : prev + ' ' + text;
   }
   const FILLER = new Set(['nan', 'varukiren', 'vanakam', 'nanti', 'cari', 'aiya', 'enental', 'parkalam']);
-  function trackStep(T, st, text, now) {
-    const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)); if (!hw.filter(w => w.length >= 3).length) return null;
+  // What the congregation shouts over the singing ("Praise the Lord!", "Amen!", "ஸ்தோத்திரம்") and what Sarvam
+  // writes for bare music ("Thank you.", "music"): measured with a shouting crowd mixed in, these became most of the
+  // words heard, and every word that fits no line pulls the right line's score down. Dropped unless a song of
+  // today's service has the word itself.
+  const SHOUT = new Set(['amen', 'praice', 'lort', 'tank', 'you', 'cecuc', 'klory', 'kot', 'yec', 'come', 'curc', 'lift', 'your', 'hantc', 'hocana', 'hikect', 'mucic', 'myucik', 'ctotiram', 'ctotram', 'nanti', 'the', 'and', 'thank', 'jesus', 'glory', 'praise', 'lord', 'music', 'tenkyu', 'tankyu', 'tenk', 'cicac', 'amin', 'lihpt', 'yuvar', 'hentc', 'piraic', 'praic', 'lart', 'kulori', 'klori', 'kat', 'ocana', 'miyucik', 'yecuve']);
+  function dropShouts(T, hw) {
+    if (!hw.some(w => SHOUT.has(w))) return hw;
+    const vs = T.vset || (T.vset = new Set(T.voc.map(e => e[0])));
+    return hw.filter(w => !SHOUT.has(w) || vs.has(w));
+  }
+  function trackStep0(T, st, text, now) {
+    const hw = dropShouts(T, seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w))); if (!hw.filter(w => w.length >= 3).length) return null;
     now = now || Date.now();
     // A clip (4.5 s) often holds the end of one line and the start of the next (fast songs: two or three lines):
     // its newest words say where the singer is now, the whole clip gives the evidence.
@@ -751,6 +777,13 @@
       return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };
     }
     // ---- another service song (or the first one, when nothing is open) ----
+    if (o && mine && o.top >= .8 && o.topN >= 2 && o.top - mine.top >= .2) {
+      let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
+      if (novelFit(mine.sg, o.sg, p, hw) >= 2) {
+        st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = [];
+        return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
+      }
+    }
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
       const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
       st.sw = { id: o.sg.id, n: same ? st.sw.n + 1 : 1, at: now };
@@ -810,6 +843,23 @@
     return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
   }
 
-  const Core = { trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  // A song switch, with a guard against going straight back: right after the singer moved on, words of the song just
+  // left still come through (Sarvam leans to the service words it was given), and one or two of them in order looked
+  // like the old song again (seen live: Enthan -> Alleluya -> Enthan within 45 s).
+  function trackStep(T, st, text, now) {
+    now = now || Date.now();
+    const from = st.song, r = trackStep0(T, st, text, now);
+    if (!r || !from || r.song === from) return r;
+    if (st.left && st.left.id === r.song && now - st.left.at < 30000) {
+      const sg = T.songs.find(x => x.id === r.song), mg = T.songs.find(x => x.id === from);
+      const p = sg && sg.ix.pos.has(r.line) ? sg.ix.pos.get(r.line) : -1;
+      const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w));
+      if (p < 0 || novelFit(mg, sg, p, hw) < 2) return null;
+    }
+    st.left = { id: from, at: now };
+    return r;
+  }
+
+  const Core = { novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
