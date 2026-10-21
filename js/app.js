@@ -237,6 +237,12 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     $('liveLang').hidden = !song; $('btnLiveEdit').hidden = !song;
     renderSlides();
   }
+  // "Chorus", "Verse 2" for a tidied song (its parts), otherwise "Slide 3"
+  function slideLabel(si) {
+    const p = song && song.parts ? String(song.parts).split(' ')[si] : '';
+    if (!p || !slides || String(song.parts).split(' ').length !== slides.length) return t('slide') + ' ' + (si + 1);
+    return (p === 'C' ? t('part_chorus') : p === 'A' ? t('part_anu') : t('part_verse') + (p.length > 1 ? ' ' + p.slice(1) : '')) + ' · ' + (si + 1);
+  }
   function renderSlides() {
     const box = $('slides'); box.innerHTML = '';
     if (!song) { box.appendChild(el('div', 'empty', t('service_empty'))); return; }
@@ -244,7 +250,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     const curSlide = follow.cur >= 0 && lines[follow.cur] ? lines[follow.cur].slide : -1;
     slides.forEach((idx, si) => {
       const d = el('div', 'slide' + (si === curSlide && screen.kind === 'song' ? ' live' : ''));
-      const n = el('div', 'n'); n.append(el('span', '', t('slide') + ' ' + (si + 1)), el('span', '', si === curSlide && screen.kind === 'song' ? t('on_screen') : ''));
+      const n = el('div', 'n'); n.append(el('span', '', slideLabel(si)), el('span', '', si === curSlide && screen.kind === 'song' ? t('on_screen') : ''));
       d.appendChild(n);
       idx.forEach(i => { const b = el('button', 'ln' + (i === follow.cur ? ' cur' : ''), lines[i].text); b.onclick = () => jumpLine(i); d.appendChild(b); });
       box.appendChild(d);
@@ -325,9 +331,9 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   async function saveSong(data, id) {
     const now = Date.now();
     let s = id ? songById(id) : null;
-    if (s) Object.assign(s, data, { updated: now });
+    if (s) { if (data.lyrics != null && data.lyrics !== s.lyrics && !('parts' in data)) s.parts = ''; Object.assign(s, data, { updated: now }); }
     else { s = Object.assign({ id: uid(), bg: '', created: now, updated: now }, data); songs.push(s); }
-    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', yt: s.yt || null, src: s.src || '', created: s.created || now, updated: s.updated });
+    await Store.put('songs', { id: s.id, title: s.title, lang: s.lang, lyrics: s.lyrics, bg: s.bg || '', yt: s.yt || null, src: s.src || '', parts: s.parts || '', pk: s.pk || '', created: s.created || now, updated: s.updated });
     songsChanged();
     if (song && song.id === s.id) loadSong(s.id, { keepScreen: true });
     return s;
@@ -941,10 +947,10 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         let parts = [];
         try { parts = this.split(await this.paragraphs(f), f.name.replace(/\.[^.]+$/, '')); } catch (e) { const li = el('li', 'empty', f.name + ': ' + t('ref_bad')); list.appendChild(li); continue; }
         for (const p of parts) {
-          const lyrics = p.lines.join('\n').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
+          const tdy = LFTidy.tidy(p.lines.join('\n')), lyrics = (tdy.lyrics || p.lines.join('\n')).trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
           const cand = { title: p.title, lyrics }; const k = this.dupKey(cand);
           if (seen.has(k)) { dupes++; continue; } seen.add(k);
-          const s = await saveSong({ title: p.title, lang: this.lang(lyrics), bg: '', lyrics }, null); added++;
+          const s = await saveSong({ title: LFTidy.tidyTitle(p.title) || tdy.title, lang: this.lang(lyrics), bg: '', lyrics, parts: tdy.lyrics ? tdy.parts.join(' ') : '' }, null); added++;
           if (toService && !service.includes(s.id)) service.push(s.id);
           const li = el('li'); const b = el('button', '', `${s.title} · ${langName(s.lang)}`); b.onclick = () => { setTab('songs'); editSong(s.id); }; li.appendChild(b); list.appendChild(li);
         }
@@ -989,14 +995,22 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       for (const p of pack.songs || []) {
         const lyrics = String(p.lyrics || '').trim(); if (lyrics.split('\n').filter(Boolean).length < 2) continue;
         // An updated bundled pack: the same song gets the new lyrics (same id, so service lists keep it).
-        const old = replace && byTitle.get(p.title);
+        // The song is found by its title (or, after the tidy renamed it, by its earlier text); a song the user edited
+        // (its text matches no pack version: not this one, not an earlier one) keeps the user's text.
+        const was = new Set(p.was || []);
+        const old = replace && (byTitle.get(p.title) || songs.find(s => s.src && s.src === p.src && (was.has(LFTidy.hash(s.lyrics)) || s.pk === LFTidy.hash(s.lyrics))));
         if (old) {
           const ytNew = p.yt && p.yt.id && !(old.yt && old.yt.id);       // a YouTube link was found for it (never replaces the user's own)
-          if (old.lyrics !== lyrics || ytNew) { Object.assign(old, { lyrics, updated: now }); if (p.yt && p.yt.id && (ytNew || old.lyrics === lyrics)) old.yt = { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 }; recs.push(old); }
+          const h = LFTidy.hash(old.lyrics), untouched = old.lyrics === lyrics || was.has(h) || old.pk === h;
+          if ((untouched && (old.lyrics !== lyrics || old.title !== p.title || (old.parts || '') !== (p.parts || ''))) || ytNew) {
+            if (untouched) Object.assign(old, { title: p.title, lyrics, parts: p.parts || '', pk: LFTidy.hash(lyrics), updated: now });
+            if (p.yt && p.yt.id && (ytNew || old.lyrics === lyrics)) old.yt = { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 };
+            recs.push(old);
+          }
           continue;
         }
         const key = Bulk.dupKey({ title: p.title, lyrics }); if (seen.has(key)) { skipped++; continue; } seen.add(key);
-        recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, bg: '', yt: p.yt && p.yt.id ? { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 } : null, src: p.src || '', created: now, updated: now });
+        recs.push({ id: uid(), title: p.title, lang: p.lang || Bulk.lang(lyrics), lyrics, parts: p.parts || '', pk: LFTidy.hash(lyrics), bg: '', yt: p.yt && p.yt.id ? { id: p.yt.id, start: +p.yt.start || 0, end: +p.yt.end || 0 } : null, src: p.src || '', created: now, updated: now });
       }
       if (recs.length) { await Store.putMany('songs', recs); for (const r of recs) if (!songs.includes(r)) songs.push(r); }
       return { added: recs.length, skipped };
@@ -2482,9 +2496,38 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('songForm').onsubmit = async e => {
       e.preventDefault();
       const data = { title: $('sfTitle').value.trim() || t('untitled'), lang: $('sfLang').value, bg: $('sfBg').value, lyrics: $('sfLyrics').value, yt: Track.parse($('sfYt').value) };
+      if (sfTidied && data.lyrics === sfTidied.text) data.parts = sfTidied.parts;
       const s = await saveSong(data, editingId);
       editingId = s.id; toast(t('saved')); editSong(s.id); renderService();
     };
+    // Tidy: one stanza (up to 4 lines) a slide, headings and cues out, the chorus after each verse - see js/tidy.js
+    let sfTidied = null;
+    $('sfTidy').onclick = () => {
+      const r = LFTidy.tidy($('sfLyrics').value); if (!r.lyrics) return;
+      $('sfLyrics').value = r.lyrics; sfTidied = { text: r.lyrics, parts: r.parts.join(' ') };
+      toast(t('tidy_done_one') + (r.other ? ' · ' + t('tidy_other') : ''));
+    };
+    const ownSongs = () => songs.filter(x => !/wikisource\.org|freegospelsongs\.in/.test(x.src || ''));
+    $('btnTidyAll').onclick = async () => {
+      const own = ownSongs(), backup = [], recs = []; const now = Date.now();
+      for (const x of own) {
+        const r = LFTidy.tidy(x.lyrics); if (!r.lyrics || r.lyrics === x.lyrics) continue;
+        backup.push({ id: x.id, lyrics: x.lyrics, parts: x.parts || '' });
+        Object.assign(x, { lyrics: r.lyrics, parts: r.parts.join(' '), updated: now }); recs.push(x);
+      }
+      if (!recs.length) { toast(t('tidy_none')); return; }
+      await Store.set('tidy-backup', { at: now, items: backup }); await Store.putMany('songs', recs);
+      prepCache.clear(); songsChanged(); renderSongList(); if (song) loadSong(song.id, { keepScreen: true });
+      $('btnTidyUndo').hidden = false; toast(`${recs.length} ${t('tidy_done_all')}`);
+    };
+    $('btnTidyUndo').onclick = async () => {
+      const b = await Store.get('tidy-backup'); if (!b || !b.items) return;
+      const recs = []; for (const it of b.items) { const x = songById(it.id); if (x) { Object.assign(x, { lyrics: it.lyrics, parts: it.parts, updated: Date.now() }); recs.push(x); } }
+      await Store.putMany('songs', recs); await Store.set('tidy-backup', null);
+      prepCache.clear(); songsChanged(); renderSongList(); if (song) loadSong(song.id, { keepScreen: true });
+      $('btnTidyUndo').hidden = true; toast(t('tidy_undone'));
+    };
+    Store.get('tidy-backup').then(b => { if (b && b.items && b.items.length) $('btnTidyUndo').hidden = false; }).catch(() => {});
     $('sfDelete').onclick = async () => {
       const b = $('sfDelete');
       if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = t('delete_confirm'); setTimeout(() => { b.dataset.sure = ''; b.textContent = t('delete'); }, 3000); return; }

@@ -139,6 +139,23 @@ Today's service list is tried first, on its own. Only when nothing in the servic
 whole library consulted, and then a song is chosen only when a whole line matches clearly (score ≥ 0.72, confirmed on
 a second phrase) - a few shared words never switch the screen.
 
+## One clean slide layout for every song (js/tidy.js)
+
+Every bundled song is stored in the same layout, and your own songs can be put in it with one tap
+(**Songs → ✨ Tidy my own songs**, with **Undo tidy**; or **✨ Tidy slides** in the song editor; imports are tidied
+on the way in):
+- one stanza per slide, at most 4 lines (a longer stanza is split evenly - at sentence ends where there are any,
+  keeping Tamil/Malayalam couplets together); a one-line stanza joins its neighbour when that fits;
+- headings and notes that are not sung are taken out: பல்லவி / சரணங்கள் / അനുപല്ലവി / ചരണങ്ങൾ / Chorus, tala and
+  raga names, "sung to the tune of", Music##, (2x), "- 2", echoes in brackets; verse numbers come off the text;
+- chorus cues ("- திறவுண்ட", "(എന്തു...)", "......എന്നാളും") are resolved: the chorus is written out after each verse,
+  in the order it is sung (the follower and the screen move through the song the way it is sung);
+- an English translation or English-letter copy pasted under a Tamil/Malayalam song is kept apart (not on the slides);
+- slides are labelled Chorus / Verse 2 / Anupallavi on the console.
+`node tools/tidy-packs.js` re-tidies the packs and raises their versions; browsers then update every bundled song the
+user has not changed (each pack song carries fingerprints of its earlier texts) and keep the ones the user edited.
+Measured on the tracker benchmark: right line 65% -> 72%, wrong line 8.9% -> 4.5%.
+
 ## Bundled song collections (vendor/packs.json)
 
 Every copy of the app ships the free collections and loads them into the browser's library on first open (also in a

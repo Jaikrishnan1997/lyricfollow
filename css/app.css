@@ -230,3 +230,4 @@ body.low *{transition:none!important;animation:none!important}
 
 .secret{-webkit-text-security:disc;text-security:disc;font-family:monospace}
 .ailog{margin-top:.6rem;font-size:.85em}.ailog ol{margin:.3rem 0 0;padding-left:1.1rem}.ailog li{margin:.15rem 0}.ailog .muted{color:var(--muted)}
+button.small{padding:.3rem .6rem;font-size:.82em}.ghost{background:transparent;border:1px dashed var(--line)}#sfTidy{margin-top:.35rem;align-self:flex-start}

@@ -90,6 +90,7 @@
           <select id="songLangFilter"></select>
           <button class="primary" id="btnNewSong">+ <span data-i18n="new_song">New song</span></button>
         </div>
+        <div class="row"><button id="btnTidyAll" class="small">✨ <span data-i18n="tidy_all">Tidy my own songs</span></button><button id="btnTidyUndo" class="small" hidden data-i18n="tidy_undo">Undo tidy</button></div>
         <ul class="songlist" id="songList"></ul>
       </aside>
       <div class="panel" id="songEditor">
@@ -99,7 +100,7 @@
             <label class="field"><span data-i18n="language">Language</span><select id="sfLang"></select></label>
             <label class="field"><span data-i18n="background">Background</span><select id="sfBg"></select></label>
           </div>
-          <label class="field"><span data-i18n="lyrics">Lyrics</span><textarea id="sfLyrics" rows="16"></textarea><small data-i18n="lyrics_hint"></small></label>
+          <label class="field"><span data-i18n="lyrics">Lyrics</span><textarea id="sfLyrics" rows="16"></textarea><small data-i18n="lyrics_hint"></small><button type="button" id="sfTidy" class="ghost small">✨ <span data-i18n="tidy">Tidy slides</span></button></label>
           <label class="field"><span data-i18n="track">Backing track (YouTube link, with time)</span>
             <div class="row tight"><input type="text" id="sfYt" placeholder="https://youtu.be/…?t=108"><button type="button" id="sfYtPick" data-i18n="track_pick">Choose</button><button type="button" id="sfYtFind" title="YouTube">🔎 <span data-i18n="yt_find">Find on YouTube</span></button></div>
             <small id="sfYtInfo" class="hint"></small></label>
@@ -372,6 +373,7 @@
 
 <script src="js/i18n.js"></script>
 <script src="js/core.js"></script>
+<script src="js/tidy.js"></script>
 <script src="js/bible.js"></script>
 <script src="js/store.js"></script>
 <script src="js/stage.js"></script>
