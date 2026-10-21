@@ -1292,7 +1292,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     go(i, why) {
       this.moves.push([Math.round(performance.now() / 100) / 10, follow.cur, i, why || '']); if (this.moves.length > 80) this.moves.shift();
       this.ahead = why === 'lead' || why === 'timer' ? { from: follow.cur, to: i, at: Date.now() } : null;
-      follow.cur = i; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
+      follow.cur = i; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false; if (typeof Trk !== 'undefined') Trk.missN = 0;
       if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
     }
   };
@@ -1402,6 +1402,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         if (this.st.mineTop >= .45 || this.st.otherTop >= .42) this.fitAt = now;
       if (this.st.mineTop >= .45) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, now); Svc.mineAt = now; this.offSince = 0; }
         else if (this.st.words >= 3 && this.st.mineTop < .3) { if (!this.offSince) this.offSince = now; if (now - this.offSince > 6000) Svc.okAt = 0; }
+        // Words of the open song heard: the singing is on it, even when the screen does not move (a long line, a slow
+        // song, one word a clip). Before, only a move counted, so the screen went blank ("Blank after 8 s") in the
+        // middle of a slide and came back 2-3 lines further on. Blanking now needs clips that clearly are not this song.
+        if (this.st.mineTop >= .35) { lastMatchAt = now; this.missN = 0; if (screen.autoBlank) { screen.autoBlank = false; output(); } }
+        else if (this.st.words >= 2 && this.st.mineTop < .25) this.missN = (this.missN || 0) + 1;
       }
       // Nothing in today's service fits well: look through the whole library (a song the leader started that is not
       // on today's list). Found -> opened and added to today's list; the service songs are tried first always.
@@ -2260,6 +2265,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   setInterval(() => {
     if (Listen.mode !== 'songs' || !S.blankAfter || screen.kind !== 'song' || screen.autoBlank || follow.cur < 0) return;
     const now = Date.now();
+    // clip engines (Sarvam/Whisper): one or two words a clip, so it also takes three clips in a row that are clearly
+    // something else (Trk.missN) - a quiet stretch of the recogniser is no reason to blank the lyrics
+    if (Listen.engine === 'whisper' && (Trk.missN || 0) < 3) return;
     if (now - lastSpeechAt < 2500 && now - lastMatchAt > S.blankAfter * 1000) { screen.autoBlank = true; output(); }
   }, 500);
 
