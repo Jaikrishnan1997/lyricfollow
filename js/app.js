@@ -1394,7 +1394,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       mode = mode || S.listenMode;
       // Online: Whisper large-v3 (Groq) for singing - the browser recogniser only understands speech, not songs;
       // preaching stays on the browser recogniser (streaming, no daily limit) unless chosen for it too.
-      const wantWhisper = S.groq && S.groqKey && ((mode || S.listenMode) === 'songs' || S.groqBible);
+      const wantWhisper = S.groq && /^gsk_/.test(S.groqKey || '') && ((mode || S.listenMode) === 'songs' || S.groqBible);
       let engine = S.net === 'online' ? (wantWhisper ? 'whisper' : S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
       // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
       // cannot reach them, so listening uses the device's own online recogniser here.
@@ -2121,7 +2121,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const saveKeys = () => { S.keysAt = Date.now(); const kr = {}; for (const k of KEYS) kr[k] = S[k]; Store.set('keys', kr).catch(() => {}); };
     const whRe = () => { saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stWhOn').onchange = e => { S.groq = e.target.checked; whRe(); };
-    $('stWhKey').onchange = e => { S.groqKey = e.target.value.trim(); whRe(); };
+    $('stWhKey').onchange = e => { const v = e.target.value.trim(); if (v && !/^gsk_/.test(v)) { e.target.value = S.groqKey || ''; toast(t('whisper_badkey')); return; } S.groqKey = v; whRe(); };
     $('stWhModel').onchange = e => { S.groqModel = e.target.value || 'whisper-large-v3'; whRe(); };
     $('stWhBible').onchange = e => { S.groqBible = e.target.checked; whRe(); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';

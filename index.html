@@ -258,7 +258,7 @@
         <h3 data-i18n="whisper_title">Song listening (Whisper AI)</h3>
         <p class="hint" data-i18n="whisper_hint"></p>
         <label class="check"><input type="checkbox" id="stWhOn"> <span data-i18n="whisper_on">Use Whisper for singing in Online mode</span></label>
-        <label class="field"><span data-i18n="whisper_key">Groq API key</span><input type="password" id="stWhKey" autocomplete="off" placeholder="gsk_…"></label>
+        <label class="field"><span data-i18n="whisper_key">Groq API key</span><input type="text" class="secret" id="stWhKey" name="lf-groq-token" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="gsk_…"></label>
         <label class="field"><span data-i18n="gemini_model">Model</span><select id="stWhModel"><option value="whisper-large-v3">whisper-large-v3 (most accurate)</option><option value="whisper-large-v3-turbo">whisper-large-v3-turbo (faster)</option></select></label>
         <label class="check"><input type="checkbox" id="stWhBible"> <span data-i18n="whisper_bible">Also use it for the preacher</span></label>
         <p class="hint"><a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></p>
@@ -267,7 +267,7 @@
         <h3 data-i18n="gemini_title">AI listening (Gemini)</h3>
         <p class="hint" data-i18n="gemini_hint"></p>
         <label class="check"><input type="checkbox" id="stGemOn"> <span data-i18n="gemini_on"></span></label>
-        <label class="field"><span data-i18n="gemini_key">Gemini API key</span><input type="password" id="stGemKey" autocomplete="off" placeholder="AIza…"></label>
+        <label class="field"><span data-i18n="gemini_key">Gemini API key</span><input type="text" class="secret" id="stGemKey" name="lf-gemini-token" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="AIza…"></label>
         <label class="field"><span data-i18n="gemini_model">Model</span><input id="stGemModel" list="gemModels" placeholder="gemini-2.5-flash-lite"><datalist id="gemModels"><option value="gemini-2.5-flash-lite"></option><option value="gemini-2.5-flash"></option><option value="gemini-3.1-flash-lite"></option><option value="gemini-2.0-flash"></option></datalist></label>
         <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
       </div>

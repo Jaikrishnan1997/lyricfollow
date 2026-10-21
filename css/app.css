@@ -226,3 +226,5 @@ body.low *{transition:none!important;animation:none!important}
 .chip.yt{color:#c00}
 .favbtn{background:transparent !important;color:inherit !important;border:1px solid #ccc !important}
 .favbtn.on{background:#fff6d6 !important;color:#8a6200 !important;border-color:#e0a100 !important}
+
+.secret{-webkit-text-security:disc;text-security:disc;font-family:monospace}
