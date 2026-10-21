@@ -1226,6 +1226,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     moves: [],
     go(i, why) {
       this.moves.push([Math.round(performance.now() / 100) / 10, follow.cur, i, why || '']); if (this.moves.length > 80) this.moves.shift();
+      this.ahead = why === 'lead' || why === 'timer' ? { from: follow.cur, to: i, at: Date.now() } : null;
       follow.cur = i; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
       if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
     }
@@ -1312,19 +1313,41 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
-  /* Line-by-line follower for Whisper's often half-right words (Core.seqStep): the singer is taken to go on line
-   * by line, so the next line is shown on a partial match, and lines further on need more evidence. Seen live with
-   * a room mic: Whisper wrote "அவன் நடத்தும் செய்யுங்கள்", "செயல்களெல்லாம் பாட்டோரைக் குதியும்" - too little
-   * for the whole-line scores, and the screen stayed on the chorus through two verses. */
-  const Seq = {
-    ix: null, ixKey: '', st: { pend: -1 },
+  /* Today's service tracker for Whisper (Core.trackStep): one place decides the song and the line, any line in
+   * either direction - singers repeat lines, go back to the first line between the others (1,2,1,3,1,4…), sing the
+   * chorus again or move to another song of the service. Lead still adds the timing (next line as one ends). */
+  const Trk = {
+    key: '', T: null, st: { song: null, cur: -1 }, offSince: 0, log: [], backOnce: -1,
+    index() {
+      const ids = service.slice(); if (song && !ids.includes(song.id)) ids.push(song.id);
+      const key = ids.map(id => { const sg = songById(id); return sg ? id + ':' + (sg.updated || 0) : ''; }).join('|');
+      if (key !== this.key) { this.key = key; this.T = Core.trackIndex(ids.map(songById).filter(Boolean).map(sg => ({ id: sg.id, lines: prepared(sg) }))); }
+      return this.T;
+    },
     heard(text) {
-      if (!song || !lines.length || !S.autoFollow) return;
-      const k = song.id + ':' + lines.length + ':' + (song.updated || 0);
-      if (k !== this.ixKey) { this.ixKey = k; this.ix = Core.seqIndex(lines); this.st = { pend: -1, top: -1 }; }
-      const r = Core.seqStep(this.ix, follow.cur, text, this.st);
-      if (r.score >= .5) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, Date.now()); Svc.mineAt = Date.now(); }   // the singing fits the open song
-      if (r.line != null && r.line !== follow.cur) Lead.go(r.line, 'seq');
+      if (!S.autoFollow) return;
+      const T = this.index(); if (!T.songs.length) return;
+      this.st.song = song ? song.id : null; this.st.cur = follow.cur;
+      const c0 = follow.cur, r = Core.trackStep(T, this.st, text), now = Date.now();
+      this.log.push([Math.round(performance.now() / 100) / 10, c0, text.slice(0, 40), r ? r.line + ' ' + r.why : '', +this.st.mineTop.toFixed(2)]); if (this.log.length > 60) this.log.shift();
+      if (song) {
+        // The singing fits the open song: keep giving Whisper its lyrics. Clearly another song for 6 s: stop, so
+        // Whisper writes what is sung (with the open song's lyrics as the hint it writes that song's words instead).
+        if (this.st.mineTop >= .45) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, now); Svc.mineAt = now; this.offSince = 0; }
+        else if (this.st.words >= 3 && this.st.mineTop < .3) { if (!this.offSince) this.offSince = now; if (now - this.offSince > 6000) Svc.okAt = 0; }
+      }
+      if (!r) return;
+      if (!song || r.song !== song.id) {
+        this.offSince = 0; Svc.okId = r.song; Svc.okAt = now; Svc.mineAt = now;
+        loadSong(r.song, { line: r.line }); toast(t('sounds_like') + ': ' + songById(r.song).title); return;
+      }
+      // Lead shows the next line as the singer finishes one, so the clip often still holds the line before the
+      // one on screen: that is not the singer going back. Only a second clip running says so.
+      if (r.why === 'back' && Lead.ahead && Lead.ahead.to === follow.cur && Lead.ahead.from === r.line && now - Lead.ahead.at < 10000) {
+        if (this.backOnce !== r.line) { this.backOnce = r.line; return; }
+      }
+      this.backOnce = -1;
+      if (r.line !== follow.cur) Lead.go(r.line, r.why);
     }
   };
 
@@ -1363,11 +1386,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const main = lines.filter(l => !l.alt);
       // (Not the opening lines of every service song: seen live, Whisper then writes those lines over talk and music.)
       if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
-      // The line before and the current line only - never lines ahead. Seen live: with the next two lines in the
+      // The current line only - never lines ahead (nor the line before: a singer going back to it must not look
+      // like Whisper repeating its hint). Seen live: with the next two lines in the
       // hint, Whisper wrote them out over music breaks, the screen moved on, the hint moved on with it, and the
       // screen ran a whole verse ahead of the singer. Moving on must come from what is really sung.
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
-      return main.slice(Math.max(0, at - 1), at + 1).map(l => l.text).join(' ').slice(0, 400);
+      return main.slice(at, at + 1).map(l => l.text).join(' ').slice(0, 400);
     },
     async send(a, clipEnd) {
       this.busy = true;
@@ -1404,7 +1428,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // during the intro moved the screen on, the hint moved on with it, and so on through the song). Such a clip
         // never moves the screen; the singing of a new line (not in the hint) does.
         const echo = !!(text && pr && Listen.mode === 'songs' && Core.echoOf(text, pr));
-        if (text && Listen.mode && !echo) { this.realAt = Date.now(); onText(text, [], .85); if (Listen.mode === 'songs') { Seq.heard(text); Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
+        if (text && Listen.mode && !echo) { this.realAt = Date.now(); onText(text, [], .85); if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); } }
         // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
         // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
         if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
@@ -1609,7 +1633,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // The offline model writes Malayalam/Tamil in English letters, so matches score a little lower.
     const thr = S.thr / 100 - (Listen.engine === 'local' ? .06 : 0);
     let moved = false;
-    if (song && lines.length && S.autoFollow) {
+    if (song && lines.length && S.autoFollow && Listen.engine !== 'whisper') {   // Whisper: Trk decides
       for (const alt of (interim.length ? interim : [''])) {
         if (Core.decide(follow, lines, (heardKey + ' ' + Core.keyWords(alt)).slice(-400), thr, Listen.engine === 'whisper' ? { back: .25 } : null)) { moved = true; break; }
       }
@@ -2214,13 +2238,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
+    lines: () => lines.map((l, i) => i + (l.alt ? '~ ' : ' ') + l.text),
     whisper: () => ({ engine: Listen.engine, left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60) })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60), trk: Trk.log.slice(-40) })
   };
   init();
 })();

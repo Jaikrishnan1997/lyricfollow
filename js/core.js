@@ -411,6 +411,10 @@
     return p[n];
   }
   function wsim(a, b) { return 1 - levV(a, b) / Math.max(a.length, b.length); }
+  const SIMC = new Map();
+  function wsimC(a, b) { const k = a + '|' + b; let v = SIMC.get(k); if (v === undefined) { if (SIMC.size > 50000) SIMC.clear(); v = wsim(a, b); SIMC.set(k, v); } return v; }
+  // Whisper often writes only the start of a long sung word ("சூரிய" for "சூரியனே")
+  function wsimP(h, w) { let v = wsimC(h, w); if (h.length >= 4 && w.length > h.length + 1 && h.length * 2 >= w.length) { const q = wsimC(h, w.slice(0, h.length)); if (q >= .8) v = Math.max(v, .9 * q); } return v; }
   function seqWords(t) { return keyWords(t).split(/\s+/).filter(w => w.length >= 2).map(phon); }
   /** True when (almost) every word of `text` is also in `hint`: Whisper may only be repeating its hint. */
   function echoOf(text, hint) {
@@ -420,27 +424,31 @@
     return hw.filter(inHint).length >= Math.max(1, Math.ceil(hw.length * .8));
   }
   /** lines: [{text, alt}] - alternate-language copies (alt) are skipped. */
-  function seqIndex(lines) {
-    const idx = [], W = [], K = [];
-    lines.forEach((l, i) => { if (!l || l.alt) return; idx.push(i); W.push(seqWords(l.text)); K.push(key(l.text)); });
+  function seqIndex(lines, idfShared) {
+    const idx = [], W = [], K = [], first = [];
+    let lastSlide = null;
+    lines.forEach((l, i) => {
+      if (!l || l.alt) return;
+      first.push(l.slide !== lastSlide); lastSlide = l.slide;
+      idx.push(i); W.push(seqWords(l.text)); K.push(key(l.text));
+    });
     const df = new Map(); for (const ws of W) for (const w of new Set(ws)) df.set(w, (df.get(w) || 0) + 1);
-    const N = W.length, idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    const N = W.length, idf = idfShared || (w => Math.log((N + 1) / ((df.get(w) || 0) + .5)));
     const rep = K.map(k => K.filter(x => x === k).length > 1);
-    return { idx, W, rep, idf, pos: new Map(idx.map((li, p) => [li, p])) };
+    return { idx, W, K, rep, first, idf, pos: new Map(idx.map((li, p) => [li, p])) };
   }
   function seqScore(ix, hw, p) {
-    const lw = ix.W[p]; let m = 0, tot = 0, n = 0;
+    const lw = ix.W[p]; let m = 0, tot = 0, n = 0; const used = new Set();
     for (const h of hw) {
       if (h.length < 3) continue;
-      let bs = 0, bw = null;
-      for (const w of lw) {
-        // Whisper often writes only the start of a long sung word ("சூரிய" for "சூரியனே")
-        let v = wsim(h, w); if (h.length >= 4 && w.length > h.length + 1 && h.length * 2 >= w.length) v = Math.max(v, .9 * wsim(h, w.slice(0, h.length)));
-        if (v > bs) { bs = v; bw = [w]; }
-      }
-      for (let k = 0; k + 1 < lw.length; k++) { const v = wsim(h, lw[k] + lw[k + 1]); if (v > bs) { bs = v; bw = [lw[k], lw[k + 1]]; } }
+      // each word of the line answers one heard word only ("அல்லேலூயா அல்லேலூயா" is not the line with one அல்லேலூயா)
+      let bs = 0, bw = null, bk = null;
+      for (let k = 0; k < lw.length; k++) { if (used.has(k)) continue; const v = wsimP(h, lw[k]); if (v > bs) { bs = v; bw = [lw[k]]; bk = [k]; } }
+      for (let k = 0; k + 1 < lw.length; k++) { if (used.has(k) || used.has(k + 1)) continue; const v = wsimC(h, lw[k] + lw[k + 1]); if (v > bs) { bs = v; bw = [lw[k], lw[k + 1]]; bk = [k, k + 1]; } }
+      if (bs >= .55 && bk) bk.forEach(k => used.add(k));
+      if (!bw) { tot += 1; continue; }
       const wt = bw ? Math.max(.3, Math.min(...bw.map(ix.idf))) : 1;
-      tot += wt; if (bs >= .55) { m += wt * bs; n++; }
+      tot += wt; if (bs >= .55) { m += wt * bs; if (wt >= 1) n++; }   // n: matched words that say something (not "துதியுங்கள்")
     }
     // A few common words ("தேவனைத் துதியுங்கள்" ends half the lines) are not enough evidence for a line on their own.
     return { s: tot ? Math.min(1, m / Math.max(tot, 2.2)) : 0, n };
@@ -490,6 +498,101 @@
     st.pend = best; return out(null);
   }
 
-  const Core = { echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+
+  /* ---------- Today's service tracker (Whisper): which song, which line - any line, either direction ----------
+   * Singers do not go line by line: a line sung twice, back to the first line between the others (1,2,1,3,1,4…),
+   * the chorus again, back to the top, or straight into another song of the service. Each clip is scored against
+   * every line of every service song (Core.seqScore, word weights shared across the service so words common to
+   * all the songs count little). Inside the open song the nearest lines are preferred - the next line most, a
+   * slide's first line and the song's top a little - and the further a jump, the more evidence it needs.
+   * Another song takes over only when it fits clearly better twice running (or once, unmistakably). */
+  function trackIndex(songs) {   // songs: [{id, lines:[{text, alt, slide}]}]
+    const all = []; songs.forEach(sg => sg.lines.forEach(l => { if (l && !l.alt) all.push(seqWords(l.text)); }));
+    const df = new Map(); for (const ws of all) for (const w of new Set(ws)) df.set(w, (df.get(w) || 0) + 1);
+    const N = all.length, idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    return { songs: songs.map(sg => ({ id: sg.id, ix: seqIndex(sg.lines, idf) })) };
+  }
+  function prior(ix, c, p) {
+    const d = p - c;
+    if (c < 0) return p === 0 ? .06 : ix.first[p] ? .02 : -.04;
+    if (d === 0) return .03;
+    if (d === 1) return .08;
+    if (d === 2) return .02;
+    if (d > 2) return -Math.min(.15, .03 * (d - 2));
+    return (p === 0 || ix.first[p] ? .03 : 0) - Math.min(.15, .06 + .015 * -d);
+  }
+  /** st: {song, cur} (cur = line index in the song's lines, -1 before it starts) plus the tracker's own memory.
+   *  Returns {song, line, why} when something should change, else null. */
+  function trackStep(T, st, text, now) {
+    const hw = seqWords(text).filter(w => w.length >= 2); if (!hw.filter(w => w.length >= 3).length) return null;
+    now = now || Date.now();
+    // A clip (4.5 s) often holds the end of one line and the start of the next (fast songs: two or three lines):
+    // its newest words say where the singer is now, the whole clip gives the evidence.
+    const big = hw.filter(w => w.length >= 3), tail = big.length >= 4 ? big.slice(-Math.ceil(big.length / 2)) : null;
+    const res = T.songs.map(sg => {
+      let top = 0, topN = 0; const sc = [];
+      for (let p = 0; p < sg.ix.W.length; p++) {
+        const r = seqScore(sg.ix, hw, p);
+        if (tail) { const q = seqScore(sg.ix, tail, p); if (q.s * .95 > r.s && q.n >= 2) { r.s = q.s * .95; r.n = Math.max(r.n, q.n); } }
+        sc.push(r); if (r.s > top) { top = r.s; topN = r.n; }
+      }
+      return { sg, sc, top, topN };
+    });
+    const mine = res.find(r => r.sg.id === st.song);
+    const others = res.filter(r => r !== mine).sort((a, b) => b.top - a.top);
+    const o = others[0];
+    st.mineTop = mine ? mine.top : 0; st.otherTop = o ? o.top : 0; st.words = big.length;
+    // ---- another service song (or the first one, when nothing is open) ----
+    if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
+      const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
+      st.sw = { id: o.sg.id, n: same ? st.sw.n + 1 : 1, at: now };
+      const sure = o.top >= .8 && o.topN >= 3 && (!mine || mine.top < .3);
+      if (st.sw.n >= 2 || sure || (!mine && o.top >= .7 && o.topN >= 2)) {
+        let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
+        st.sw = null; st.pend = null; st.last = null; st.rate = 0;
+        return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
+      }
+    } else if (st.sw && (now - st.sw.at > 12000 || (mine && o && mine.top >= o.top))) st.sw = null;
+    if (!mine) return null;
+    if (st.sinceSong !== st.song) { st.sinceSong = st.song; st.since = now; st.last = null; }
+    // ---- inside the open song ----
+    const ix = mine.sg.ix;
+    let c = st.cur < 0 ? -1 : ix.pos.has(st.cur) ? ix.pos.get(st.cur) : -1;
+    if (st.cur >= 0 && c < 0) { for (let p = ix.idx.length - 1; p >= 0; p--) if (ix.idx[p] <= st.cur) { c = p; break; } }
+    const sCur = c >= 0 ? mine.sc[c].s : 0;
+    let best = -1, bv = -1;
+    for (let p = 0; p < mine.sc.length; p++) { const v = mine.sc[p].s + prior(ix, c, p); if (v > bv + 1e-9) { bv = v; best = p; } }
+    if (best < 0 || best === c) { st.pend = null; return null; }
+    // equal lines (a chorus) - the copy nearest the current place, ahead first
+    const r = mine.sc[best], s = r.s, n = r.n, d = c < 0 ? best + 1 : best - c;
+    if (s - sCur < .1) return null;
+    const conf = st.pend && Math.abs(st.pend.p - best) <= (ix.K[st.pend.p] === ix.K[best] ? 99 : 1) && now - st.pend.at < 9000;
+    const conf2 = conf && st.pend.s >= .6 && st.pend.n >= 2;          // the clip before was strong evidence too
+    const stuck = c >= 0 && now - ((st.last && st.last.t) || st.since || now) > 10000;
+    // Singing speed (lines a second, from the last moves): in a fast song a clip spans two or three lines, so the
+    // expected step is taken on the next-line bar.
+    const exp = st.rate && st.last ? Math.round(st.rate * (now - st.last.t) / 1000) : 1;
+    let ok;
+    if (c >= 0 && d > 1 && d <= Math.min(4, exp + 1) && s >= .45) ok = true;
+    else if (stuck && d > 1 && d <= 8 && s >= .5 && n >= 2) ok = true;            // the screen has not moved for 10 s
+    else if (c < 0) ok = (best <= 1 && s >= .5) || (conf && s >= .55 && n >= 2);  // before the song: its start
+    else if (d === 1) ok = s >= .4;
+    else if (d === 2) ok = (s >= .45 && n >= 2) || (conf && s >= .38);
+    else if (d <= 4 && d > 0) ok = (s >= .55 && n >= 2) || (conf && s >= .42 && n >= 1);
+    else if (d > 4) ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);       // far ahead: rare, needs a lot
+    else if (d === -1) ok = (s >= .55 && n >= 2) || (s >= .7 && n >= 1) || (conf && s >= .42);
+    else if (d >= -4) ok = (s >= .55 && n >= 2) || (conf && s >= .45 && n >= 2);
+    else if (best === 0 || ix.first[best]) ok = (s >= .65 && n >= 2) || (conf && s >= .5 && n >= 2);   // back to the top / a verse
+    else ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);
+    if (!ok) { st.pend = { p: best, at: now, s, n }; return null; }
+    st.pend = null;
+    if (c >= 0 && d > 0 && st.last && st.last.p >= 0 && best > st.last.p) {
+      const r = (best - st.last.p) / Math.max(1, (now - st.last.t) / 1000); st.rate = st.rate ? st.rate * .6 + Math.min(1.2, r) * .4 : Math.min(1.2, r);
+    }
+    st.last = { p: best, t: now };
+    return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
+  }
+
+  const Core = { trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
