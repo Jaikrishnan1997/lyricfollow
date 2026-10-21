@@ -547,7 +547,7 @@
     if (big.length >= 2) { st.ev = st.ev || {}; for (const r of res) st.ev[r.sg.id] = (st.ev[r.sg.id] || 0) * .65 + r.top * .35; }
     const ev = id => (st.ev && st.ev[id]) || 0;
     const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
-    if (lead && st.song && lead.top >= .35 && ev(lead.sg.id) >= .35 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
+    if (lead && st.song && big.length >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
       let p = 0; for (let q = 0; q < lead.sc.length; q++) if (lead.sc[q].s > lead.sc[p].s) p = q;
       st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
       return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };

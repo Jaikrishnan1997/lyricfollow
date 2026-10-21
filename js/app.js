@@ -1444,7 +1444,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       this.busy = true;
       const fd = new FormData();
       fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
-      fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', 'verbose_json'); fd.append('temperature', '0');
+      fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', this.local ? 'json' : 'verbose_json'); fd.append('temperature', '0');   // laptop: plain json is ~0.8 s faster
       const lg = this.lang(); if (lg) fd.append('language', lg);
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
       // On the laptop: encode only ~15 s of context instead of Whisper's full 30 s, and no retries at higher
