@@ -228,7 +228,7 @@
     return { list, map };
   }
   /** Best line in each song for what was just heard. Returns [{id, line, score}] best first. */
-  function songLookup(ix, heard, limit) {
+  function songLookup(ix, heard, limit, noSkel) {
     const HG = heardGrams(heard), best = new Map();
     for (const [T, wt] of HG) {
       const cnt = new Map();
@@ -240,7 +240,7 @@
       }
     }
     // Second pass on consonant skeletons (catches transliterated Malayalam/Tamil from the offline model).
-    if (HG.sk && HG.sk.length >= 4) {
+    if (!noSkel && HG.sk && HG.sk.length >= 4) {
       let budget = 6000;
       ix.list.forEach((s, si) => s.lines.forEach((ln, li) => {
         if (budget-- <= 0 || ln.key.length < 3) return;
@@ -517,7 +517,33 @@
     const N = all.length, own = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
     const k = lib && lib.N ? Math.log(N + 1) / Math.log(lib.N + 1) : 0;
     const idf = k ? (w => Math.min(own(w), Math.max(k * lib.idf(w), .3))) : own;
-    return { songs: songs.map(sg => ({ id: sg.id, ix: seqIndex(sg.lines, idf) })) };
+    const out = { songs: songs.map(sg => ({ id: sg.id, ix: seqIndex(sg.lines, idf) })) };
+    // Every distinct word (and pair of neighbouring words) of today's songs -> the places it is in. A clip is then
+    // compared with each distinct word once, and only places holding a similar word are scored (the rest score 0):
+    // ~0.1-0.5 ms a clip instead of 1-6 ms.
+    const voc = new Map(), add = (w, si, p) => { let a = voc.get(w); if (!a) voc.set(w, a = []); a.push(si * 4096 + p); };
+    out.songs.forEach((sg, si) => sg.ix.W.forEach((lw, p) => { lw.forEach((w, k) => { add(w, si, p); if (k + 1 < lw.length) add(w + lw[k + 1], si, p); }); }));
+    out.voc = [...voc.entries()]; out.vcache = new Map();
+    return out;
+  }
+  // places (per song index) holding a word similar to one of the heard words
+  function candidates(T, hw) {
+    const per = T.songs.map(() => new Set());
+    for (const h of new Set(hw)) {
+      if (h.length < 3) continue;
+      let hit = T.vcache.get(h);
+      if (!hit) {
+        hit = [];
+        for (const [w, ps] of T.voc) {
+          const lh = h.length, lw = w.length;
+          if (lw * 2 < lh || (lh * 2 < lw && !(lh >= 4 && w.startsWith(h.slice(0, 2))))) continue;   // far apart in length
+          if (wsimP(h, w) >= .55) for (const x of ps) hit.push(x);
+        }
+        if (T.vcache.size > 3000) T.vcache.clear(); T.vcache.set(h, hit);
+      }
+      for (const x of hit) per[Math.floor(x / 4096)].add(x % 4096);
+    }
+    return per;
   }
   function prior(ix, c, p) {
     const d = p - c;
@@ -631,7 +657,7 @@
     if (!L || big.length < 2) return null;
     // another copy of a song on today's list (same first line) is that song, not a new one
     const out = [], seen = new Set(skip ? [...skip].map(id => L.grp.get(id)).filter(Boolean) : []);
-    for (const c of songLookup(L.gix, key(text), 10)) {
+    for (const c of songLookup(L.gix, key(text), 10, /[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(text))) {
       if (skip && skip.has(c.id)) continue;
       const g = L.grp.get(c.id); if (seen.has(g)) continue; seen.add(g);
       let ix = L.six.get(c.id);
@@ -687,9 +713,11 @@
     // A clip (4.5 s) often holds the end of one line and the start of the next (fast songs: two or three lines):
     // its newest words say where the singer is now, the whole clip gives the evidence.
     const big = hw.filter(w => w.length >= 3), tail = big.length >= 4 ? big.slice(-Math.ceil(big.length / 2)) : null;
-    const res = T.songs.map(sg => {
+    const cands = T.voc ? candidates(T, hw) : null, ZERO = { s: 0, n: 0 };
+    const res = T.songs.map((sg, si) => {
       let top = 0, topN = 0; const sc = [];
       for (let p = 0; p < sg.ix.W.length; p++) {
+        if (cands && !cands[si].has(p)) { sc.push(ZERO); continue; }
         const r = seqScore(sg.ix, hw, p);
         if (tail) { const q = seqScore(sg.ix, tail, p); if (q.s * .95 > r.s && q.n >= 2) { r.s = q.s * .95; r.n = Math.max(r.n, q.n); } }
         sc.push(r); if (r.s > top) { top = r.s; topN = r.n; }

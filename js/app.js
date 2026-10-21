@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -1433,6 +1433,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (r.why === 'back' && Lead.ahead && Lead.ahead.to === follow.cur && Lead.ahead.from === r.line && now - Lead.ahead.at < 10000) {
         if (this.backOnce !== r.line) { this.backOnce = r.line; return; }
       }
+      // No flicker: going back a line or two to where the screen just was (A -> B -> A within 8 s, a line that
+      // appears twice in the song with one or two words heard) waits for a second clip that says so too.
+      const lm = Lead.moves[Lead.moves.length - 1];
+      if (r.why === 'back' && lm && lm[2] === follow.cur && lm[1] === r.line && performance.now() / 1000 - lm[0] < 8 && this.backOnce !== r.line) { this.backOnce = r.line; return; }
       this.backOnce = -1;
       if (r.line !== follow.cur) Lead.go(r.line, r.why);
     }
@@ -1530,11 +1534,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     plan(p) {
       if (p && p.kind === 'laptop') return { every: this.clipSec, len: 4.5, overlap: 4.5 };
       if (Listen.mode !== 'songs') return { every: 3.2, len: 4.5, overlap: 1 };
+      // Fast follow (default): a clip every 2.2 s while unsure, the last 4 s each time - the screen catches up
+      // about twice as often; about Rs 50-55 an hour of singing instead of Rs 35.
+      const fast = S.followFast !== false;
       // (shorter waits than before: seen live, a 6 s wait after a music break or talk was felt as a late screen)
       if (this.quiet >= 4) return { every: 5, len: 3.5, overlap: 0 };
       if (this.quiet >= 1) return { every: 4, len: 3.5, overlap: 0 };
       if (Date.now() - (Trk.fitAt || 0) > 25000) return { every: 4.5, len: 4, overlap: 0 };
       const every = this.interval(p);
+      if (fast) return every > 3.3 ? { every: Math.min(every, 3.5), len: 4, overlap: .5 } : { every: 2.2, len: 4, overlap: 1.8 };
       return every > 3.3 ? { every, len: 4.5, overlap: 0 } : { every: 3.2, len: 4.5, overlap: .8 };
     },
     lang() {
@@ -2623,6 +2631,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stSvKey').onchange = e => { S.sarvamKey = e.target.value.trim(); whRe(); };
     $('stSvOn').onchange = e => { S.sarvam = e.target.checked; whRe(); };
     $('stSvCap').value = S.sarvamCap || ''; $('stSvCap').onchange = e => { S.sarvamCap = Math.max(0, Math.round(+e.target.value || 0)); SvUse.warned = false; saveSettings(); };
+    $('stFast').checked = S.followFast !== false; $('stFast').onchange = e => { S.followFast = e.target.checked; saveSettings(); };
     $('stVbAi').checked = S.vbAI !== false; $('stVbAi').onchange = e => { S.vbAI = e.target.checked; saveSettings(); };
     $('stVbAiCap').value = S.vbAiCap == null ? 20 : S.vbAiCap; $('stVbAiCap').onchange = e => { S.vbAiCap = Math.max(0, +e.target.value || 0); saveSettings(); };
     SvUse.render();

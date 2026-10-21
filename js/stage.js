@@ -24,9 +24,9 @@
   .lf-bg,.lf-bg>img,.lf-bg>video,.lf-shade{position:absolute;inset:0;width:100%;height:100%}
   .lf-bg>img,.lf-bg>video{object-fit:cover}
   .lf-shade{background:rgba(0,0,0,.28);pointer-events:none}
-  .lf-txt{position:absolute;inset:6% 6%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.22em;font-weight:700;line-height:1.28;transition:opacity .22s ease}
+  .lf-txt{position:absolute;inset:6% 6%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.22em;font-weight:700;line-height:1.28;transition:opacity .1s ease}
   .lf-txt.bottom{justify-content:flex-end;inset:auto 5% 5% 5%;height:42%}
-  .lf-txt p{margin:0;transition:opacity .2s ease;text-wrap:balance}
+  .lf-txt p{margin:0;transition:opacity .08s ease;text-wrap:balance}
   .lf-txt p.dim{opacity:.45}
   .lf-txt.shadow{text-shadow:0 .04em .12em rgba(0,0,0,.75),0 0 .5em rgba(0,0,0,.35)}
   .lf-txt .vblock{display:flex;flex-direction:column;gap:.15em;width:100%}
