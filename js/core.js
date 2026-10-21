@@ -591,6 +591,18 @@
     st.libLev = lead ? [lead[0], +lead[1].toFixed(2)] : null;
     return null;
   }
+  /** The words heard in the last ~8 s (this clip and the one before), newest last. A clip of singing often brings
+   *  one or two words only (measured live with Sarvam: "இயேசுவைத்.", "ராஜாதி ராஜா."), too few to tell lines and
+   *  songs apart; with the clip before it there are enough. A clip with plenty of words is used alone. */
+  function trackWin(st, text, now, span) {
+    now = now || Date.now(); span = span || 8000;
+    st.win = (st.win || []).filter(x => now - x.t < span && now - x.t > 0);
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const prev = st.win.map(x => x.text).join(' ');
+    st.win.push({ t: now, text: String(text || '') });
+    if (st.win.length > 2) st.win.shift();
+    return words.length >= 4 || !prev ? text : prev + ' ' + text;
+  }
   const FILLER = new Set(['nan', 'varukiren', 'vanakam', 'nanti', 'cari', 'aiya', 'enental', 'parkalam']);
   function trackStep(T, st, text, now) {
     const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)); if (!hw.filter(w => w.length >= 3).length) return null;
@@ -672,6 +684,6 @@
     return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
   }
 
-  const Core = { seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);

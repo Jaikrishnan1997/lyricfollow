@@ -68,7 +68,12 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
   let g = 0, n = 0, bb = 0, ws = 0;
   for (let tc = 4.5; tc < end; tc += 3.3) {
     const inWin = words.filter(x => x.t > tc - 4.5 && x.t <= tc);
-    const r = Core.trackStep(T, st, transcript(inWin.map(x => x.w), L), tc * 1000);
+    let tx = transcript(inWin.map(x => x.w), L);
+    // SPARSE=1: a clip gives 1-3 words only (measured live with Sarvam over a song: mostly 1-2 words a clip)
+    if (process.env.SPARSE && tx) { const w = tx.split(' '), k = rnd() < .4 ? 1 : rnd() < .67 ? 2 : 3; const pickW = w.map((x, i) => [x, i, x.length + rnd() * 6]).sort((a, b) => b[2] - a[2]).slice(0, k).sort((a, b) => a[1] - b[1]); tx = pickW.map(x => x[0]).join(' '); }
+    // WIN=1: the words of the clip before are matched with this one (Core.trackWin)
+    if (process.env.WIN) tx = Core.trackWin(st, tx, tc * 1000);
+    const r = Core.trackStep(T, st, tx, tc * 1000);
     if (r) { st.song = r.song; st.cur = r.line; }
     const sung = words.filter(x => x.t <= tc); if (!sung.length) continue;
     const now = sung[sung.length - 1], prevK = sc.seq[now.k - 1];
