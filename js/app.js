@@ -998,7 +998,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         // The song is found by its title (or, after the tidy renamed it, by its earlier text); a song the user edited
         // (its text matches no pack version: not this one, not an earlier one) keeps the user's text.
         const was = new Set(p.was || []);
-        const old = replace && (byTitle.get(p.title) || songs.find(s => s.src && s.src === p.src && (was.has(LFTidy.hash(s.lyrics)) || s.pk === LFTidy.hash(s.lyrics))));
+        const old = replace && (byTitle.get(p.title) || songs.find(s => s.src && s.src === p.src && was.has(LFTidy.hash(s.lyrics))));
         if (old) {
           const ytNew = p.yt && p.yt.id && !(old.yt && old.yt.id);       // a YouTube link was found for it (never replaces the user's own)
           const h = LFTidy.hash(old.lyrics), untouched = old.lyrics === lyrics || was.has(h) || old.pk === h;

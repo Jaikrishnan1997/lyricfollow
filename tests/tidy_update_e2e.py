@@ -26,6 +26,8 @@ try:
       edited:(a.find(x=>(x.lyrics||'').startsWith('MY OWN EDIT'))||{}).title,
       en:(a.find(x=>x.title.startsWith('All Praise to Him Who'))||{}).lyrics}))""")
     print('songs before/after', n0, a['n'])
+    miss = pg.evaluate("""(async()=>{const pk=await (await fetch('vendor/songs-ta-fgs.json')).json(); const a=await LFStore.all('songs'); const T=new Set(a.map(x=>x.title)); return pk.songs.filter(s=>!T.has(s.title)).map(s=>s.title).slice(0,40);})()""")
+    print('fgs pack songs not in DB:', len(miss), miss[:12])
     print('untouched song updated:', old_ex.replace('\n',' / ')[:50], '=>', (a['avi'] or '')[:80].replace('\n',' / '), '| parts', a['aviParts'])
     print('edited song kept:', a['edited'])
     print('English hymn slides:', len((a['en'] or '').split('\n\n')))

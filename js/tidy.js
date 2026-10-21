@@ -25,7 +25,7 @@
   // "sung to the tune of ...": എന്ന രീതി, என்ற மெட்டு, tune of
   const TUNE = /എന്ന\s*(?:രീതി|രാഗം|മട്ട്)|என்ற\s*(?:மெட்டு|ராகம்|இராகம்)|மெட்டு\s*:|\b(?:tune of|to the tune|sung to)\b/i;
   const JUNK = /^[\s_*#~=.\-–—•·|]+$/;
-  const REPEAT = /\s*(?:[([]\s*(?:x\s*\d|\d\s*(?:x|times|தடவை|முறை|പ്രാവശ്യം)?)\s*[)\]]|(?:x\s*\d|\d\s*x)|\s[-–—]\s*\d)\s*$/i;
+  const REPEAT = /\s*(?:[([]\s*(?:x\s*\d|\d\s*(?:x|times|தடவை|முறை|പ്രാവശ്യം)?)\s*[)\]]|(?:x\s*\d|\d\s*x)|\s[-–—]\s*\d|(?<=[\p{L}\p{M}.)])[-–—]\s*[2-4])\s*$/iu;
   // chapter-like heading of a verse: "1", "1.", "Verse 2", "சரணம் 2", "ചരണം 3"
   const VNUM = /^(?:(?:verse|stanza|சரணம்|ചരണം)\s*)?(\d{1,2})\s*[.):\-]?$/i;
   const LEADNUM = /^\s*(\d{1,2})\s*[.,)]\s*(?=\S)/;
@@ -96,6 +96,9 @@
       const prevK = lines.length ? key(lines[lines.length - 1]) : '';
       const pe = l.match(/^\(\s*(.+?)\s*\)$/); if (pe && prevK && key(pe[1]) === prevK) continue;
       const te = l.match(/^(.+?)[\s,-]*\(\s*(.+?)\s*,?\s*\)$/); if (te && key(te[1]) === key(te[2])) l = te[1].trim();
+      // "...உயர்த்திடுவார்-2-பயப்படாதே": a repeat mark, then a cue
+      const rc = l.match(/[-–—]\s*[2-4]\s*[-–—]\s*([^\s\-–—]{1,30})\s*\.{0,4}$/);
+      if (rc && find(rc[1]) >= 0) { st.cues.push(find(rc[1])); l = l.slice(0, rc.index).trim(); }
       l = l.replace(REPEAT, '').trim(); if (!l) continue;
       // "... (2) അനുഗ്രഹ": a repeat mark and then the cue
       const mr = l.match(/\s*[([]\s*\d\s*[)\]]\s*([^\s()]{1,30})\s*\.{0,4}$/);
@@ -112,7 +115,7 @@
       m = l.match(CUE_PAREN); if (m) { target = find(m[1]); st.cues.push(target); l = l.slice(0, m.index).trim(); }
       else if (md && find(md[1]) >= 0) { target = find(md[1]); st.cues.push(target); l = l.slice(0, md.index).trim(); }
       else { m = l.match(CUE_END); if (m && m[1].split(' ').length <= 2) { target = find(m[1]); if (target >= 0) { st.cues.push(target); l = l.slice(0, m.index).trim(); } } }
-      l = l.replace(/[,;:\s]+$/, m && target >= 0 ? '' : '$&').replace(/\s*(?:\.{3,}|…+|[-–—]+)\s*$/, '').trim();
+      l = l.replace(/[,;:\s]+$/, m && target >= 0 ? '' : '$&').replace(/\s*(?:\.{2,}|…+|[-–—]+)\s*$/, '').trim();
       if (l) lines.push(l);
     }
     st.lines = lines;
@@ -157,6 +160,12 @@
   function regroup(sts) {
     const single = sts.filter(s => s.lines.length === 1).length;
     if (sts.length < 8 || single < sts.length * .7) return sts;
+    // a numbered verse ("1.") always starts a new stanza: regroup each numbered part on its own
+    if (sts.some(s => s.num != null)) {
+      const parts = []; let cur = null;
+      for (const s of sts) { if (!cur || s.num != null || s.tag) { cur = { lines: [], cues: [], num: s.num, tag: s.tag }; parts.push(cur); } cur.lines.push(...s.lines); }
+      return parts.length > 1 ? parts : sts;
+    }
     const lines = [].concat(...sts.map(s => s.lines)), n = lines.length;
     const fin = l => /[.!?]["'’”)\]]*$/.test(l);
     let best = null;

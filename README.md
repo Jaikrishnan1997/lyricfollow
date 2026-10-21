@@ -163,7 +163,9 @@ new browser, an incognito window or a new phone): Malayalam hymns from Wikisourc
 Wikisource (260) and the Tamil pack below (159). Loading takes about a second (one database transaction);
 duplicates are skipped by sound, so the buttons under *Free song collections* can be pressed again safely.
 
-## Tamil song pack (vendor/songs-ta-fgs.json)
+## Tamil & Malayalam song pack (vendor/songs-ta-fgs.json)
+
+227 songs (217 Tamil, 10 Malayalam) from freegospelsongs.in - every song on the site that has lyrics, as of October 2026 (68 added in this update, mojibake-encoded pages repaired). Published by their rights holders for free personal, church and outreach use, not commercial use.
 
 159 Tamil songs whose rights holders published them on freegospelsongs.in (a non-profit site that describes them as
 copyright-free and invites sharing; terms: free for personal devotion, church and outreach programs, no commercial use).
