@@ -63,10 +63,29 @@ function Start-Voice {
   }
   Write-Host "  Offline voice engines started ($((Get-Content (Join-Path $m 'model.txt') -ErrorAction SilentlyContinue)), $provider): $($started -join ', ')"
 }
+# Offline Whisper for singing (installed by "Setup offline Whisper (best).bat"): whisper.cpp's server on port 6020,
+# answering like Online Whisper - clips with the lyrics hint, on the NVIDIA GPU when there is one.
+function Start-Whisper {
+  $dir = Join-Path $root 'voice/whisper'
+  $exe = Join-Path $dir 'whisper-server'; if ($isWin) { $exe += '.exe' }
+  $model = Join-Path $dir 'model.bin'
+  if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $model)) { return }
+  try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 6020); $c.Close(); Write-Host '  Offline Whisper already running.'; return } catch { }
+  $threads = [Math]::Max(2, [Math]::Min(8, [Environment]::ProcessorCount - 2))
+  $wArgs = @('-m', "`"$model`"", '--host', '127.0.0.1', '--port', '6020', '-t', "$threads", '-l', 'auto')
+  $forceCpu = (Test-Path -LiteralPath (Join-Path $root 'voice/cpu.txt')) -and ((Get-Content (Join-Path $root 'voice/cpu.txt') -Raw -ErrorAction SilentlyContinue) -match 'cpu')
+  if ($forceCpu -or -not (Test-Path -LiteralPath (Join-Path $dir 'gpu.txt'))) { $wArgs += '-ng' }
+  $sp = @{ FilePath = $exe; ArgumentList = $wArgs; WorkingDirectory = $dir
+           RedirectStandardOutput = (Join-Path $root 'voice/whisper.log'); RedirectStandardError = (Join-Path $root 'voice/whisper-err.log') }
+  if ($isWin) { $sp.WindowStyle = 'Minimized' }
+  Start-Process @sp
+  Write-Host "  Offline Whisper started ($((Get-Content (Join-Path $dir 'model.txt') -ErrorAction SilentlyContinue)), port 6020)"
+}
 if ($RestartVoice) {
-  Get-Process -Name 'sherpa-onnx-offline-websocket-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Get-Process -Name 'sherpa-onnx-offline-websocket-server', 'whisper-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
 }
+Start-Whisper
 Start-Voice
 if ($RestartVoice) { Start-Sleep -Seconds 3; exit 0 }
 

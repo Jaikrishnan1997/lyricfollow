@@ -23,6 +23,16 @@ the app only has to find which known line is being sung, it tolerates many mista
 For Malayalam/Tamil the Online service is still more accurate. Use the "Accurate" offline model on a good laptop,
 or switch to Online when internet is available.
 
+### Best offline singing: offline Whisper (whisper.cpp)
+Double-click **Setup offline Whisper (best).bat** once (internet needed this once, ~1.8 GB). It installs
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT) with Whisper large-v3 – the model the Online mode uses –
+or large-v3-turbo on graphics cards under 4 GB, and uses the NVIDIA GPU (CUDA 12) when there is one.
+**Start Lyric Follow.bat** then starts it too (port 6020, log in `voice\whisper.log`). In **Offline** mode, singing is
+followed exactly like Online – the lyrics hint, the service tracker, line timing – but on this laptop: no internet, no
+key, no daily limit, and a clip every 1–2 s instead of every 3 s. If it is not installed or stops answering, the app
+uses the offline voice engine below. The preacher (Bible) mode keeps using the offline voice engine.
+`setup-whisper.ps1 -Turbo` / `-Large` / `-Cpu` choose the model or the CPU build explicitly.
+
 ### One-time offline voice setup
 Double-click **Setup offline voice (Balanced).bat** or **Setup offline voice (Accurate).bat** (no questions), or **Setup offline voice.bat** to choose. Close Lyric Follow before changing the model. Needs internet only this once:
 1. Fast – older/low-end laptops (~120 MB download)

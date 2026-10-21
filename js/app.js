@@ -688,6 +688,23 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   // Offline engine: cuts the microphone audio at natural pauses and sends each phrase to the local voice engines.
   // One engine per language (started by "Start Lyric Follow.bat"). Songs use the song's language; the preacher's
   // speech goes to the speaker's language AND English, because references are often said in English.
+  // Offline Whisper (whisper.cpp's server, started by Start Lyric Follow.bat when "Setup offline Whisper" was run).
+  const LOCAL_WHISPER = 'http://127.0.0.1:6020';
+  const LocalWh = {
+    ok: false,
+    async check() {
+      if (HOSTED) return false;
+      try { const c = new AbortController(), tm = setTimeout(() => c.abort(), 1500); const r = await fetch(LOCAL_WHISPER + '/health', { signal: c.signal, cache: 'no-store' }); clearTimeout(tm); this.ok = r.ok; }
+      catch (e) { this.ok = false; }
+      return this.ok;
+    }
+  };
+  /** A recognised clip of singing (offline engine): shown as heard, then the service tracker and the line timing. */
+  function songClip(text, clipEnd) {
+    if (!text || !Listen.mode) return;
+    onText(text, [], .85);
+    if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); }
+  }
   const Local = {
     conns: {}, timer: null, ok: false, retry: null, sentEnd: -1, sentFinalTo: -1, lang: '', lastMs: 0, fails: 0, guard: null,
     conn(lang) {
@@ -705,6 +722,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         const letters = (txt.match(/\p{L}/gu) || []).length;
         if (letters < 4 || /^(thank you|thanks for watching|you|bye|okay|subtitles by.*|music)[.!\s]*$/i.test(txt)) return;
         me.conf = .85;
+        if (me.clip) { me.clip = false; songClip(txt, me.clipEnd); return; }
         if (me.secondary) {   // English helper engine: only counts when the main engine found nothing in this phrase
           const r = Bible.parseRef(txt, { exactOnly: true, needChapter: true, needVerse: true });
           if (!r) return;
@@ -743,6 +761,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       const main = this.conn(this.lang);
       if (!main.ws || main.ws.readyState !== 1) return;
       this.ok = true;
+      if (Listen.mode === 'songs' && S.autoFollow) { this.clipTick(main); return; }
       const ph = Mic.phrase(); if (!ph) return;
       const len = ph.to - ph.from, rate = Mic.rate;
       if (len < rate * .5) return;
@@ -761,6 +780,18 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       const every = Math.max(S.low ? 1.6 : 1.0, Math.min(4, this.lastMs / 1000 * 1.2));
       if (len < rate * 2.5 || Mic.total - this.sentEnd < rate * every) return;
       this.sentEnd = Mic.total; this.send(main, Mic.slice(ph.from, Mic.total), false);
+    },
+    // Singing: the same clip-by-clip following as Online Whisper (the last 4.5 s, the tracker, the line timing),
+    // at the pace the laptop's engine allows - with a graphics card every second or two, faster than Online.
+    clipAt: 0,
+    clipTick(main) {
+      if (main.busy) return;
+      const now = Date.now(), every = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15));
+      if (now - this.clipAt < every * 1000) return;
+      const a = Mic.last(4.5); if (!a.length) return;
+      let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
+      this.clipAt = now; if (Math.sqrt(e / a.length) < .004) return;   // silence
+      if (this.send(main, a, true)) { main.clip = true; main.clipEnd = now; }
     },
     stop() {
       clearInterval(this.timer); clearTimeout(this.retry); this.ok = false;
@@ -1352,8 +1383,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   };
 
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null,
-    start() { this.stop(); this.lastSent = Date.now(); this.tick(); },
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0,
+    start() { this.stop(); this.fails = 0; if (!this.local) this.clipSec = this.left != null && this.left < 300 ? 5 : 3.2; this.lastSent = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
       if (!Listen.mode || Listen.engine !== 'whisper') return;
@@ -1402,9 +1433,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', 'verbose_json'); fd.append('temperature', '0');
       const lg = this.lang(); if (lg) fd.append('language', lg);
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
+      const t0 = Date.now();
       try {
-        const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
-        if (r.status === 429) {
+        // Offline: the same request to whisper.cpp on this laptop (no key, no daily limit).
+        const r = this.local ? await fetch(LOCAL_WHISPER + '/inference', { method: 'POST', body: fd })
+          : await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
+        if (this.local) { this.lastMs = Date.now() - t0; this.clipSec = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15)); }
+        if (r.status === 429 && !this.local) {
           // The free tier's daily limit is per model: when one is used up, carry on with the other one.
           const msg = await r.text().catch(() => '');
           if (/per day|RPD/i.test(msg) && !this.swapped) {
@@ -1434,10 +1469,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
         // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
         if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
-        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
+        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper${this.local ? ' (' + t('mode_offline') + ')' : ''}`, true);
       } catch (e) {
         this.fails++;
-        if (this.fails >= 3) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+        if (this.fails >= 3 && this.local) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); }   // back to the other offline engine
+        else if (this.fails >= 3) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
       } finally { this.busy = false; }
     }
   };
@@ -1454,6 +1490,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // cannot reach them, so listening uses the device's own online recogniser here.
       if (engine === 'local' && HOSTED) { toast(t('local_hosted')); S.net = 'online'; saveSettings(); renderNet(); engine = 'cloud'; }
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
+      // Offline singing: Whisper on this laptop (whisper.cpp) when it is installed - it follows like Online.
+      if (engine === 'local' && mode === 'songs' && await LocalWh.check()) engine = 'whisper';
+      Whisper.local = engine === 'whisper' && S.net !== 'online';
       this.stopEngines();
       this.mode = mode; this.engine = engine;
       // The song on screen when listening starts was chosen by the operator (or kept from last time): it is trusted
@@ -1635,7 +1674,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // The offline model writes Malayalam/Tamil in English letters, so matches score a little lower.
     const thr = S.thr / 100 - (Listen.engine === 'local' ? .06 : 0);
     let moved = false;
-    if (song && lines.length && S.autoFollow && Listen.engine !== 'whisper') {   // Whisper: Trk decides
+    if (song && lines.length && S.autoFollow && Listen.engine !== 'whisper' && Listen.engine !== 'local') {   // clip engines: Trk decides
       for (const alt of (interim.length ? interim : [''])) {
         if (Core.decide(follow, lines, (heardKey + ' ' + Core.keyWords(alt)).slice(-400), thr, Listen.engine === 'whisper' ? { back: .25 } : null)) { moved = true; break; }
       }
