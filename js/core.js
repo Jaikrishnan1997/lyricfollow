@@ -546,10 +546,11 @@
     // so one clip rarely shows the new song clearly, but several running do (seen live: 35 s to switch).
     if (big.length >= 2) { st.ev = st.ev || {}; for (const r of res) st.ev[r.sg.id] = (st.ev[r.sg.id] || 0) * .65 + r.top * .35; }
     const ev = id => (st.ev && st.ev[id]) || 0;
-    if (o && st.song && o.top >= .45 && ev(o.sg.id) >= .42 && ev(o.sg.id) >= ev(st.song) + .15 && others.every(x => x === o || ev(x.sg.id) < ev(o.sg.id))) {
-      let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
+    const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
+    if (lead && st.song && lead.top >= .35 && ev(lead.sg.id) >= .35 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
+      let p = 0; for (let q = 0; q < lead.sc.length; q++) if (lead.sc[q].s > lead.sc[p].s) p = q;
       st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
-      return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
+      return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };
     }
     // ---- another service song (or the first one, when nothing is open) ----
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
