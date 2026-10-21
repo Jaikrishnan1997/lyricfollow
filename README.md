@@ -152,6 +152,31 @@ duplicates are skipped by sound, so the buttons under *Free song collections* ca
 copyright-free and invites sharing; terms: free for personal devotion, church and outreach programs, no commercial use).
 Each song carries its album page as source. Voice & Import → *தமிழ் · local pack* loads them into the library.
 
+## Whisper all day for free (Online mode)
+
+Each clip of singing goes to the first free service that still has room, in this order:
+1. **Groq whisper-large-v3** (most accurate) – 2,000 clips a day, 20 a minute
+2. **Groq whisper-large-v3-turbo** – another 2,000 a day
+3. **Your Cloudflare Worker** (Workers AI whisper-large-v3-turbo) – about 214 audio minutes a day free, reset 00:00 UTC
+4. **Whisper on this laptop** (Setup offline Whisper) – no limit, needs the app opened from Start Lyric Follow.bat
+
+When a service answers "limit reached" it is skipped until the limit has passed (1 min / 30 min / 3 h for Groq,
+00:00 UTC for Cloudflare), remembered across reloads. Settings → "Try all services again now" clears that.
+While the screen is following with confidence, clips go out every ~4–6 s (about one sung line) instead of every
+3.2 s; at once back to 3.2 s when unsure or when the song may have changed. Measured: 12–15 clips a minute instead
+of 18. Together roughly 8 hours of cloud Whisper a day for free, then the laptop.
+
+Please use one account per service – several accounts to get more free clips breaks their terms.
+
+### More free Whisper: Cloudflare Worker (one-time, ~10 minutes, free, no card)
+1. Make a free account at **dash.cloudflare.com**.
+2. **Workers & Pages → Create → Create Worker**, name it `lyricfollow-whisper`, **Deploy**, then **Edit code**:
+   replace everything with the contents of **cloudflare-worker.js** (in this folder) and **Deploy**.
+3. In the Worker: **Settings → Bindings → Add → Workers AI**, variable name `AI`.
+4. **Settings → Variables and Secrets → Add**, type **Secret**, name `KEY`, value: a password you choose. Deploy.
+5. Copy the Worker's address (`https://lyricfollow-whisper.<your-name>.workers.dev`) and in Lyric Follow
+   **Settings → Song listening** paste it into **Worker address** and the password into **Worker password**.
+
 ## Optional: Gemini AI listening (Online mode)
 
 Settings → *AI listening (Gemini)*: paste your own Gemini API key (free at https://aistudio.google.com/apikey) and tick

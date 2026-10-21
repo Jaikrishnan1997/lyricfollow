@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -48,7 +48,7 @@
   const settingsBus = (() => { try { return new BroadcastChannel('lyricfollow-settings'); } catch (e) { return null; } })();
   // Keys and the AI switches carry the time they were last changed (S.keysAt): whichever tab changed them last wins,
   // both when a tab saves (the stored record is read first) and when another tab announces its settings.
-  const KEYS = ['groq', 'groqKey', 'groqModel', 'groqBible', 'gemini', 'geminiKey', 'geminiModel'];
+  const KEYS = ['groq', 'groqKey', 'groqModel', 'groqBible', 'cfUrl', 'cfKey', 'gemini', 'geminiKey', 'geminiModel'];
   function saveSettings() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
@@ -59,7 +59,7 @@
   }
   function showKeys() {
     const set = (id, v, chk) => { const el2 = document.getElementById(id); if (el2) chk ? (el2.checked = !!v) : (el2.value = v || ''); };
-    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey);
+    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stCfUrl', S.cfUrl); set('stCfKey', S.cfKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey);
   }
   if (settingsBus) settingsBus.onmessage = e => {
     const n = e.data || {}; if (typeof n !== 'object') return;
@@ -1152,7 +1152,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (!Listen.mode || Listen.engine !== 'gemini') return;
       this.timer = setTimeout(() => this.tick(), 500);
       const now = Date.now();
-      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.clipSec * 1000 || !Mic.stream) return;
+      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.interval(this.cur || this.pick()) * 1000 || !Mic.stream) return;
       const sec = (now - this.lastSent) / 1000 + .4;       // small overlap so words on a clip edge are not lost
       const a = Mic.last(Math.min(sec, 9)); this.lastSent = now;
       let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
@@ -1397,14 +1397,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   };
 
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, tempLocal: false, localUntil: 0,
-    start() { this.stop(); this.fails = 0; if (!this.local) this.clipSec = this.left != null && this.left < 300 ? 5 : 3.2; this.lastSent = Date.now(); this.tick(); },
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null,
+    start() { this.stop(); this.fails = 0; this.goodRun = 0; this.clipSec = 3.2; this.lastSent = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
       if (!Listen.mode || Listen.engine !== 'whisper') return;
       this.timer = setTimeout(() => this.tick(), 300);
       const now = Date.now();
-      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.clipSec * 1000 || !Mic.stream) return;
+      if (this.busy || now < this.backoffUntil || now - this.lastSent < this.interval(this.cur || this.pick()) * 1000 || !Mic.stream) return;
       const a = Mic.last(4.5); this.lastSent = now;
       let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i];
       if (!a.length || Math.sqrt(e / a.length) < .004) return;
@@ -1440,47 +1440,78 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
       return main.slice(at, at + 1).map(l => l.text).join(' ').slice(0, 400);
     },
+    /* Where each clip goes. Free services in turn - Groq large-v3, Groq turbo (2000 clips a day each), your
+     * Cloudflare Worker (Workers AI whisper-large-v3-turbo, ~214 audio minutes a day free) - and finally Whisper on
+     * this laptop (no limit). A service that says "limit reached" is skipped until its limit has passed (kept across
+     * reloads); Offline mode uses the laptop only. */
+    providers() {
+      const groqOk = S.groq && /^gsk_/.test(S.groqKey || ''), cfOk = /^https:\/\//.test(S.cfUrl || '');
+      const groq = ['whisper-large-v3', 'whisper-large-v3-turbo'];
+      if (S.groqModel === 'whisper-large-v3-turbo') groq.reverse();
+      const list = [];
+      if (!this.local) { if (groqOk) groq.forEach(m => list.push({ id: 'groq:' + m, kind: 'groq', model: m, name: 'Groq' })); if (cfOk) list.push({ id: 'cf', kind: 'cf', name: 'Cloudflare' }); }
+      list.push({ id: 'laptop', kind: 'laptop', name: t('mode_offline') });
+      return list;
+    },
+    blocked() { try { return JSON.parse(localStorage.getItem('lf-wh-block') || '{}'); } catch (e) { return this._bl || {}; } },
+    block(id, ms, why) {
+      const b = this.blocked(); b[id] = Date.now() + ms; this._bl = b;
+      try { localStorage.setItem('lf-wh-block', JSON.stringify(b)); } catch (e) {}
+      const next = this.pick(); toast(t('whisper_quota') + (next ? ' → ' + next.name + (next.model ? ' ' + next.model.replace('whisper-', '') : '') : ''));
+    },
+    pick() {
+      const b = this.blocked(), now = Date.now();
+      return this.providers().find(p => !(b[p.id] > now) && (p.kind !== 'laptop' || LocalWh.ok)) || null;
+    },
+    // Fewer clips to the free services while the screen is following with confidence: one every 6 s instead of every
+    // 3.2 s (the line timing fills the gap); back to 3.2 s at once when unsure, before the song starts or when a
+    // switch is pending. The laptop has no limit and keeps its own pace.
+    interval(p) {
+      if (p && p.kind === 'laptop') return this.clipSec;
+      const sure = this.goodRun >= 2 && follow.cur >= 0 && !(Trk.st && Trk.st.sw) && Date.now() - Svc.okAt < 15000;
+      if (!sure) return 3.2;
+      // never longer than about one sung line, so no line is skipped (line length from the measured singing speed)
+      const n = (i => (lines[i] && lines[i].w ? lines[i].w.length : 4))(follow.cur), dur = Math.max(2, n) * Lead.spw + .6;
+      return Math.max(3.2, Math.min(6, dur));
+    },
     async send(a, clipEnd) {
       this.busy = true;
-      if (this.tempLocal && Date.now() > this.localUntil) { this.tempLocal = false; this.local = false; this.clipSec = 3.2; }   // back to Groq
+      let p = this.pick();
+      if (!p && !LocalWh.ok && await LocalWh.check()) p = this.pick();
+      if (!p) { this.busy = false; this.backoffUntil = Date.now() + 10000; setStatus(t('whisper_quota'), false); return; }
+      this.cur = p;
       const fd = new FormData();
       fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
-      fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', this.local ? 'json' : 'verbose_json'); fd.append('temperature', '0');   // laptop: plain json is ~0.8 s faster
+      fd.append('temperature', '0');
       const lg = this.lang(); if (lg) fd.append('language', lg);
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
-      // On the laptop: encode only ~15 s of context instead of Whisper's full 30 s, and no retries at higher
-      // "temperature" (measured on a GTX 1650 with large-v3: 6.5-12 s a clip -> about 3 s).
-      if (this.local) { fd.append('audio_ctx', '768'); fd.append('temperature_inc', '0'); }
+      let url, headers = {};
+      if (p.kind === 'groq') { url = 'https://api.groq.com/openai/v1/audio/transcriptions'; headers = { Authorization: 'Bearer ' + S.groqKey }; fd.append('model', p.model); fd.append('response_format', 'verbose_json'); }
+      else if (p.kind === 'cf') { url = S.cfUrl; if (S.cfKey) headers = { 'X-Key': S.cfKey }; }
+      else {
+        // On the laptop: encode only ~15 s of context instead of Whisper's full 30 s, no retries at higher
+        // "temperature", plain json (measured on a GTX 1650: 6.5-12 s a clip -> about 1.2-3 s).
+        url = LOCAL_WHISPER + '/inference'; fd.append('response_format', 'json'); fd.append('audio_ctx', '768'); fd.append('temperature_inc', '0');
+      }
       const t0 = Date.now();
       try {
-        // Offline: the same request to whisper.cpp on this laptop (no key, no daily limit).
-        const r = this.local ? await fetch(LOCAL_WHISPER + '/inference', { method: 'POST', body: fd })
-          : await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
-        if (this.local) { this.lastMs = Date.now() - t0; this.clipSec = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15)); }
-        if (r.status === 429 && !this.local) {
-          const msg = await r.text().catch(() => ''), daily = /per day|RPD|audio seconds/i.test(msg);
-          // Groq's free limit reached: carry on with Whisper on this laptop when it is installed (no limit) - for
-          // 30 s after a per-minute limit, 30 min after a daily one - then try Groq again.
-          if (await LocalWh.check()) {
-            this.local = true; this.tempLocal = true; this.localUntil = Date.now() + (daily ? 30 * 60000 : 30000);
-            toast(t('whisper_quota') + ' → ' + t('mode_offline') + ' Whisper'); return;
-          }
-          // The free tier's daily limit is per model: when one is used up, carry on with the other one.
-          if (daily && !this.swapped) {
-            this.swapped = true; S.groqModel = (S.groqModel || 'whisper-large-v3') === 'whisper-large-v3' ? 'whisper-large-v3-turbo' : 'whisper-large-v3';
-            const sel = document.getElementById('stWhModel'); if (sel) sel.value = S.groqModel; saveSettings(); toast(t('whisper_quota') + ' → ' + S.groqModel); return;
-          }
-          this.backoffUntil = Date.now() + (/per day|RPD/i.test(msg) ? 60000 : 6000); setStatus(t('whisper_quota'), false); return;
+        const r = await fetch(url, { method: 'POST', headers, body: fd });
+        if (p.kind === 'laptop') { this.lastMs = Date.now() - t0; this.clipSec = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15)); }
+        if (r.status === 429 || (p.kind === 'cf' && r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 403)) {
+          const msg = await r.text().catch(() => '');
+          // Groq: per minute -> 1 min; audio seconds per hour -> 30 min; per day -> 3 h (rolling), then tried again.
+          // Cloudflare: the free allocation resets at 00:00 UTC.
+          const day = /per day|RPD|ASD|daily|neuron|allocation/i.test(msg), hour = /per hour|ASH|audio seconds/i.test(msg);
+          if (p.kind === 'cf' && day) { const n = new Date(); this.block(p.id, Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + 1) - Date.now() + 60000); }
+          else this.block(p.id, day ? 3 * 3600000 : hour ? 30 * 60000 : 60000);
+          return;
         }
-        if (r.status === 401 || r.status === 403) { this.fails = 9; throw new Error('key'); }
+        if (r.status === 401 || r.status === 403) { this.block(p.id, 3600000); if (p.kind === 'groq') toast(t('whisper_failed')); return; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        // Groq's free tier allows 20 clips a minute and about 2000 a day: one clip every 3.2 s, slowing to one every
-        // 5 s when fewer than 300 are left today.
-        const rem = +r.headers.get('x-ratelimit-remaining-requests'); if (rem >= 0 && r.headers.has('x-ratelimit-remaining-requests')) { this.left = rem; this.clipSec = rem < 300 ? 5 : 3.2; }
         const j = await r.json(); this.fails = 0; this.sent++;
         lastEventAt = Date.now();
         const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
-        let text = (j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
+        let text = (p.kind === 'groq' && j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
         if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
@@ -1492,16 +1523,23 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // during the intro moved the screen on, the hint moved on with it, and so on through the song). Such a clip
         // never moves the screen; the singing of a new line (not in the hint) does.
         const echo = !!(text && pr && Listen.mode === 'songs' && Core.echoOf(text, pr));
-        if (text && Listen.mode && !echo) { this.realAt = Date.now(); onText(text, [], .85); if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); } }
+        if (text && Listen.mode && !echo) {
+          this.realAt = Date.now(); onText(text, [], .85);
+          if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); this.goodRun = Trk.st.mineTop >= .6 ? (this.goodRun || 0) + 1 : 0; }
+        } else if (!text) this.goodRun = 0;
         // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
         // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
         if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
-        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper${this.local ? ' (' + t('mode_offline') + ')' : ''}`, true);
+        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper (${p.name})`, true);
       } catch (e) {
         this.fails++;
-        if (this.fails >= 3 && this.tempLocal) { this.tempLocal = false; this.local = false; this.fails = 0; this.clipSec = 3.2; this.backoffUntil = Date.now() + 20000; }   // laptop Whisper failed: Groq again shortly
-        else if (this.fails >= 3 && this.local) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); }   // back to the other offline engine
-        else if (this.fails >= 3) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+        // A service that keeps failing (no internet, Worker down, laptop engine stopped) is skipped for 2 minutes.
+        if (this.fails >= 3) {
+          this.fails = 0;
+          if (p.kind === 'laptop' && this.local && !this.providers().some(q => q.kind !== 'laptop')) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); return; }
+          if (p.kind === 'laptop') LocalWh.ok = false; else this.block(p.id, 120000);
+          if (!this.pick() && !this.local) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+        }
       } finally { this.busy = false; }
     }
   };
@@ -1512,7 +1550,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       mode = mode || S.listenMode;
       // Online: Whisper large-v3 (Groq) for singing - the browser recogniser only understands speech, not songs;
       // preaching stays on the browser recogniser (streaming, no daily limit) unless chosen for it too.
-      const wantWhisper = S.groq && /^gsk_/.test(S.groqKey || '') && ((mode || S.listenMode) === 'songs' || S.groqBible);
+      const wantWhisper = S.groq && (/^gsk_/.test(S.groqKey || '') || /^https:\/\//.test(S.cfUrl || '')) && ((mode || S.listenMode) === 'songs' || S.groqBible);
       let engine = S.net === 'online' ? (wantWhisper ? 'whisper' : S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
       // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
       // cannot reach them, so listening uses the device's own online recogniser here.
@@ -1520,7 +1558,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
       // Offline singing: Whisper on this laptop (whisper.cpp) when it is installed - it follows like Online.
       if (engine === 'local' && mode === 'songs' && await LocalWh.check()) engine = 'whisper';
-      Whisper.local = engine === 'whisper' && S.net !== 'online'; Whisper.tempLocal = false;
+      Whisper.local = engine === 'whisper' && S.net !== 'online'; Whisper.cur = null;
       this.stopEngines();
       this.mode = mode; this.engine = engine;
       // The song on screen when listening starts was chosen by the operator (or kept from last time): it is trusted
@@ -2249,6 +2287,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stWhKey').onchange = e => { const v = e.target.value.trim(); if (v && !/^gsk_/.test(v)) { e.target.value = S.groqKey || ''; toast(t('whisper_badkey')); return; } S.groqKey = v; whRe(); };
     $('stWhModel').onchange = e => { S.groqModel = e.target.value || 'whisper-large-v3'; whRe(); };
     $('stWhBible').onchange = e => { S.groqBible = e.target.checked; whRe(); };
+    // Cloudflare Worker (Workers AI Whisper, free daily allocation) - the second free service after Groq.
+    $('stCfUrl').value = S.cfUrl || ''; $('stCfKey').value = S.cfKey || '';
+    $('stCfUrl').onchange = e => { const v = e.target.value.trim().replace(/\/+$/, ''); if (v && !/^https:\/\//.test(v)) { e.target.value = S.cfUrl || ''; toast(t('cf_badurl')); return; } S.cfUrl = v; whRe(); };
+    $('stCfKey').onchange = e => { S.cfKey = e.target.value.trim(); whRe(); };
+    $('stWhReset').onclick = () => { try { localStorage.removeItem('lf-wh-block'); } catch (e) {} Whisper._bl = {}; toast(t('wh_reset_done')); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
     $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
     $('stGemKey').onchange = e => { S.geminiKey = e.target.value.trim(); saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };
@@ -2308,7 +2351,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
     lines: () => lines.map((l, i) => i + (l.alt ? '~ ' : ' ') + l.text),
-    whisper: () => ({ engine: Listen.engine, left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
+    whisper: () => ({ engine: Listen.engine, provider: Whisper.cur && Whisper.cur.id, blocked: Whisper.blocked(), every: Whisper.interval(Whisper.cur), left: Whisper.left, spw: Lead.spw, sent: Whisper.sent, fails: Whisper.fails, prompt: Whisper.prompt(), lang: Whisper.lang() }),
     open(title, toService) { const s = songs.find(x => x.title === title); if (!s) return null; if (toService !== false && !service.includes(s.id)) { service.push(s.id); saveService(); } loadSong(s.id, { restart: true }); return s.id; },
     service(titles) { service = titles.map(tt => (songs.find(x => x.title === tt) || {}).id).filter(Boolean); renderService(); return service.length; },
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
