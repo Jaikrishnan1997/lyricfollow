@@ -173,8 +173,10 @@
     let best = null;
     for (let i = 0; i < toks.length; i++) {
       for (let len = 1; len <= 4 && i + len <= toks.length; len++) {
-        const k = toks.slice(i, i + len).join('');
+        let k = toks.slice(i, i + len).join('');
         if (k.length < 2 || /^\d+$/.test(k)) continue;
+        // A book name split in two by the recogniser loses its "y" glide: "ஆதி ஆகமம்" = ஆதியாகமம் (ati + akamam).
+        if (len === 2 && !ALIAS.has(k) && /[aeiou]$/.test(toks[i]) && /^[aeiou]/.test(toks[i + 1]) && ALIAS.has(toks[i] + 'y' + toks[i + 1])) k = toks[i] + 'y' + toks[i + 1];
         if (exactOnly && k.length < 4 && !FULLNAMES.has(k) && !SPOKENKEYS.has(k)) continue;
         const sk = ALIAS.has(k) ? k : (k.length >= 4 ? stemBook(k) : null);
         let hit = sk ? { b: ALIAS.get(sk), exact: true } : null;
@@ -260,7 +262,7 @@
         if (/\d/.test(toks[i]) || toks[i].length < 3 || cueKind(toks[i]) || nx >= toks.length || !Core.numbers(toks[nx]).length) continue;   // must sit right before the numbers
         const after = Core.numbers(toks.slice(nx).join(' ')); if (after.length < 2 && !(after.length === 1 && after[0] >= 100)) continue;
         // The word before the numbers, or that word glued to the previous one ("yo kanan" = yohanan).
-        const cands = [[toks[i], i]]; if (i > 0 && !/\d/.test(toks[i - 1])) cands.push([toks[i - 1] + toks[i], i - 1]);
+        const cands = [[toks[i], i]]; if (i > 0 && !/\d/.test(toks[i - 1])) { cands.push([toks[i - 1] + toks[i], i - 1]); if (/[aeiou]$/.test(toks[i - 1]) && /^[aeiou]/.test(toks[i])) cands.push([toks[i - 1] + 'y' + toks[i], i - 1]); }
         const num = i > 0 && /^[123]$/.test(toks[i - 1]);       // "2 Canes" / "2 Kays" = 2 Kings: compare with numbered books
         if (num) cands.push([toks[i - 1] + toks[i], i - 1]);
         let best = null, tie = false;
@@ -276,6 +278,12 @@
     }
     if (!f) return null;
     let nums = Core.numbers(toks.slice(f.end).join(' '));
+    // Tamil/Malayalam sometimes put the book last: "ஒன்பதாவது அதிகாரம் இரண்டாவது வசனம் மத்தேயு" (Matthew 9:2).
+    let numToks = toks.slice(f.end);
+    if (!nums.length && f.start > 0 && f.end >= toks.length - 1) {
+      const before = toks.slice(Math.max(0, f.start - 6), f.start);
+      if (Core.numbers(before.join(' ')).length >= 1 && hasCue(before)) { numToks = before; nums = Core.numbers(before.join(' ')); }
+    }
     if (opts.needChapter && !nums.length) return null;
     const book = BOOKS[f.book];
     // Speech models often glue chapter and verse into one number ("828" for 8:28): split it where both parts are valid.
@@ -288,7 +296,7 @@
     let ch = nums[0] || 1, v = nums[1] || 1, ve = nums[2] && nums[2] > v ? nums[2] : v;
     if (book.ch === 1 && nums.length === 1) { v = ch; ve = v; ch = 1; }
     // Spoken order may be verse-first: trust the chapter/verse words when both kinds are present.
-    const lab = labelledNumbers(toks.slice(f.end));
+    const lab = labelledNumbers(numToks);
     const chs = lab.filter(x => x.kind === 'ch'), vs = lab.filter(x => x.kind === 'v');
     if (chs.length && vs.length) { ch = chs[0].val; v = vs[0].val; ve = vs[1] && vs[1].val > v ? vs[1].val : (lab.find(x => x.start > vs[0].end && !x.kind && x.val > v) || { val: v }).val; }
     else if (vs.length === 1 && lab.length === 2 && !chs.length) { const other = lab.find(x => x !== vs[0]); ch = other.val; v = vs[0].val; ve = v; }
@@ -298,7 +306,7 @@
     const loadedId = Object.keys(DATA)[0];
     if (loadedId) { const n = chapter(loadedId, f.book, ch).length; if (n && v > n) return null; if (n && ve > n) ve = n; }
     else if (v > 176) return null;
-    const after = toks.slice(f.end);
+    const after = numToks;
     const cue = hasCue(after);
     // "tight": the numbers come straight after the book name with nothing else between (strong signal in speech).
     const tight = after.length > 0 && Core.numbers(after.slice(0, 2).join(' ')).length >= 1 && after.slice(0, 1).every(t => Core.numbers(t).length || CUE.has(t.replace(/[^a-z]/g, '')));

@@ -372,7 +372,7 @@
       const t = toks[ti];
       if (/^\d+$/.test(t)) { out.push(+t); prevWord = false; continue; }
       // Digits with an ordinal ending glued on ("3m" from Tamil 3ம், "16am", "5th").
-      const dm = t.match(/^(\d+)[a-z]{1,4}$/); if (dm) { out.push(+dm[1]); prevWord = false; continue; }
+      const dm = t.match(/^(\d+)[a-z]{1,6}$/); if (dm) { out.push(+dm[1]); prevWord = false; continue; }   // also "10avatu" (Tamil 10ஆவது)
       const k = t.replace(/[^a-z]/g, '');
       let n = null;
       // A number word split in two by the speech model ("padina ramvakyam" = padinaram vakyam) is tried first.
