@@ -54,7 +54,7 @@ songs.forEach((s, si) => {
   SC.push({ name: s.title.slice(0, 12) + ' none-open', open: -1, seq: linear(s).slice(0, 12).map(l => [si, l]) });
 });
 const L = +(process.argv[2] || .18), V = process.argv[3];
-const AG = {}; let tot = 0, good = 0, b1 = 0, bad = 0, wrongSong = 0, rows = [];
+const HM = { n: 0, good: 0, ok: 0, tot: 0 }; const AG = {}; let tot = 0, good = 0, b1 = 0, bad = 0, wrongSong = 0, rows = [];
 for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
   seed = 7 + Math.round(spw * 100) + sc.name.length;
   // timeline of words
@@ -74,9 +74,10 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
     // WIN=1: the words of the clip before are matched with this one (Core.trackWin)
     if (process.env.WIN) tx = Core.trackWin(st, tx, tc * 1000);
     const r = Core.trackStep(T, st, tx, tc * 1000);
-    if (r) { st.song = r.song; st.cur = r.line; }
+    if (r) { st.song = r.song; st.cur = r.line; if (r.why === 'hmm') HM.n++; }
     const sung = words.filter(x => x.t <= tc); if (!sung.length) continue;
     const now = sung[sung.length - 1], prevK = sc.seq[now.k - 1];
+    if (st.hmm && st.song === songs[now.si].id) { const ixx = T.songs.find(x => x.id === st.song).ix; const mp = ixx.idx[st.hmm.map]; HM.tot++; if (mp != null && songs[now.si].lines[mp] && songs[now.si].lines[mp].text === songs[now.si].lines[now.li].text) HM.ok++; if (r && r.why === 'hmm' && songs[now.si].lines[r.line].text === songs[now.si].lines[now.li].text) HM.good++; }
     n++;
     const sid = songs[now.si].id, same = st.song === sid;
     if (!same) { ws++; bb++; continue; }
@@ -92,4 +93,5 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
 }
 if (V === 'rows') console.log(rows.join('\n'));
 if (V === 'agg') for (const [k, [n, g, b]] of Object.entries(AG)) console.log(k.padEnd(16), 'right', (g / n * 100).toFixed(0) + '%', 'wrong', (b / n * 100).toFixed(0) + '%');
+if (process.env.HMMSTAT) console.log('hmm moves', HM.n, 'right', HM.good, '| filter MAP right', (HM.ok / HM.tot * 100).toFixed(1) + '%');
 console.log(`noise ${L}: right line ${(good / tot * 100).toFixed(1)}%  one behind ${((tot - good - bad) / tot * 100).toFixed(1)}%  wrong ${(bad / tot * 100).toFixed(1)}% (wrong song ${(wrongSong / tot * 100).toFixed(1)}%)  clips ${tot}`);

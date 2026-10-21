@@ -528,6 +528,83 @@
     if (d > 2) return -Math.min(.15, .03 * (d - 2));
     return (p === 0 || ix.first[p] ? .03 : 0) - Math.min(.15, .06 + .015 * -d);
   }
+  /* Where in the open song the singer probably is, from all the clips so far (a hidden-Markov filter over its lines).
+   * Over music a clip often brings one or two words (measured live with Sarvam: ~1 word every 3 s), too little for
+   * any one clip to move the screen with confidence - but the song moves on at the singing speed, and each word
+   * that fits a line (or does not) adds up. Each clip: the belief moves on by the time passed (stay on a line for
+   * about its length, then the next; sometimes back to a slide's first line or the top), then is weighted by how
+   * well the heard words fit each line. */
+  function hmmStep(st, ix, sc, c, now, informative) {
+    const P = ix.W.length; if (!P) return null;
+    let H = st.hmm;
+    if (!H || H.song !== st.song || H.P !== P) { H = st.hmm = { song: st.song, P, b: new Float64Array(P), t: now, map: -1, c: -2 }; H.b.fill(.02 / P); H.b[Math.max(0, c)] += .98; }
+    if (H.c !== c && c >= 0) { for (let p = 0; p < P; p++) H.b[p] *= .25; H.b[c] += .75; }      // the screen was moved: start from there
+    H.c = c;
+    const dt = Math.min(12, Math.max(.3, (now - H.t) / 1000)); H.t = now;
+    const lps = st.rate > .05 ? 1 / st.rate : 0;                                              // seconds a line, measured
+    const firsts = []; for (let p = 0; p < P; p++) if (p === 0 || ix.first[p]) firsts.push(p);
+    const nb = new Float64Array(P);
+    for (let p = 0; p < P; p++) {
+      const v = H.b[p]; if (v < 1e-9) continue;
+      const dur = lps || Math.max(1.6, ix.W[p].length * .55 + .5), stay = Math.exp(-dt / dur), mv = 1 - stay;
+      nb[p] += v * stay * .96;
+      if (p + 1 < P) nb[p + 1] += v * mv * .84; else nb[p] += v * mv * .84;
+      if (p + 2 < P) nb[p + 2] += v * mv * .12; else nb[p] += v * mv * .12;
+      const j = v * (stay * .04 + mv * .04);                                                  // back to a slide start / anywhere
+      for (const f of firsts) nb[f] += j * .7 / firsts.length;
+      for (let q = 0; q < P; q++) nb[q] += j * .3 / P;
+    }
+    if (informative) for (let p = 0; p < P; p++) nb[p] *= .07 + sc[p].s * (sc[p].n >= 1 ? 1 : .5);
+    let sum = 0; for (let p = 0; p < P; p++) sum += nb[p]; if (!(sum > 0)) return null;
+    let best = 0; for (let p = 0; p < P; p++) { nb[p] /= sum; if (nb[p] > nb[best]) best = p; }
+    H.b = nb;
+    // equal lines (a chorus written out again): the copy nearest the screen
+    if (ix.K[best] && c >= 0) { let near = best; for (let p = 0; p < P; p++) if (ix.K[p] === ix.K[best] && Math.abs(p - c) < Math.abs(near - c)) near = p; best = near; }
+    const prevMap = H.map; H.map = best;
+    return { p: best, post: nb[best], again: prevMap === best };
+  }
+  // Keeps the last informative clips (each with, per song, the places it fits well) and finds a song whose places
+  // run on in order over the last three clips: {song, p} (p = its place now) or null.
+  function trajectory(st, res, big, now) {
+    if (!big.length) return null;
+    const entry = { t: now, m: new Map() };
+    for (const r of res) {
+      if (r.top < .6) continue;
+      const ps = []; let n = 0; for (let p = 0; p < r.sc.length; p++) if (r.sc[p].s >= Math.max(.6, r.top - .05)) { ps.push(p); n = Math.max(n, r.sc[p].n); }
+      if (ps.length && ps.length <= 6) entry.m.set(r.sg.id, { ps, top: r.top, n });
+    }
+    st.traj = (st.traj || []).filter(e => now - e.t < 25000).concat([entry]).slice(-4);
+    if (st.traj.length < 3) return null;
+    const c0 = st.cur;
+    let found = null;
+    for (const r of res) {
+      const id = r.sg.id, ix = r.sg.ix, cPos = id === st.song && c0 >= 0 && ix.pos.has(c0) ? ix.pos.get(c0) : -9;
+      // any three of the last four clips (one clip that heard nothing useful in between is allowed), the newest included
+      const T = st.traj, last = T.length - 1;
+      const sets = T.length === 4 ? [[0, 1, 3], [0, 2, 3], [1, 2, 3]] : [[0, 1, 2]];
+      for (const set of sets) {
+        const rows = set.map(i => T[i].m.get(id)); if (rows.some(x => !x)) continue;
+        if (id !== st.song && st.song) {
+          // another song: clearly better than the open one in two of the clips, a good fit in each, and real words
+          const better = set.filter(i => (T[i].m.get(id) || {}).top >= ((T[i].m.get(st.song) || {}).top || 0) + .1).length;
+          if (better < 2 || rows.filter(x => x.top >= .7).length < 2 || rows.reduce((t, x) => t + x.n, 0) < 3) continue;
+        }
+        let ok = null;
+        for (const a of rows[0].ps) {
+          const b = rows[1].ps.filter(x => x >= a && x <= a + 3).sort((x, y) => x - y)[0]; if (b == null) continue;
+          const c = rows[2].ps.filter(x => x >= b && x <= b + 3).sort((x, y) => x - y)[0]; if (c == null) continue;
+          // the same line three times says where only when the screen is far from it
+          if (c === a && !(cPos !== -9 && Math.abs(c - cPos) >= 3)) continue;
+          ok = c; break;
+        }
+        if (ok == null) continue;
+        if (!found || (id === st.song && found.song !== st.song)) found = { song: id, p: ok };
+        break;
+      }
+      if (T[last] && !T[last].m.get(id) && found && found.song === id) found = null;   // the newest clip must fit it too
+    }
+    return found;
+  }
   /** st: {song, cur} (cur = line index in the song's lines, -1 before it starts) plus the tracker's own memory.
    *  Returns {song, line, why} when something should change, else null. */
   // Words Whisper writes over unclear audio and music in Tamil/Malayalam ("நான்", "வருகிறேன்", "வணக்கம்", "நன்றி",
@@ -627,6 +704,18 @@
     // so one clip rarely shows the new song clearly, but several running do (seen live: 35 s to switch).
     if (big.length >= 2) { st.ev = st.ev || {}; for (const r of res) st.ev[r.sg.id] = (st.ev[r.sg.id] || 0) * .65 + r.top * .35; }
     const ev = id => (st.ev && st.ev[id]) || 0;
+    // ---- a trajectory over the last clips: one or two words a clip, but each fitting the next place in the same
+    // song (lines 1, 3, 3, 4 ...). Random matches of common words do not line up like that. Seen live: Alleluya
+    // sung from the top with the screen at its end (stuck 80 s), and with another song open (40 s to switch).
+    const traj = trajectory(st, res, big, now);
+    if (traj && traj.song !== st.song && (!mine || mine.top < .9)) {
+      st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = [];
+      return { song: traj.song, line: res.find(r => r.sg.id === traj.song).sg.ix.idx[traj.p], why: 'song' };
+    }
+    if (traj && traj.song === st.song && mine) {
+      const ix0 = mine.sg.ix, c0 = st.cur < 0 ? -1 : ix0.pos.has(st.cur) ? ix0.pos.get(st.cur) : -1;
+      if (c0 < 0 || Math.abs(traj.p - c0) >= 2) { st.pend = null; st.last = { p: traj.p, t: now }; st.traj = []; if (st.hmm) st.hmm.c = traj.p; return { song: st.song, line: ix0.idx[traj.p], why: traj.p < c0 ? 'back' : 'fwd' }; }
+    }
     const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
     if (lead && st.song && big.length >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
       let p = 0; for (let q = 0; q < lead.sc.length; q++) if (lead.sc[q].s > lead.sc[p].s) p = q;
@@ -651,12 +740,21 @@
     let c = st.cur < 0 ? -1 : ix.pos.has(st.cur) ? ix.pos.get(st.cur) : -1;
     if (st.cur >= 0 && c < 0) { for (let p = ix.idx.length - 1; p >= 0; p--) if (ix.idx[p] <= st.cur) { c = p; break; } }
     const sCur = c >= 0 ? mine.sc[c].s : 0;
+    const hm = hmmStep(st, ix, mine.sc, c, now, big.some(w => ix.idf(w) >= 1));
+    const byHmm = () => {
+      // the filter is sure, the same two clips running, and the clip itself does not speak against it
+      if (!hm || hm.p === c || !hm.again || hm.post < .5 || mine.sc[hm.p].s < .2) return null;
+      const d = c < 0 ? hm.p + 1 : hm.p - c;
+      if (Math.abs(d) > 6 && hm.post < .7) return null;
+      st.pend = null; st.last = { p: hm.p, t: now }; if (st.hmm) st.hmm.c = hm.p;
+      return { song: st.song, line: ix.idx[hm.p], why: 'hmm' };
+    };
     let best = -1, bv = -1;
     for (let p = 0; p < mine.sc.length; p++) { const v = mine.sc[p].s + prior(ix, c, p); if (v > bv + 1e-9) { bv = v; best = p; } }
-    if (best < 0 || best === c) { st.pend = null; return null; }
+    if (best < 0 || best === c) { st.pend = null; return byHmm(); }
     // equal lines (a chorus) - the copy nearest the current place, ahead first
     const r = mine.sc[best], s = r.s, n = r.n, d = c < 0 ? best + 1 : best - c;
-    if (s - sCur < .1) return null;
+    if (s - sCur < .1) return byHmm();
     const conf = st.pend && Math.abs(st.pend.p - best) <= (ix.K[st.pend.p] === ix.K[best] ? 99 : 1) && now - st.pend.at < 9000;
     const conf2 = conf && st.pend.s >= .6 && st.pend.n >= 2;          // the clip before was strong evidence too
     const stuck = c >= 0 && now - ((st.last && st.last.t) || st.since || now) > 10000;
@@ -675,12 +773,12 @@
     else if (d >= -4) ok = (s >= .55 && n >= 2) || (conf && s >= .45 && n >= 2);
     else if (best === 0 || ix.first[best]) ok = (s >= .65 && n >= 2) || (conf && s >= .5 && n >= 2);   // back to the top / a verse
     else ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);
-    if (!ok) { st.pend = { p: best, at: now, s, n }; return null; }
+    if (!ok) { st.pend = { p: best, at: now, s, n }; return byHmm(); }
     st.pend = null;
     if (c >= 0 && d > 0 && st.last && st.last.p >= 0 && best > st.last.p) {
       const r = (best - st.last.p) / Math.max(1, (now - st.last.t) / 1000); st.rate = st.rate ? st.rate * .6 + Math.min(1.2, r) * .4 : Math.min(1.2, r);
     }
-    st.last = { p: best, t: now };
+    st.last = { p: best, t: now }; if (st.hmm) st.hmm.c = best;
     return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
   }
 
