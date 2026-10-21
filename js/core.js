@@ -542,6 +542,15 @@
     const others = res.filter(r => r !== mine).sort((a, b) => b.top - a.top);
     const o = others[0];
     st.mineTop = mine ? mine.top : 0; st.otherTop = o ? o.top : 0; st.words = big.length;
+    // Evidence over the last few clips, per song: Whisper gets only half the words of a song it has no hint for,
+    // so one clip rarely shows the new song clearly, but several running do (seen live: 35 s to switch).
+    if (big.length >= 2) { st.ev = st.ev || {}; for (const r of res) st.ev[r.sg.id] = (st.ev[r.sg.id] || 0) * .65 + r.top * .35; }
+    const ev = id => (st.ev && st.ev[id]) || 0;
+    if (o && st.song && o.top >= .45 && ev(o.sg.id) >= .42 && ev(o.sg.id) >= ev(st.song) + .15 && others.every(x => x === o || ev(x.sg.id) < ev(o.sg.id))) {
+      let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
+      st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
+      return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
+    }
     // ---- another service song (or the first one, when nothing is open) ----
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
       const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
@@ -549,7 +558,7 @@
       const sure = o.top >= .8 && o.topN >= 3 && (!mine || mine.top < .3);
       if (st.sw.n >= 2 || sure || (!mine && o.top >= .7 && o.topN >= 2)) {
         let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
-        st.sw = null; st.pend = null; st.last = null; st.rate = 0;
+        st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
         return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
       }
     } else if (st.sw && (now - st.sw.at > 12000 || (mine && o && mine.top >= o.top))) st.sw = null;
