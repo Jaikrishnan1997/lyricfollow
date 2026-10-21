@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -48,7 +48,7 @@
   const settingsBus = (() => { try { return new BroadcastChannel('lyricfollow-settings'); } catch (e) { return null; } })();
   // Keys and the AI switches carry the time they were last changed (S.keysAt): whichever tab changed them last wins,
   // both when a tab saves (the stored record is read first) and when another tab announces its settings.
-  const KEYS = ['groq', 'groqKey', 'groqModel', 'groqBible', 'cfUrl', 'cfKey', 'gemini', 'geminiKey', 'geminiModel'];
+  const KEYS = ['groq', 'groqKey', 'groqModel', 'groqBible', 'cfUrl', 'cfKey', 'sarvamKey', 'sarvam', 'gemini', 'geminiKey', 'geminiModel'];
   function saveSettings() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
@@ -59,7 +59,7 @@
   }
   function showKeys() {
     const set = (id, v, chk) => { const el2 = document.getElementById(id); if (el2) chk ? (el2.checked = !!v) : (el2.value = v || ''); };
-    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stCfUrl', S.cfUrl); set('stCfKey', S.cfKey); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey);
+    set('stWhOn', S.groq, true); set('stWhKey', S.groqKey); set('stCfUrl', S.cfUrl); set('stCfKey', S.cfKey); set('stSvKey', S.sarvamKey); set('stSvOn', S.sarvam !== false, true); set('stGemOn', S.gemini, true); set('stGemKey', S.geminiKey);
   }
   if (settingsBus) settingsBus.onmessage = e => {
     const n = e.data || {}; if (typeof n !== 'object') return;
@@ -1399,6 +1399,26 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
+  /* Key words for Sarvam (up to 50 per clip): the open song's own words once the singing has confirmed it, otherwise
+   * a share from every song of today's service - so the right lyric words are spelt and recognised through the music.
+   * Words, not whole lines: Sarvam does not write them out on its own the way Whisper repeats a prompt. */
+  const svTermsCache = new Map();
+  function sarvamTerms() {
+    if (Listen.mode !== 'songs') return [];
+    const words = sg => {
+      const k = sg.id + ':' + (sg.updated || 0); if (svTermsCache.has(k)) return svTermsCache.get(k);
+      const cnt = new Map();
+      for (const l of prepared(sg)) { if (l.alt) continue; for (const w of l.text.split(/\s+/)) { const c = w.replace(/[^\p{L}\p{M}]/gu, ''); if (c.length >= 3) cnt.set(c, (cnt.get(c) || 0) + 1); } }
+      const out = [...cnt.keys()].sort((a, b) => b.length - a.length); svTermsCache.set(k, out); return out;
+    };
+    if (song && Svc.okId === song.id && Date.now() - Svc.okAt < 15000) return words(song).slice(0, 50);
+    const list = service.map(songById).filter(Boolean); if (song && !list.includes(song)) list.push(song);
+    if (!list.length) return [];
+    const per = Math.max(4, Math.floor(50 / list.length)), out = [];
+    for (const sg of list) for (const w of words(sg).slice(0, per)) if (out.length < 50 && !out.includes(w)) out.push(w);
+    return out;
+  }
+
   const Whisper = {
     timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null,
     start() { this.stop(); this.fails = 0; this.goodRun = 0; this.clipSec = 3.2; this.lastSent = Date.now(); this.tick(); },
@@ -1448,10 +1468,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
      * this laptop (no limit). A service that says "limit reached" is skipped until its limit has passed (kept across
      * reloads); Offline mode uses the laptop only. */
     providers() {
-      const groqOk = S.groq && /^gsk_/.test(S.groqKey || ''), cfOk = /^https:\/\//.test(S.cfUrl || '');
+      const groqOk = S.groq && /^gsk_/.test(S.groqKey || ''), cfOk = /^https:\/\//.test(S.cfUrl || ''), svOk = S.sarvam !== false && (S.sarvamKey || '').length > 10;
       const groq = ['whisper-large-v3', 'whisper-large-v3-turbo'];
       if (S.groqModel === 'whisper-large-v3-turbo') groq.reverse();
       const list = [];
+      // Sarvam Saaras v4 first when its key is set: built for Indian languages (Tamil, Malayalam, code-mixed), paid.
+      if (!this.local && svOk) list.push({ id: 'sarvam', kind: 'sarvam', name: 'Sarvam' });
       if (!this.local) { if (groqOk) groq.forEach(m => list.push({ id: 'groq:' + m, kind: 'groq', model: m, name: 'Groq' })); if (cfOk) list.push({ id: 'cf', kind: 'cf', name: 'Cloudflare' }); }
       list.push({ id: 'laptop', kind: 'laptop', name: t('mode_offline') });
       return list;
@@ -1487,10 +1509,16 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
       fd.append('temperature', '0');
       const lg = this.lang(); if (lg) fd.append('language', lg);
-      const pr = this.prompt(); if (pr) fd.append('prompt', pr);
+      const pr = p.kind === 'sarvam' ? '' : this.prompt(); if (pr) fd.append('prompt', pr);   // Sarvam: key words instead, nothing to echo
       let url, headers = {};
       if (p.kind === 'groq') { url = 'https://api.groq.com/openai/v1/audio/transcriptions'; headers = { Authorization: 'Bearer ' + S.groqKey }; fd.append('model', p.model); fd.append('response_format', 'verbose_json'); }
       else if (p.kind === 'cf') { url = S.cfUrl; if (S.cfKey) headers = { 'X-Key': S.cfKey }; }
+      else if (p.kind === 'sarvam') {
+        url = 'https://api.sarvam.ai/speech-to-text'; headers = { 'api-subscription-key': S.sarvamKey };
+        fd.append('model', 'saaras:v4'); fd.set('language_code', lg ? lg + '-IN' : 'unknown');
+        const kt = sarvamTerms(); if (kt.length) fd.append('keyterms', JSON.stringify(kt));
+        fd.delete('language'); fd.delete('temperature');
+      }
       else {
         // On the laptop: encode only ~15 s of context instead of Whisper's full 30 s, no retries at higher
         // "temperature", plain json (measured on a GTX 1650: 6.5-12 s a clip -> about 1.2-3 s).
@@ -1509,12 +1537,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
           else this.block(p.id, day ? 3 * 3600000 : hour ? 30 * 60000 : 60000);
           return;
         }
-        if (r.status === 401 || r.status === 403) { this.block(p.id, 3600000); if (p.kind === 'groq') toast(t('whisper_failed')); return; }
+        if (r.status === 401 || r.status === 402 || r.status === 403) { this.block(p.id, 3600000); if (p.kind !== 'laptop') toast(p.name + ': ' + t('key_or_credit')); return; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json(); this.fails = 0; this.sent++;
         lastEventAt = Date.now();
         const segs = (j.segments || []).filter(sg => !(sg.no_speech_prob > .6) && !(sg.avg_logprob < -1.2));
-        let text = (p.kind === 'groq' && j.segments ? segs.map(sg => sg.text).join(' ') : j.text || '').trim();
+        let text = (p.kind === 'groq' && j.segments ? segs.map(sg => sg.text).join(' ') : j.text || j.transcript || '').trim();
         if (/^[\[(（].*[\])）]$/.test(text)) text = '';             // "[Music]", "(இசை)"
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
         if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
@@ -1547,14 +1575,59 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
+  /* Preacher (Bible) mode with Sarvam Saaras v4 streaming, when a Sarvam key is set: live speech straight from the
+   * browser over a WebSocket (key as the sub-protocol), Malayalam/Tamil/English and mixed speech; partial and final
+   * text go to the verse finder like the browser recogniser's. */
+  const SarvamLive = {
+    ws: null, timer: null, sentTo: 0, fails: 0,
+    start(lang) {
+      this.stop();
+      const code = S.vbLang === 'auto' ? 'auto' : (lang || S.vbLang || 'ml-IN');
+      const q = new URLSearchParams({ model: 'saaras:v4', language_code: code, sample_rate: '16000', encoding: 'linear16', endpointing: 'vad' });
+      let ws; try { ws = this.ws = new WebSocket('wss://api.sarvam.ai/speech-to-text-realtime/ws?' + q, ['api-subscription-key.' + S.sarvamKey]); } catch (e) { this.fail(); return; }
+      this.sentTo = Mic.total || 0;
+      ws.onopen = () => { this.fails = 0; setStatus(t('listen_for_bible') + ' · Sarvam', true); clearInterval(this.timer); this.timer = setInterval(() => this.pump(), 250); };
+      ws.onmessage = ev => {
+        let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+        lastEventAt = Date.now();
+        if (m.event === 'transcript.partial' && m.text) onText('', [m.text], .85);
+        else if (m.event === 'transcript.final' && m.text) onText(m.text, [], .9);
+        else if (m.event === 'error') { this.fails++; }
+      };
+      ws.onclose = e => {
+        clearInterval(this.timer); this.timer = null;
+        if (this.ws !== ws || !(Listen.mode && Listen.engine === 'sarvam')) return;
+        this.ws = null; this.fails++;
+        // key refused / no credit (4001/4003/1008) or repeated drops: the browser recogniser takes over
+        if (this.fails >= 3 || [4001, 4003, 1008].includes(e.code)) this.fail();
+        else setTimeout(() => { if (Listen.mode && Listen.engine === 'sarvam') this.start(Listen.lang); }, 1500);
+      };
+    },
+    fail() { this.stop(); toast('Sarvam: ' + t('key_or_credit')); Listen.engine = SR ? 'cloud' : null; if (SR && Listen.mode) Cloud.start(Listen.lang); updateListenUI(); },
+    pump() {
+      const ws = this.ws; if (!ws || ws.readyState !== 1 || !Mic.stream) return;
+      const to = Mic.total; if (to - this.sentTo < Mic.rate * .2) return;
+      const a = Mic.slice(Math.max(this.sentTo, to - Mic.rate * 2), to); this.sentTo = to;
+      const pcm = new Int16Array(a.length); for (let i = 0; i < a.length; i++) { const v = Math.max(-1, Math.min(1, a[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; }
+      const u8 = new Uint8Array(pcm.buffer); let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+      try { ws.send(JSON.stringify({ event: 'audio_input', audio: btoa(bin) })); } catch (e) {}
+    },
+    stop() {
+      clearInterval(this.timer); this.timer = null; const ws = this.ws; this.ws = null;
+      if (ws) { try { ws.onclose = null; if (ws.readyState === 1) ws.send(JSON.stringify({ event: 'end' })); ws.close(); } catch (e) {} }
+    }
+  };
+
   const Listen = {
     mode: null, lang: '', engine: null,
     async start(mode) {
       mode = mode || S.listenMode;
       // Online: Whisper large-v3 (Groq) for singing - the browser recogniser only understands speech, not songs;
       // preaching stays on the browser recogniser (streaming, no daily limit) unless chosen for it too.
-      const wantWhisper = S.groq && (/^gsk_/.test(S.groqKey || '') || /^https:\/\//.test(S.cfUrl || '')) && ((mode || S.listenMode) === 'songs' || S.groqBible);
+      const wantWhisper = ((S.groq && (/^gsk_/.test(S.groqKey || '') || /^https:\/\//.test(S.cfUrl || ''))) || (S.sarvam !== false && (S.sarvamKey || '').length > 10)) && ((mode || S.listenMode) === 'songs' || S.groqBible);
       let engine = S.net === 'online' ? (wantWhisper ? 'whisper' : S.gemini && S.geminiKey ? 'gemini' : 'cloud') : 'local';
+      // Preacher with a Sarvam key: Sarvam's live recogniser (Indian languages, mixed speech).
+      if (S.net === 'online' && mode === 'bible' && S.sarvam !== false && (S.sarvamKey || '').length > 10) engine = 'sarvam';
       // Opened from the web address (phone/tablet): the offline engines live on the laptop and a secure page
       // cannot reach them, so listening uses the device's own online recogniser here.
       if (engine === 'local' && HOSTED) { toast(t('local_hosted')); S.net = 'online'; saveSettings(); renderNet(); engine = 'cloud'; }
@@ -1573,18 +1646,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
       // Laptop: the microphone also feeds the level meter and language detection. iPhone/iPad: keeping the
       // microphone open makes Safari treat the page as "already capturing", so the recogniser may restart itself.
-      if (engine === 'local' || engine === 'gemini' || engine === 'whisper' || (!HOSTED && location.protocol !== 'file:') || IOS) {
+      if (engine === 'local' || engine === 'gemini' || engine === 'whisper' || engine === 'sarvam' || (!HOSTED && location.protocol !== 'file:') || IOS) {
         this.waitingMic = true; updateListenUI();
         const ok = await Mic.start();
         this.waitingMic = false;
         if (!ok && engine !== 'cloud') { this.mode = null; updateListenUI(); toast(t('mic_blocked')); return; }
       }
       if (!this.mode) return;
-      if (engine === 'cloud') Cloud.start(this.lang); else if (engine === 'gemini') Gemini.start(); else if (engine === 'whisper') Whisper.start(); else Local.start(this.lang);
+      if (engine === 'cloud') Cloud.start(this.lang); else if (engine === 'gemini') Gemini.start(); else if (engine === 'whisper') Whisper.start(); else if (engine === 'sarvam') SarvamLive.start(this.lang); else Local.start(this.lang);
       updateListenUI();
     },
-    setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else if (this.engine === 'local') Local.start(lang); updateListenUI(); },
-    stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); Whisper.stop(); },
+    setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else if (this.engine === 'local') Local.start(lang); else if (this.engine === 'sarvam' && S.vbLang !== 'auto') SarvamLive.start(lang); updateListenUI(); },
+    stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); Whisper.stop(); SarvamLive.stop(); },
     stop() { this.mode = null; this.stopEngines(); LangID.stop(); Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
   };
 
@@ -2294,6 +2367,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('stCfUrl').value = S.cfUrl || ''; $('stCfKey').value = S.cfKey || '';
     $('stCfUrl').onchange = e => { const v = e.target.value.trim().replace(/\/+$/, ''); if (v && !/^https:\/\//.test(v)) { e.target.value = S.cfUrl || ''; toast(t('cf_badurl')); return; } S.cfUrl = v; whRe(); };
     $('stCfKey').onchange = e => { S.cfKey = e.target.value.trim(); whRe(); };
+    $('stSvKey').value = S.sarvamKey || ''; $('stSvOn').checked = S.sarvam !== false;
+    $('stSvKey').onchange = e => { S.sarvamKey = e.target.value.trim(); whRe(); };
+    $('stSvOn').onchange = e => { S.sarvam = e.target.checked; whRe(); };
     $('stWhReset').onclick = () => { try { localStorage.removeItem('lf-wh-block'); } catch (e) {} Whisper._bl = {}; toast(t('wh_reset_done')); };
     $('stGemOn').checked = !!S.gemini; $('stGemKey').value = S.geminiKey || ''; $('stGemModel').value = S.geminiModel || 'gemini-2.5-flash-lite';
     $('stGemOn').onchange = e => { S.gemini = e.target.checked; saveKeys(); saveSettings(); updateListenUI(); if (Listen.mode) Listen.start(Listen.mode); };

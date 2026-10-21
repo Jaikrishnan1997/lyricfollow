@@ -262,6 +262,11 @@
         <label class="field"><span data-i18n="gemini_model">Model</span><select id="stWhModel"><option value="whisper-large-v3">whisper-large-v3 (most accurate)</option><option value="whisper-large-v3-turbo">whisper-large-v3-turbo (faster)</option></select></label>
         <label class="check"><input type="checkbox" id="stWhBible"> <span data-i18n="whisper_bible">Also use it for the preacher</span></label>
         <p class="hint"><a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></p>
+        <h4 data-i18n="sv_title">Best for Tamil and Malayalam: Sarvam AI (paid)</h4>
+        <p class="hint" data-i18n="sv_hint"></p>
+        <label class="check"><input type="checkbox" id="stSvOn"> <span data-i18n="sv_on">Use Sarvam first</span></label>
+        <label class="field"><span data-i18n="sv_key">Sarvam API key</span><input type="text" class="secret" id="stSvKey" name="lf-sarvam-token" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore></label>
+        <p class="hint"><a href="https://dashboard.sarvam.ai" target="_blank" rel="noopener">dashboard.sarvam.ai</a></p>
         <h4 data-i18n="cf_title">More free Whisper: your Cloudflare Worker</h4>
         <p class="hint" data-i18n="cf_hint"></p>
         <label class="field"><span data-i18n="cf_url">Worker address</span><input type="text" id="stCfUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://lyricfollow-whisper.<you>.workers.dev"></label>

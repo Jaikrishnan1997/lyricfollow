@@ -152,6 +152,18 @@ duplicates are skipped by sound, so the buttons under *Free song collections* ca
 copyright-free and invites sharing; terms: free for personal devotion, church and outreach programs, no commercial use).
 Each song carries its album page as source. Voice & Import → *தமிழ் · local pack* loads them into the library.
 
+## Best accuracy for Tamil and Malayalam: Sarvam AI (paid, optional)
+
+[Sarvam AI](https://www.sarvam.ai) Saaras v4 is a speech recogniser built for the 22 Indian languages (Tamil,
+Malayalam, and speech mixed with English). Make an account at **dashboard.sarvam.ai** (₹100 free credit), create an
+API key and paste it in **Settings → Song listening → Sarvam API key**. Then, in Online mode:
+- **Singing:** every clip goes to Sarvam first, with up to 50 key words from the song being sung (from all of today's
+  service songs until the song is confirmed). Groq, Cloudflare and the laptop stay as automatic backups (also when the
+  Sarvam credit runs out).
+- **Preacher (Bible):** live streaming recognition from Sarvam (Malayalam, Tamil, English, mixed; automatic language
+  when "auto" is chosen), feeding the verse finder; the browser recogniser takes over if Sarvam stops.
+Price: ₹30 per hour of audio. Singing clips overlap, so a 3-hour service costs roughly ₹100–130.
+
 ## Whisper all day for free (Online mode)
 
 Each clip of singing goes to the first free service that still has room, in this order:
