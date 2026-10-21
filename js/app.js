@@ -696,9 +696,23 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (HOSTED) return false;
       try { const c = new AbortController(), tm = setTimeout(() => c.abort(), 1500); const r = await fetch(LOCAL_WHISPER + '/health', { signal: c.signal, cache: 'no-store' }); clearTimeout(tm); this.ok = r.ok; }
       catch (e) { this.ok = false; }
+      if (this.ok && !this.warmed) this.warm();
       return this.ok;
+    },
+    // The first clip after the engine starts is very slow on some graphics cards (83 s seen on a GTX 1650 while the
+    // card prepares its code): send one short clip of near-silence as soon as the engine is seen, before the singing.
+    warmed: false,
+    async warm() {
+      this.warmed = true;
+      try {
+        const a = new Float32Array(16000); for (let i = 0; i < a.length; i++) a[i] = (Math.random() - .5) * .002;
+        const fd = new FormData(); fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'warm.wav');
+        fd.append('response_format', 'json'); fd.append('audio_ctx', '768'); fd.append('temperature_inc', '0');
+        await fetch(LOCAL_WHISPER + '/inference', { method: 'POST', body: fd });
+      } catch (e) { this.warmed = false; }
     }
   };
+  if (!HOSTED) setTimeout(() => LocalWh.check(), 3000);   // finds (and warms up) offline Whisper at start-up
   /** A recognised clip of singing (offline engine): shown as heard, then the service tracker and the line timing. */
   function songClip(text, clipEnd) {
     if (!text || !Listen.mode) return;
@@ -1433,6 +1447,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', 'verbose_json'); fd.append('temperature', '0');
       const lg = this.lang(); if (lg) fd.append('language', lg);
       const pr = this.prompt(); if (pr) fd.append('prompt', pr);
+      // On the laptop: encode only ~15 s of context instead of Whisper's full 30 s, and no retries at higher
+      // "temperature" (measured on a GTX 1650 with large-v3: 6.5-12 s a clip -> about 3 s).
+      if (this.local) { fd.append('audio_ctx', '768'); fd.append('temperature_inc', '0'); }
       const t0 = Date.now();
       try {
         // Offline: the same request to whisper.cpp on this laptop (no key, no daily limit).

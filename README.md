@@ -31,7 +31,9 @@ or large-v3-turbo on graphics cards under 4 GB, and uses the NVIDIA GPU (CUDA 12
 followed exactly like Online – the lyrics hint, the service tracker, line timing – but on this laptop: no internet, no
 key, no daily limit, and a clip every 1–2 s instead of every 3 s. If it is not installed or stops answering, the app
 uses the offline voice engine below. The preacher (Bible) mode keeps using the offline voice engine.
-`setup-whisper.ps1 -Turbo` / `-Large` / `-Cpu` choose the model or the CPU build explicitly.
+**Setup offline Whisper (fast).bat** installs the turbo model instead (keeps the program): use it on cards under 6 GB –
+on a 4 GB GTX 1650, large-v3 took about 3 s a clip (with the shorter 15 s context the app asks for), too slow to beat
+Online. `setup-whisper.ps1 -Turbo` / `-Large` / `-Cpu` / `-Reinstall` choose explicitly.
 
 ### One-time offline voice setup
 Double-click **Setup offline voice (Balanced).bat** or **Setup offline voice (Accurate).bat** (no questions), or **Setup offline voice.bat** to choose. Close Lyric Follow before changing the model. Needs internet only this once:

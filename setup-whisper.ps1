@@ -2,7 +2,7 @@
 # Installs the Whisper large-v3 model the Online mode uses (or its smaller turbo version), running on this laptop: no internet,
 # no API key, no daily limit. With an NVIDIA graphics card it uses the GPU (CUDA 12 build).
 # Needs internet once: ~690 MB program (GPU build, includes the CUDA files) + ~1.1 GB model (large-v3) or ~550 MB (turbo).
-param([switch]$Cpu, [switch]$Turbo, [switch]$Large)
+param([switch]$Cpu, [switch]$Turbo, [switch]$Large, [switch]$Reinstall)
 $ErrorActionPreference = 'Stop'
 $root = (Split-Path -Parent $MyInvocation.MyCommand.Path).TrimEnd('\', '/')
 $dir = Join-Path $root 'voice\whisper'
@@ -28,8 +28,9 @@ if ($gpu) {
   catch { Write-Host '  NVIDIA graphics card found: installing the GPU (CUDA 12) version.' }
 } else { Write-Host '  No NVIDIA graphics card: installing the CPU version (slower: a clip every 3-6 s).'; $zip = 'whisper-blas-bin-x64.zip' }
 # Model: large-v3 (best for Tamil/Malayalam singing - it wrote clearer lines than turbo in our tests) on a card with
-# 4 GB or more; turbo (about 3x faster, a little less accurate) otherwise. -Turbo / -Large choose explicitly.
-$big = $Large -or (-not $Turbo -and $gpu -and $vram -ge 3800)
+# 6 GB or more; turbo (several times faster to write, a little less accurate) otherwise - measured on a 4 GB GTX 1650:
+# large-v3 took about 3 s a clip even with the shorter context. -Turbo / -Large choose explicitly.
+$big = $Large -or (-not $Turbo -and $gpu -and $vram -ge 5800)
 if ($big) { $mname = 'ggml-large-v3-q5_0.bin'; $mtag = 'whisper large-v3 (q5_0)'; $msize = 900MB } else { $mname = 'ggml-large-v3-turbo-q5_0.bin'; $mtag = 'whisper large-v3-turbo (q5_0)'; $msize = 450MB }
 Write-Host "  Model: $mtag"
 $modelUrl = "$hf/$mname"
@@ -38,7 +39,10 @@ Get-Process -Name 'whisper-server' -ErrorAction SilentlyContinue | Stop-Process 
 Start-Sleep -Seconds 1
 New-Item -ItemType Directory -Force -Path $dir, $tmp | Out-Null
 try {
-  # 1) Program
+  # 1) Program (kept when already installed with the same kind of build; -Reinstall downloads it again)
+  $kind = if ($gpu) { 'cuda' } else { 'cpu' }
+  $haveKind = if (Test-Path (Join-Path $dir 'gpu.txt')) { 'cuda' } else { 'cpu' }
+  if (-not $Reinstall -and (Test-Path (Join-Path $dir 'whisper-server.exe')) -and $kind -eq $haveKind) { Write-Host '  Program already installed.' } else {
   $zf = Join-Path $tmp $zip
   Get-File "$rel/$zip" $zf
   $ex = Join-Path $tmp 'x'; if (Test-Path $ex) { Remove-Item -Recurse -Force $ex }
@@ -53,6 +57,7 @@ try {
       if (-not (Test-Path $have) -and (Test-Path $src)) { Copy-Item -Force $src $have }
       if (-not (Test-Path $have)) { Write-Host "  Note: $f is missing - run ""Setup GPU support.bat"" once, then this setup again." }
     }
+  }
   }
   # 2) Model (kept when already downloaded)
   $mf = Join-Path $dir 'model.bin'
