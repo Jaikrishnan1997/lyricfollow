@@ -78,7 +78,7 @@
     44: SPOKEN[44] + ' റോമാ ரோமாபுரி roma roman',
     53: 'തിമോത്തി തിമൊഥെയൊസ് தீமோத்தி timothy',
     57: SPOKEN[57] + ' എബ്രായ എബ്രായലേഖനം எபிரேயர் ebraya',
-    65: SPOKEN[65] + ' வெளிப்படுத்தல் வெளிப்படுத்துதல் വെളിപ്പാടു velippad'
+    65: SPOKEN[65] + ' வெளிப்படுத்தல் வெளிப்படுத்துதல் வெளிப்படுத்தின வெளிப்படுத்தின்விசேஷங்கள் വെളിപ്പാടു velippad'
   });
   const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n))));
   const SPOKENKEYS = new Set();
