@@ -1397,7 +1397,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   };
 
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0,
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, tempLocal: false, localUntil: 0,
     start() { this.stop(); this.fails = 0; if (!this.local) this.clipSec = this.left != null && this.left < 300 ? 5 : 3.2; this.lastSent = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
@@ -1442,6 +1442,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     async send(a, clipEnd) {
       this.busy = true;
+      if (this.tempLocal && Date.now() > this.localUntil) { this.tempLocal = false; this.local = false; this.clipSec = 3.2; }   // back to Groq
       const fd = new FormData();
       fd.append('file', new Blob([Uint8Array.from(atob(Gemini.wav(a)), c => c.charCodeAt(0))], { type: 'audio/wav' }), 'clip.wav');
       fd.append('model', S.groqModel || 'whisper-large-v3'); fd.append('response_format', this.local ? 'json' : 'verbose_json'); fd.append('temperature', '0');   // laptop: plain json is ~0.8 s faster
@@ -1457,9 +1458,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
           : await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + S.groqKey }, body: fd });
         if (this.local) { this.lastMs = Date.now() - t0; this.clipSec = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15)); }
         if (r.status === 429 && !this.local) {
+          const msg = await r.text().catch(() => ''), daily = /per day|RPD|audio seconds/i.test(msg);
+          // Groq's free limit reached: carry on with Whisper on this laptop when it is installed (no limit) - for
+          // 30 s after a per-minute limit, 30 min after a daily one - then try Groq again.
+          if (await LocalWh.check()) {
+            this.local = true; this.tempLocal = true; this.localUntil = Date.now() + (daily ? 30 * 60000 : 30000);
+            toast(t('whisper_quota') + ' → ' + t('mode_offline') + ' Whisper'); return;
+          }
           // The free tier's daily limit is per model: when one is used up, carry on with the other one.
-          const msg = await r.text().catch(() => '');
-          if (/per day|RPD/i.test(msg) && !this.swapped) {
+          if (daily && !this.swapped) {
             this.swapped = true; S.groqModel = (S.groqModel || 'whisper-large-v3') === 'whisper-large-v3' ? 'whisper-large-v3-turbo' : 'whisper-large-v3';
             const sel = document.getElementById('stWhModel'); if (sel) sel.value = S.groqModel; saveSettings(); toast(t('whisper_quota') + ' → ' + S.groqModel); return;
           }
@@ -1492,7 +1499,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper${this.local ? ' (' + t('mode_offline') + ')' : ''}`, true);
       } catch (e) {
         this.fails++;
-        if (this.fails >= 3 && this.local) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); }   // back to the other offline engine
+        if (this.fails >= 3 && this.tempLocal) { this.tempLocal = false; this.local = false; this.fails = 0; this.clipSec = 3.2; this.backoffUntil = Date.now() + 20000; }   // laptop Whisper failed: Groq again shortly
+        else if (this.fails >= 3 && this.local) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); }   // back to the other offline engine
         else if (this.fails >= 3) { toast(t('whisper_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
       } finally { this.busy = false; }
     }
@@ -1512,7 +1520,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
       // Offline singing: Whisper on this laptop (whisper.cpp) when it is installed - it follows like Online.
       if (engine === 'local' && mode === 'songs' && await LocalWh.check()) engine = 'whisper';
-      Whisper.local = engine === 'whisper' && S.net !== 'online';
+      Whisper.local = engine === 'whisper' && S.net !== 'online'; Whisper.tempLocal = false;
       this.stopEngines();
       this.mode = mode; this.engine = engine;
       // The song on screen when listening starts was chosen by the operator (or kept from last time): it is trusted
