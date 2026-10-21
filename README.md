@@ -184,8 +184,8 @@ API key and paste it in **Settings → Song listening → Sarvam API key**. Then
   preaching language as key words; the browser recogniser takes over if Sarvam stops.
 Price: ₹30 per hour of audio **sent** (billed by the second). To keep that low:
 - only the sound since the last clip is sent (0.8 s overlap while unsure, none while following with confidence);
-- nothing is sent in a silent room; during music breaks (no words in the last clips) one short clip every 4.5–6 s;
-- during talk or prayer (no song line for 25 s) one 4 s clip every 6 s until a song line is heard again;
+- nothing is sent in a silent room; during music breaks (no words in the last clips) one short clip every 4–5 s;
+- during talk or prayer (no song line for 25 s) one 4 s clip every 4.5 s until a song line is heard again;
 - the preacher stream sends nothing after 1.5 s without a voice (the 0.4 s before the voice returns is sent with it).
 Settings shows the minutes and rupees used today and this month, and takes an optional **daily limit** (minutes):
 after it, the free services (Groq, Cloudflare, laptop) take over until the next day. A 2-hour service with about an

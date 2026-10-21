@@ -1523,16 +1523,17 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     /* How often a clip goes out and how long it is ({every, len, overlap} in seconds):
      *  unsure / a switch pending - every 3.2 s, the new 3.2 s + 0.8 s overlap
-     *  following with confidence  - about once a sung line (up to 6 s), the last 4.5 s (the line timing fills the gap)
-     *  music only (no words in the last clips) - every 4.5 s, then 6 s; 3.5 s clips
-     *  talk / prayer, no song line for 25 s - every 6 s, 4 s clips, until a song line is heard again
+     *  following with confidence  - about once a sung line (up to 5 s), the last 4.5 s (the line timing fills the gap)
+     *  music only (no words in the last clips) - every 4 s, then 5 s; 3.5 s clips
+     *  talk / prayer, no song line for 25 s - every 4.5 s, 4 s clips, until a song line is heard again
      * The laptop costs nothing and keeps its own pace with the full 4.5 s window. */
     plan(p) {
       if (p && p.kind === 'laptop') return { every: this.clipSec, len: 4.5, overlap: 4.5 };
       if (Listen.mode !== 'songs') return { every: 3.2, len: 4.5, overlap: 1 };
-      if (this.quiet >= 3) return { every: 6, len: 3.5, overlap: 0 };
-      if (this.quiet >= 1) return { every: 4.5, len: 3.5, overlap: 0 };
-      if (Date.now() - (Trk.fitAt || 0) > 25000) return { every: 6, len: 4, overlap: 0 };
+      // (shorter waits than before: seen live, a 6 s wait after a music break or talk was felt as a late screen)
+      if (this.quiet >= 4) return { every: 5, len: 3.5, overlap: 0 };
+      if (this.quiet >= 1) return { every: 4, len: 3.5, overlap: 0 };
+      if (Date.now() - (Trk.fitAt || 0) > 25000) return { every: 4.5, len: 4, overlap: 0 };
       const every = this.interval(p);
       return every > 3.3 ? { every, len: 4.5, overlap: 0 } : { every: 3.2, len: 4.5, overlap: .8 };
     },
@@ -1600,7 +1601,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (!sure) return 3.2;
       // never longer than about one sung line, so no line is skipped (line length from the measured singing speed)
       const n = (i => (lines[i] && lines[i].w ? lines[i].w.length : 4))(follow.cur), dur = Math.max(2, n) * Lead.spw + .6;
-      return Math.max(3.2, Math.min(6, dur));
+      return Math.max(3.2, Math.min(5, dur));
     },
     async send(a, clipEnd) {
       this.busy = true;
@@ -2075,13 +2076,22 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (!this.on() || this.busy || this.words < 10 || now - this.lastAt < 8000 || now - lastRefAt < 6000) return;
       this.ask();
     },
+    async grounded(ref, text) {
+      const lg = detectScript(text), vid = lg === 'ml' ? 'mal1910' : lg === 'ta' ? 'tamov' : (S.versions.find(v => (Bible.VERSIONS.find(x => x.id === v) || {}).lang === 'en') || 'kjv');
+      try { await Bible.load(vid); } catch (e) { return true; }   // cannot check: leave it to the operator
+      if (!this.common) this.common = new Set(['தேவன்', 'கர்த்தர்', 'இயேசு', 'அவர்', 'அவன்', 'நான்', 'நீங்கள்', 'என்று', 'என்ன', 'இந்த', 'அந்த', 'ஆனால்', 'ദൈവം', 'കർത്താവ്', 'യേശു', 'അവൻ', 'ഞാൻ', 'നിങ്ങൾ', 'എന്നു', 'എന്ന്', 'god', 'lord', 'jesus', 'said', 'unto', 'that', 'with', 'they', 'them', 'this', 'have', 'shall', 'will', 'there', 'their', 'from', 'which'].map(w => Core.keyWords(w).replace(/\s/g, '').slice(0, 5)));
+      const stems = x => new Set(Core.keyWords(x).split(' ').filter(w => w.length >= 4).map(w => w.slice(0, 5)).filter(w => !this.common.has(w)));
+      let vt = ''; for (let v = Math.max(1, ref.v - 2); v <= ref.ve + 2; v++) vt += ' ' + (Bible.verse(vid, ref.book, ref.ch, v) || '');
+      if (!vt.trim()) return true;
+      const hs = stems(text), vs = stems(vt); let n = 0; for (const w of hs) if (vs.has(w)) n++;
+      return n >= 2;
+    },
     async ask() {
       this.busy = true; this.lastAt = Date.now(); this.words = 0;
       const plan = planList().map(p => Bible.refLabel({ book: p.book, ch: p.ch, v: p.v || 1, ve: p.ve || p.v || 1 }, 'en').replace(/:1$/, '')).join('; ');
-      const onScreen = screen.kind === 'bible' && screen.bible ? Bible.refLabel(screen.bible, 'en') : '';
       const sys = 'A preacher is speaking (Tamil, Malayalam or English). From the transcript of his last few sentences, name the Bible verse(s) he is reading, quoting, retelling or explaining right now. ' +
         'Answer only JSON: {"ref":"Book chapter:verse[-verse]" or null,"sure":0..1}. English book names. null when he is not talking about one specific passage (greetings, prayer, announcements, his own testimony, general teaching).' +
-        (plan ? ' Today\'s sermon passages: ' + plan + '.' : '') + (onScreen ? ' On the screen now: ' + onScreen + '.' : '');
+        (plan ? ' Today\'s sermon passages: ' + plan + '.' : '');
       try {
         const r = await fetch('https://api.sarvam.ai/v1/chat/completions', { method: 'POST', headers: { 'api-subscription-key': S.sarvamKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'sarvam-105b', reasoning_effort: null, temperature: 0, max_tokens: 60, messages: [{ role: 'system', content: sys }, { role: 'user', content: this.buf.trim() }] }) });
@@ -2097,6 +2107,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         if (!(+o.sure >= .5)) return note(o.ref + ' ' + (+o.sure).toFixed(1), t('ai_unsure'));
         const p = Bible.parseRef(String(o.ref), {}); if (!p || !Bible.validRef(p.book, p.ch, p.v)) return note(o.ref, t('ai_none'));
         const ref = { book: p.book, ch: p.ch, v: p.v, ve: Math.max(p.v, p.ve || p.v) }, lbl = Bible.refLabel(ref, 'en') + ' ' + (+o.sure).toFixed(2);
+        // Only a passage that shares words with what was said (names, things, actions - in the Bible of the language
+        // spoken): seen live, the model named Esther 5:1 "sure 1.0" for "ஒன்னு தமிழ்ல சொல்லு இல்ல இதுல சொல்லு".
+        if (!(await this.grounded(ref, this.buf))) return note(lbl, t('ai_unsure'));
         const sb = screen.kind === 'bible' && screen.bible;
         if (sb && sb.book === ref.book && sb.ch === ref.ch && ref.v <= (sb.ve || sb.v) && ref.ve >= sb.v) return note(lbl, t('ai_onscreen'));
         const k = refKey(ref), again = this.last && this.last.k === k && Date.now() - this.last.at < 60000;
