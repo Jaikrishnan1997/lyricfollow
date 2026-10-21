@@ -412,6 +412,13 @@
   }
   function wsim(a, b) { return 1 - levV(a, b) / Math.max(a.length, b.length); }
   function seqWords(t) { return keyWords(t).split(/\s+/).filter(w => w.length >= 2).map(phon); }
+  /** True when (almost) every word of `text` is also in `hint`: Whisper may only be repeating its hint. */
+  function echoOf(text, hint) {
+    const hw = seqWords(text).filter(w => w.length >= 3), pw = seqWords(hint);
+    if (!hw.length || !pw.length) return false;
+    const inHint = h => pw.some(w => wsim(h, w) >= .7 || (h.length >= 4 && w.length > h.length && wsim(h, w.slice(0, h.length)) >= .75));
+    return hw.filter(inHint).length >= Math.max(1, Math.ceil(hw.length * .8));
+  }
   /** lines: [{text, alt}] - alternate-language copies (alt) are skipped. */
   function seqIndex(lines) {
     const idx = [], W = [], K = [];
@@ -483,6 +490,6 @@
     st.pend = best; return out(null);
   }
 
-  const Core = { seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);

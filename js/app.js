@@ -1400,7 +1400,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
         if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
-        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Seq.heard(text); Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
+        // Only words of the hint: over music Whisper writes its hint back (seen live: the hinted line "heard"
+        // during the intro moved the screen on, the hint moved on with it, and so on through the song). Such a clip
+        // never moves the screen; the singing of a new line (not in the hint) does.
+        const echo = !!(text && pr && Listen.mode === 'songs' && Core.echoOf(text, pr));
+        if (text && Listen.mode && !echo) { this.realAt = Date.now(); onText(text, [], .85); if (Listen.mode === 'songs') { Seq.heard(text); Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
+        // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
+        // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
+        if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
       } catch (e) {
         this.fails++;
