@@ -1478,6 +1478,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
         if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
+        // Whisper stuck in a loop ("நான் பிசு நான் பிசு நான் பிசு…", seen with turbo on the laptop): a word or two
+        // repeated three times or more counts twice at most.
+        if (text) text = text.replace(/((?:\S+\s+){0,1}\S+)(?:\s+\1){2,}/gu, '$1 $1');
         // Only words of the hint: over music Whisper writes its hint back (seen live: the hinted line "heard"
         // during the intro moved the screen on, the hint moved on with it, and so on through the song). Such a clip
         // never moves the screen; the singing of a new line (not in the hint) does.
