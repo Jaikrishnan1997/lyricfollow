@@ -90,7 +90,7 @@
       other.alt = true; other.key = ''; other.g = new Set(); other.w = []; other.wu = new Set(); other.main = main === a ? i - 1 : i;
       if (main === b) { b.slideFirst = i - 1; }
     }
-    return { ls, sl };
+    return { ls, sl, order };
   }
   const prepCache = new Map();
   function prepared(s) {
