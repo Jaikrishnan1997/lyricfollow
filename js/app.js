@@ -1383,7 +1383,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       }
       if (!r) return;
       if (!song || r.song !== song.id) {
-        this.offSince = 0; Svc.okId = r.song; Svc.okAt = now; Svc.mineAt = now;
+        // No lyrics hint for the new song until its own singing confirms it (Trk sets okAt again when a clip fits it
+        // well). Seen live: after a switch on weak evidence, the new song's lines in the hint made Whisper write
+        // them ("Anbin manatha…") over a different song, and the wrong song confirmed itself.
+        this.offSince = 0; Svc.okId = r.song; Svc.okAt = 0; Svc.mineAt = now;
         loadSong(r.song, { line: r.line }); toast(t('sounds_like') + ': ' + songById(r.song).title); return;
       }
       // Lead shows the next line as the singer finishes one, so the clip often still holds the line before the

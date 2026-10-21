@@ -523,8 +523,11 @@
   }
   /** st: {song, cur} (cur = line index in the song's lines, -1 before it starts) plus the tracker's own memory.
    *  Returns {song, line, why} when something should change, else null. */
+  // Words Whisper writes over unclear audio and music in Tamil/Malayalam ("நான்", "வருகிறேன்", "வணக்கம்", "நன்றி",
+  // "சரி", "ஐயா", "ஏனென்றால்"): seen live opening and switching songs on their own, so they are not evidence.
+  const FILLER = new Set(['nan', 'varukiren', 'vanakam', 'nanti', 'cari', 'aiya', 'enental', 'parkalam']);
   function trackStep(T, st, text, now) {
-    const hw = seqWords(text).filter(w => w.length >= 2); if (!hw.filter(w => w.length >= 3).length) return null;
+    const hw = seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w)); if (!hw.filter(w => w.length >= 3).length) return null;
     now = now || Date.now();
     // A clip (4.5 s) often holds the end of one line and the start of the next (fast songs: two or three lines):
     // its newest words say where the singer is now, the whole clip gives the evidence.
