@@ -392,6 +392,97 @@
     return out;
   }
 
-  const Core = { wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+
+  /* ---------- Line-by-line follower for noisy song transcripts (Whisper over a room mic) ----------
+   * Whisper often gets only half of each sung word right ("அவன் நடத்தும் செய்யுங்கள்" for "அவர் நடத்தும்
+   * செயல்களெல்லாம்"). Whole-line trigram scores then stay low and the screen fell 3-4 lines behind (seen live).
+   * Here each heard word is matched to the closest word of a line by edit distance on a sound-alike spelling
+   * (k/g, c/s/j, t/d, p/b), weighted by how rare that word is in the song, and the singer is assumed to go on
+   * line by line: the next line wins easily, lines further on need more evidence. */
+  function phon(w) { return w.replace(/g/g, 'k').replace(/[jsz]/g, 'c').replace(/d/g, 't').replace(/b/g, 'p').replace(/w/g, 'v').replace(/([a-z])\1+/g, '$1'); }
+  function levV(a, b) {
+    const m = a.length, n = b.length; if (!m || !n) return Math.max(m, n);
+    let p = Array.from({ length: n + 1 }, (_, i) => i);
+    for (let i = 1; i <= m; i++) {
+      const c = [i];
+      for (let j = 1; j <= n; j++) { const x = a[i - 1], y = b[j - 1]; const sub = x === y ? 0 : (/[aeiou]/.test(x) && /[aeiou]/.test(y)) ? .5 : 1; c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + sub); }
+      p = c;
+    }
+    return p[n];
+  }
+  function wsim(a, b) { return 1 - levV(a, b) / Math.max(a.length, b.length); }
+  function seqWords(t) { return keyWords(t).split(/\s+/).filter(w => w.length >= 2).map(phon); }
+  /** lines: [{text, alt}] - alternate-language copies (alt) are skipped. */
+  function seqIndex(lines) {
+    const idx = [], W = [], K = [];
+    lines.forEach((l, i) => { if (!l || l.alt) return; idx.push(i); W.push(seqWords(l.text)); K.push(key(l.text)); });
+    const df = new Map(); for (const ws of W) for (const w of new Set(ws)) df.set(w, (df.get(w) || 0) + 1);
+    const N = W.length, idf = w => Math.log((N + 1) / ((df.get(w) || 0) + .5));
+    const rep = K.map(k => K.filter(x => x === k).length > 1);
+    return { idx, W, rep, idf, pos: new Map(idx.map((li, p) => [li, p])) };
+  }
+  function seqScore(ix, hw, p) {
+    const lw = ix.W[p]; let m = 0, tot = 0, n = 0;
+    for (const h of hw) {
+      if (h.length < 3) continue;
+      let bs = 0, bw = null;
+      for (const w of lw) {
+        // Whisper often writes only the start of a long sung word ("சூரிய" for "சூரியனே")
+        let v = wsim(h, w); if (h.length >= 4 && w.length > h.length + 1 && h.length * 2 >= w.length) v = Math.max(v, .9 * wsim(h, w.slice(0, h.length)));
+        if (v > bs) { bs = v; bw = [w]; }
+      }
+      for (let k = 0; k + 1 < lw.length; k++) { const v = wsim(h, lw[k] + lw[k + 1]); if (v > bs) { bs = v; bw = [lw[k], lw[k + 1]]; } }
+      const wt = bw ? Math.max(.3, Math.min(...bw.map(ix.idf))) : 1;
+      tot += wt; if (bs >= .55) { m += wt * bs; n++; }
+    }
+    // A few common words ("தேவனைத் துதியுங்கள்" ends half the lines) are not enough evidence for a line on their own.
+    return { s: tot ? Math.min(1, m / Math.max(tot, 2.2)) : 0, n };
+  }
+  /** One clip: returns {line, score} when the singer has moved on to a later line, else {line: null, score}.
+   *  st keeps a pending far jump between clips ({pend}). */
+  function seqStep(ix, cur, text, st) {
+    const hw = seqWords(text); if (!hw.length || !ix.W.length) return { line: null, score: 0 };
+    let c = cur < 0 ? -1 : ix.pos.has(cur) ? ix.pos.get(cur) : -1;
+    if (cur >= 0 && c < 0) { for (let p = ix.idx.length - 1; p >= 0; p--) if (ix.idx[p] <= cur) { c = p; break; } }
+    const sCur = c >= 0 ? seqScore(ix, hw, c).s : 0;
+    let best = -1, bs = 0, bn = 0;
+    for (let p = Math.max(0, c - 1); p <= Math.min(ix.W.length - 1, c + 6); p++) {
+      const r = seqScore(ix, hw, p); let v = r.s; const d = p - c;
+      if (d === 1) v += .06; else if (d >= 3) v -= .03 * (d - 2);
+      if (v > bs + .001) { bs = v; best = p; bn = r.n; }
+    }
+    const out = l => ({ line: l, score: bs });
+    // The song started again from the top (sung twice, or the band went back): its opening lines, clearly heard
+    // twice while the screen is well into the song.
+    if (c >= 6) {
+      let b0 = -1, s0 = 0, n0 = 0; for (let p = 0; p <= 1; p++) { const r = seqScore(ix, hw, p); if (r.s > s0) { s0 = r.s; b0 = p; n0 = r.n; } }
+      if (s0 >= .65 && n0 >= 2 && !ix.rep[b0] && s0 > sCur + .15 && s0 >= bs) {
+        if (st.top >= 0) { st.top = -1; st.pend = -1; return { line: ix.idx[b0], score: s0 }; }
+        st.top = b0; return { line: null, score: s0 };
+      }
+    }
+    st.top = -1;
+    const d = best - c;
+    if (best <= c) {
+      st.pend = -1;
+      // A chorus line sung again just behind the screen ("அல்லேலூயா அல்லேலூயா" repeated after the chorus ended and
+      // the screen had moved on to the next verse): back to it.
+      for (let p = c - 1; p >= Math.max(0, c - 4); p--) {
+        if (!ix.rep[p]) continue; const r = seqScore(ix, hw, p);
+        if (r.s >= .75 && r.s > sCur + .3) return { line: ix.idx[p], score: r.s };
+      }
+      return out(null);
+    }
+    if (bs - sCur < .1) return out(null);
+    if (c < 0) return bs >= .55 && best <= 1 ? out(ix.idx[best]) : out(null);   // before the song: only its opening
+    if (d === 1) return bs >= .4 ? out(ix.idx[best]) : out(null);
+    // A chorus line far ahead is most likely the chorus sung again here, not a skipped verse.
+    if (ix.rep[best] && d > 4) { st.pend = -1; return out(null); }
+    const two = st.pend >= 0 && Math.abs(st.pend - best) <= 1 && bs >= (d === 2 ? .38 : .45) && bn >= (d === 2 ? 1 : 2);
+    if ((bs >= (d === 2 ? .55 : .6) && bn >= 2) || two) { st.pend = -1; return out(ix.idx[best]); }
+    st.pend = best; return out(null);
+  }
+
+  const Core = { seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);

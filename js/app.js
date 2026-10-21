@@ -1214,16 +1214,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // At its end already: show the next line - but a line is never skipped: one not yet shown is shown first.
       if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj]) target = mj + 1;
       else if (left <= .35) left = .35;
-      if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target]);
+      if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target], 'lead');
       clearTimeout(this.timer); this.timer = null;
       if (target === mj && mj + 1 < mains.length) {
         this.timer = setTimeout(() => {                                  // the singer will reach the next line now
           if (!song || this.heardJ !== mj || follow.cur !== mains[mj]) return;
-          this.go(mains[mj + 1]);
+          this.go(mains[mj + 1], 'timer');
         }, Math.max(150, (left - .2) * 1000));
       }
     },
-    go(i) {
+    moves: [],
+    go(i, why) {
+      this.moves.push([Math.round(performance.now() / 100) / 10, follow.cur, i, why || '']); if (this.moves.length > 80) this.moves.shift();
       follow.cur = i; follow.pend = -1; follow.hits = 0; lastMatchAt = Date.now(); screen.autoBlank = false;
       if (screen.kind !== 'song') screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output();
     }
@@ -1252,6 +1254,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (nW < 2) return;                                                  // one word says nothing about the song
       // Singing heard for 25 s and none of it fits the open song: stop trusting it, so Whisper gets no hint from
       // it (a wrong song's lyrics in the hint make Whisper write that song) and the right one can be found.
+      if (mine && mine.score >= .35) this.mineAt = Date.now();
       if (song && nW >= 3 && this.okId === song.id) { if (!this.mineAt) this.mineAt = Date.now(); if (Date.now() - this.mineAt > 25000) this.okAt = 0; }
       if (!song || (top.id !== song.id && follow.cur < 0 && top.score >= .6)) { if (top.score >= .6 && nW >= 3) this.open(top.id, top.line); return; }
       if (top.id !== song.id) {
@@ -1285,7 +1288,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         if ((good.length === 1 && nWords >= 3) || (stuck && nWords >= 2)) {
           const near = this.fwd && Math.abs(this.fwd.line - line) <= 2;
           this.fwd = near ? { line, n: this.fwd.n + 1 } : { line, n: 1 };
-          if (this.fwd.n >= 2 || (top.score >= .95 && nWords >= 5)) { this.fwd = null; this.back = { line: -1, n: 0 }; Lead.go(line); }
+          if (this.fwd.n >= 2 || (top.score >= .95 && nWords >= 5)) { this.fwd = null; this.back = { line: -1, n: 0 }; Lead.go(line, 'svc-fwd'); }
         }
         return;
       }
@@ -1294,18 +1297,34 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // while the screen is far on, go back on the usual bar.
       if (line <= 3 && follow.cur >= 8 && top.score >= .45) {
         this.back = this.back.line >= 0 && this.back.line <= 4 ? { line, n: this.back.n + 1 } : { line, n: 1 };
-        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
+        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line, 'svc-top'); }
         return;
       }
       if (ahead == null && line <= follow.cur - 3) {                     // song started again / a verse repeated
         this.back = this.back.line === line ? { line, n: this.back.n + 1 } : { line, n: 1 };
-        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line); }
+        if (this.back.n >= 2) { this.back = { line: -1, n: 0 }; Lead.go(line, 'svc-back'); }
       } else this.back = { line: -1, n: 0 };
     },
     open(id, line) {
       this.other = { id: null, n: 0 }; this.back = { line: -1, n: 0 }; this.okId = id; this.okAt = Date.now();
-      if (song && song.id === id) { Lead.go(line); return; }
+      if (song && song.id === id) { Lead.go(line, 'svc-open'); return; }
       loadSong(id, { line }); toast(t('sounds_like') + ': ' + songById(id).title);
+    }
+  };
+
+  /* Line-by-line follower for Whisper's often half-right words (Core.seqStep): the singer is taken to go on line
+   * by line, so the next line is shown on a partial match, and lines further on need more evidence. Seen live with
+   * a room mic: Whisper wrote "அவன் நடத்தும் செய்யுங்கள்", "செயல்களெல்லாம் பாட்டோரைக் குதியும்" - too little
+   * for the whole-line scores, and the screen stayed on the chorus through two verses. */
+  const Seq = {
+    ix: null, ixKey: '', st: { pend: -1 },
+    heard(text) {
+      if (!song || !lines.length || !S.autoFollow) return;
+      const k = song.id + ':' + lines.length + ':' + (song.updated || 0);
+      if (k !== this.ixKey) { this.ixKey = k; this.ix = Core.seqIndex(lines); this.st = { pend: -1, top: -1 }; }
+      const r = Core.seqStep(this.ix, follow.cur, text, this.st);
+      if (r.score >= .5) { Svc.okId = song.id; Svc.okAt = Math.max(Svc.okAt, Date.now()); Svc.mineAt = Date.now(); }   // the singing fits the open song
+      if (r.line != null && r.line !== follow.cur) Lead.go(r.line, 'seq');
     }
   };
 
@@ -1379,7 +1398,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // Whisper's well-known phrases over silence and music (from film subtitles in its training data).
         if (/^(thank you[.!]?|thank you for watching.*|thanks for watching.*|you[.!]?|bye[.!]?|\.+)$|^(subtitles?\b|sous-titr|субтитры|amara\.org)/i.test(text.trim())) text = '';
         if (text && pr && Core.key(text) === Core.key(pr)) text = '';   // only its prompt repeated back
-        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
+        if (text && Listen.mode) { onText(text, [], .85); if (Listen.mode === 'songs') { Seq.heard(text); Svc.track(text); Lead.heard(text, clipEnd || Date.now()); } }
         setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper`, true);
       } catch (e) {
         this.fails++;
@@ -1402,6 +1421,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (engine === 'cloud' && !SR) { toast(t('need_chrome')); return; }
       this.stopEngines();
       this.mode = mode; this.engine = engine;
+      // The song on screen when listening starts was chosen by the operator (or kept from last time): it is trusted
+      // like one just opened, so Whisper gets its lyrics as the hint at once. Seen live: a song restored at start-up
+      // was never trusted, Whisper got no hint, its half-right words never confirmed the song - and so on.
+      if (mode === 'songs' && song) { Svc.okId = song.id; Svc.okAt = Date.now() + 10 * 60000; Svc.mineAt = Date.now(); }
       this.lang = mode === 'songs' ? (song ? song.lang : 'ml-IN') : (S.vbLang === 'auto' ? (this.lastBibleLang || { ml: 'ml-IN', ta: 'ta-IN', en: 'en-IN' }[S.lang] || 'ml-IN') : S.vbLang);
       lastEventAt = Date.now(); hunt.i = 0; hunt.at = Date.now();
       // The offline engine needs the audio itself; the online one only needs the meter (skip it when opened as a file).
@@ -2188,7 +2211,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score } })
+    state: () => ({ cur: follow.cur, song: song && song.title, screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60) })
   };
   init();
 })();
