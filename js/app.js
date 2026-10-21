@@ -464,6 +464,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
 
   /* ---------- heard references (voice Bible) ---------- */
   const heardRefs = []; let lastRefAt = 0;
+  try { for (const h of JSON.parse(sessionStorage.getItem('lf-heard-refs') || '[]')) if (h && h.r) heardRefs.push(h); } catch (e) {}
   function pushHeardRef(r, src, sure, listOnly) {
     const k = refKey(r);
     const prev = heardRefs.find(x => refKey(x.r) === k);
@@ -475,6 +476,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       renderHeardRefs(); return;
     }
     heardRefs.unshift({ r, src, at: Date.now(), sure: !!sure }); heardRefs.length = Math.min(heardRefs.length, 10);
+    try { sessionStorage.setItem('lf-heard-refs', JSON.stringify(heardRefs)); } catch (e) {}
     renderHeardRefs();
     if (S.vbAuto && sure) { showBible(r); hideAsk(); }
     else if (!sure && Listen.mode === 'bible' && !listOnly) askRef(r);
@@ -2036,12 +2038,26 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    * offered (list + "Did the preacher say...?"), never put on the screen by itself - except a passage of today's
    * plan named with certainty. About Rs 0.005 an answer, at most one every 8 s; daily limit in Settings. */
   const VerseAI = {
-    buf: '', words: 0, lastAt: 0, busy: false, last: null,
+    buf: '', words: 0, lastAt: 0, busy: false, last: null, log: null,
+    // What it heard and answered, on the operator's screen (kept through a page reload, for this browser tab).
+    note(ans, what) {
+      this.log = (this.log || []).concat([[new Date().toLocaleTimeString().replace(/:\d\d(?=\D*$)/, ''), this.buf.slice(-70).trim(), ans, what]]).slice(-12);
+      try { sessionStorage.setItem('lf-ai-log', JSON.stringify(this.log)); } catch (e) {}
+      this.render();
+    },
+    render() {
+      if (!this.log) { try { this.log = JSON.parse(sessionStorage.getItem('lf-ai-log') || '[]'); } catch (e) { this.log = []; } }
+      const box = $('aiLogBox'), ol = $('aiLog'); if (!box || !ol) return;
+      box.hidden = !this.log.length; ol.innerHTML = '';
+      for (const [tm, heard, ans, what] of this.log.slice().reverse()) { const li = el('li'); li.append(el('b', '', `${tm} ${ans}`), el('span', 'muted', ` ${what} · “…${heard}”`)); ol.appendChild(li); }
+    },
     on() { return S.vbAI !== false && (S.sarvamKey || '').length > 10 && Listen.mode === 'bible' && !SvUse.aiOver(); },
     heard(text) {
       if (!text) return;
-      this.buf = (this.buf + ' ' + text).replace(/\s+/g, ' ').slice(-420); this.words += text.trim().split(/\s+/).length;
+      // only the last ~30 seconds: a story told earlier must not be named again over the talk that follows it
       const now = Date.now();
+      this.parts = (this.parts || []).filter(x => now - x[0] < 30000).concat([[now, text.trim()]]);
+      this.buf = this.parts.map(x => x[1]).join(' ').replace(/\s+/g, ' ').slice(-420); this.words += text.trim().split(/\s+/).length;
       if (!this.on() || this.busy || this.words < 10 || now - this.lastAt < 8000 || now - lastRefAt < 6000) return;
       this.ask();
     },
@@ -2060,18 +2076,19 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         const j = await r.json(), u = j.usage || {};
         SvUse.addAi(((+u.prompt_tokens || 400) * 15 + (+u.completion_tokens || 30) * 60) / 1e6);
         const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
-        const m = txt.match(/\{[\s\S]*\}/); if (!m) return;
-        let o; try { o = JSON.parse(m[0]); } catch (e) { return; }
-        if (!o || !o.ref || !(+o.sure >= .5)) return;
-        const p = Bible.parseRef(String(o.ref), {}); if (!p || !Bible.validRef(p.book, p.ch, p.v)) return;
-        const ref = { book: p.book, ch: p.ch, v: p.v, ve: Math.max(p.v, p.ve || p.v) };
+        const m = txt.match(/\{[\s\S]*\}/);
+        let o = null; try { o = m ? JSON.parse(m[0]) : null; } catch (e) {}
+        const note = (ans, what) => this.note(ans, what);
+        if (!o || !o.ref) return note('-', t('ai_none'));
+        if (!(+o.sure >= .5)) return note(o.ref + ' ' + (+o.sure).toFixed(1), t('ai_unsure'));
+        const p = Bible.parseRef(String(o.ref), {}); if (!p || !Bible.validRef(p.book, p.ch, p.v)) return note(o.ref, t('ai_none'));
+        const ref = { book: p.book, ch: p.ch, v: p.v, ve: Math.max(p.v, p.ve || p.v) }, lbl = Bible.refLabel(ref, 'en') + ' ' + (+o.sure).toFixed(2);
         const sb = screen.kind === 'bible' && screen.bible;
-        if (sb && sb.book === ref.book && sb.ch === ref.ch && ref.v <= (sb.ve || sb.v) && ref.ve >= sb.v) return;   // already showing it
-        this.log = (this.log || []).concat([[new Date().toLocaleTimeString(), this.buf.slice(-80), o.ref, o.sure]]).slice(-20);
+        if (sb && sb.book === ref.book && sb.ch === ref.ch && ref.v <= (sb.ve || sb.v) && ref.ve >= sb.v) return note(lbl, t('ai_onscreen'));
         const k = refKey(ref), again = this.last && this.last.k === k && Date.now() - this.last.at < 60000;
         this.last = { k, at: Date.now() };
-        if (+o.sure >= .85 && inPlan(ref)) pushHeardRef(ref, 'ai', true);
-        else pushHeardRef(ref, 'ai', false, again || +o.sure < .8);
+        if (+o.sure >= .85 && inPlan(ref)) { note(lbl, t('ai_shown')); pushHeardRef(ref, 'ai', true); }
+        else { const only = again || +o.sure < .8; note(lbl, only ? t('ai_listed') : t('ai_asked')); pushHeardRef(ref, 'ai', false, only); }
       } catch (e) { /* offline or refused: the free steps carry on */ }
       finally { this.busy = false; }
     }
@@ -2567,6 +2584,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
 
   /* ---------- start ---------- */
   async function init() {
+    setTimeout(() => { try { renderHeardRefs(); VerseAI.render(); } catch (e) {} }, 1500);
     if (location.protocol === 'file:') {
       // Opened by double-clicking index.html. If "Start Lyric Follow.bat" is running, go there (mic permission is remembered, offline voice works).
       try { const r = await fetch('http://localhost:8765/manifest.webmanifest', { mode: 'no-cors', cache: 'no-store' }); if (r) { location.replace('http://localhost:8765/index.html'); return; } } catch (e) {}

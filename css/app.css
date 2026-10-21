@@ -229,3 +229,4 @@ body.low *{transition:none!important;animation:none!important}
 .favbtn.on{background:#fff6d6 !important;color:#8a6200 !important;border-color:#e0a100 !important}
 
 .secret{-webkit-text-security:disc;text-security:disc;font-family:monospace}
+.ailog{margin-top:.6rem;font-size:.85em}.ailog ol{margin:.3rem 0 0;padding-left:1.1rem}.ailog li{margin:.15rem 0}.ailog .muted{color:var(--muted)}

@@ -39,6 +39,7 @@ try:
     say('இளையவன் தகப்பனை நோக்கி ஆஸ்தியில் எனக்கு வரும் பங்கை எனக்குத் தாரும் என்று கேட்டான், அவன் எல்லாவற்றையும் அழித்துவிட்டான், பன்றிகளை மேய்த்தான்', 9500)
     res['D story, in plan']=st()
     for k,v in res.items(): print(k.ljust(30), json.dumps(v, ensure_ascii=False))
+    print('log panel:', pg.evaluate("document.getElementById('aiLogBox').hidden"), pg.evaluate("document.getElementById('aiLog').innerText"))
     print('AI calls', len(calls), calls); print('use', pg.evaluate("LF_DEBUG.whisper().svUse"), pg.evaluate("document.getElementById('svUse').textContent"))
     print('ERR', errs); b.close()
 finally: srv.terminate()
