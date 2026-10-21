@@ -285,7 +285,53 @@
   /** Short fingerprint of a song's text: tells a song the user edited from one a pack update may replace. */
   function hash(t) { let h = 5381; t = String(t || '').replace(/\s+/g, ' ').trim(); for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
-  const API = { tidy, tidyTitle, split, stanzas, hash };
+
+  /** The order the song is sung in, for a sheet that writes the chorus only once (most hand-typed lyrics):
+   *  "V1, C, V2, V3, V4" is sung V1 C V2 C V3 C V4 C, and "C, V1, V2, V3" (the chorus first, maybe over two or three
+   *  slides) is sung C V1 C V2 C V3 C. Without this the follower had to jump back over whole verses at every chorus and
+   *  then forward again, and after the chorus its next line was always the second verse (seen live: Alleluya, 20 s on
+   *  the wrong verse). Returns {text, order: [block index...]} or null when the sheet already says the order (a
+   *  stanza written twice), or it does not look like verses and a chorus.
+   *  The chorus is told from the verses by its shape only - the verses all have the same number of lines, and the
+   *  chorus has a different number, clearly shorter or longer lines, or does not share the verses' line endings. */
+  function singOrder(text) {
+    const blocks = String(text || '').replace(/\r/g, '').split(/\n\s*\n/).map(b => b.split('\n').map(l => l.trim()).filter(Boolean)).filter(b => b.length);
+    const n = blocks.length; if (n < 3) return null;
+    const norm = b => b.join(' ').replace(/[^\p{L}\p{M}\s]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const keys = blocks.map(norm); if (new Set(keys).size < n) return null;          // written out already
+    const indic = t => /[ऀ-෿]/.test(t), anyIndic = blocks.some(b => b.some(indic));
+    const main = b => b.filter(l => !anyIndic || indic(l));                          // transliteration lines aside
+    const feat = bs => { const ls = bs.flatMap(main); const ws = ls.map(l => l.split(/\s+/).filter(Boolean)); return { L: ls.length, wpl: ws.reduce((a, w) => a + w.length, 0) / Math.max(1, ws.length), ends: ws.map(w => (w[w.length - 1] || '').replace(/[^\p{L}\p{M}]/gu, '')) }; };
+    const uniform = vs => { const L = vs.map(v => feat([v]).L); return L.length >= 2 && L.every(x => x === L[0]) && L[0] >= 2 ? L[0] : 0; };
+    const endShare = es => { const c = new Map(); es.forEach(e => c.set(e, (c.get(e) || 0) + 1)); return Math.max(0, ...c.values()) / Math.max(1, es.length); };
+    const distinct = (head, verses, L) => {
+      const h = feat(head), v = feat(verses);
+      const r = h.wpl / Math.max(.1, v.wpl); let shape = r < .72 || r > 1.4;
+      const c = new Map(); v.ends.forEach(e => c.set(e, (c.get(e) || 0) + 1)); const top = [...c.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (!shape && top && top[1] / Math.max(1, v.ends.length) >= .6) shape = h.ends.filter(e => e === top[0]).length / Math.max(1, h.ends.length) <= .25;
+      if (head.length === 1) return h.L >= 2 && (shape || Math.abs(h.L - L) >= 2);   // one line alone: a title, not a chorus
+      // a first slide of one line is a title, unless the chorus itself starts with it ("எந்தன் நாவில் புதுபாட்டு" twice)
+      if (main(head[0]).length === 1 && !head.slice(1).some(b => main(b).some(l => norm([l]) === norm(main(head[0]))))) return false;
+      // over several slides: shorter slides than a verse's (a chorus typed in pieces), or a different shape -
+      // a long first verse cut into slides of the verses' size is not a chorus
+      return shape || (head.some(b => main(b).length < L) && h.L >= L + 2 && h.L <= 2 * L + 2);
+    };
+    let order = null;
+    // the chorus after the first verse
+    let ch = [];
+    if (n >= 4) { const vs = [blocks[0], ...blocks.slice(2)], L = uniform(vs); if (L && distinct([blocks[1]], vs, L)) { order = [0, 1]; ch = [1]; for (let i = 2; i < n; i++) order.push(i, 1); } }
+    // the chorus first, over one to three slides
+    for (let k = 1; !order && k <= 3 && n - k >= 2; k++) {
+      const vs = blocks.slice(k), L = uniform(vs); if (!L) continue;
+      if (distinct(blocks.slice(0, k), vs, L)) { const hd = [...Array(k).keys()]; order = [...hd]; ch = hd; for (let i = k; i < n; i++) order.push(i, ...hd); }
+    }
+    if (!order) return null;
+    let v = 0; const seen = new Map();
+    const parts = order.map(i => ch.includes(i) ? 'C' : (seen.has(i) ? seen.get(i) : (seen.set(i, 'V' + (++v)), 'V' + v)));
+    return { text: order.map(i => blocks[i].join('\n')).join('\n\n'), order, parts };
+  }
+
+  const API = { tidy, tidyTitle, split, stanzas, hash, singOrder };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.LFTidy = API;
 })(typeof window !== 'undefined' ? window : globalThis);

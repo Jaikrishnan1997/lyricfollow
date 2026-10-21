@@ -25,7 +25,7 @@
   let songs = [];                              // all songs
   let service = [];                            // song ids for today
   const media = new Map();                     // id -> {id,name,type,url}
-  let song = null, lines = [], slides = [];
+  let song = null, lines = [], slides = [], slideParts = '';
   const follow = { cur: -1, pend: -1, hits: 0, score: 0 };
   const screen = { kind: 'idle', black: false, bgOnly: false, autoBlank: false, bible: null };
   let tab = 'live', editingId = null, selBg = null;
@@ -70,7 +70,10 @@
   function saveService() { Store.set('service', service).catch(() => {}); }
 
   /* ---------- songs ---------- */
-  function parseLyrics(text) {
+  function parseLyrics(text, parts) {
+    // A sheet with the chorus written once is followed (and shown) in the order it is sung: chorus after every verse.
+    // Songs from the packs carry their order already (parts).
+    let order = null; if (!parts && window.LFTidy && LFTidy.singOrder) { const so = LFTidy.singOrder(text); if (so) { text = so.text; order = so.parts; } }
     const blocks = String(text || '').replace(/\r/g, '').split(/\n\s*\n/).map(b => b.split('\n').map(l => l.trim()).filter(Boolean)).filter(b => b.length);
     const ls = [], sl = [];
     blocks.forEach((b, si) => { const idx = []; b.forEach(x => { idx.push(ls.length); ls.push({ text: x, slide: si }); }); sl.push(idx); });
@@ -92,7 +95,7 @@
   const prepCache = new Map();
   function prepared(s) {
     const k = s.id + ':' + (s.updated || 0);
-    if (!prepCache.has(k)) prepCache.set(k, parseLyrics(s.lyrics).ls);
+    if (!prepCache.has(k)) prepCache.set(k, parseLyrics(s.lyrics, s.parts).ls);
     return prepCache.get(k);
   }
   const songById = id => songs.find(s => s.id === id);
@@ -107,8 +110,8 @@
     // straight away (that is what made it write the lines almost word for word). Songs opened automatically
     // must first be confirmed by the singing.
     if (song && (!opts || opts.restart)) { try { Svc.okId = song.id; Svc.okAt = Date.now() + 10 * 60000; Svc.mineAt = Date.now(); } catch (e) { /* first song at start-up, before Svc exists */ } }
-    const p = parseLyrics(song ? song.lyrics : '');
-    lines = p.ls; slides = p.sl;
+    const p = parseLyrics(song ? song.lyrics : '', song ? song.parts : '');
+    lines = p.ls; slides = p.sl; slideParts = p.order ? p.order.join(' ') : (song ? song.parts || '' : '');
     const startLine = opts && opts.line != null && lines[opts.line] ? opts.line : -1;
     follow.cur = startLine; follow.pend = -1; follow.hits = 0; follow.score = 0; if (typeof Lead !== 'undefined') Lead.reset();
     heardKey = ''; lastMatchAt = Date.now(); screen.autoBlank = false; hideSuggest();
@@ -239,8 +242,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   }
   // "Chorus", "Verse 2" for a tidied song (its parts), otherwise "Slide 3"
   function slideLabel(si) {
-    const p = song && song.parts ? String(song.parts).split(' ')[si] : '';
-    if (!p || !slides || String(song.parts).split(' ').length !== slides.length) return t('slide') + ' ' + (si + 1);
+    const p = slideParts ? slideParts.split(' ')[si] : '';
+    if (!p || !slides || slideParts.split(' ').length !== slides.length) return t('slide') + ' ' + (si + 1);
     return (p === 'C' ? t('part_chorus') : p === 'A' ? t('part_anu') : t('part_verse') + (p.length > 1 ? ' ' + p.slice(1) : '')) + ' · ' + (si + 1);
   }
   function renderSlides() {
@@ -1257,8 +1260,8 @@ Previous clip's words: ${this.lastText || '(none)'}`;
    * next line is shown when the singer reaches it - and at the end of a line, straight away. Never more than one
    * line beyond what was actually heard, so a pause or an instrumental part cannot run the screen away. */
   const Lead = {
-    timer: null, spw: .5, lastPos: null, heardJ: -1,
-    reset() { clearTimeout(this.timer); this.timer = null; this.lastPos = null; this.heardJ = -1; },
+    timer: null, spw: 1, lastPos: null, heardJ: -1,   // seconds a word; measured from the singing (Tamil worship songs ~1-2 s)
+    reset() { clearTimeout(this.timer); this.timer = null; this.lastPos = null; this.heardJ = -1; this.nSpw = 0; },
     mains() { const m = []; lines.forEach((l, i) => { if (!l.alt && l.key) m.push(i); }); return m; },
     heard(text, clipEnd) {
       if (!song || !lines.length || !S.autoFollow) return;
@@ -1271,10 +1274,13 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (mj > ci + 1 && pos.sc < 2.5 && Date.now() - Svc.movedAt < 9000) return;   // 2+ lines ahead needs 3+ matching words (unless stuck)
       // singing speed (seconds per word) from the movement between two clips
       const gw = mains.slice(0, mj).reduce((a, i) => a + (lines[i].w || []).length, 0) + pos.p;
-      if (this.lastPos && gw > this.lastPos.gw) { const v = (clipEnd - this.lastPos.t) / 1000 / (gw - this.lastPos.gw); if (v > .12 && v < 3) this.spw = this.spw * .6 + v * .4; }
+      if (this.lastPos && gw > this.lastPos.gw) { const v = (clipEnd - this.lastPos.t) / 1000 / (gw - this.lastPos.gw); if (v > .12 && v < 3) { this.spw = this.nSpw ? this.spw * .6 + v * .4 : v; this.nSpw = (this.nSpw || 0) + 1; } }
       this.lastPos = { gw, t: clipEnd }; this.heardJ = mj;
       const late = (Date.now() - clipEnd) / 1000;                       // how long ago that clip ended
-      let left = (pos.n - 1 - pos.p) * this.spw - late;                // seconds until this line is finished
+      // Until this song's own pace is measured, a slow one is assumed: Tamil worship lines run 5-8 s (seen live: the
+      // first lines shown 4-5 s early at half a second a word)
+      const spw = this.nSpw ? this.spw : Math.max(this.spw, 1.6);
+      let left = (pos.n - 1 - pos.p) * spw - late;                     // seconds until this line is finished
       let target = mj;
       // At its end already: show the next line - but a line is never skipped: one not yet shown is shown first.
       if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj]) target = mj + 1;
@@ -1501,7 +1507,17 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       for (const l of prepared(sg)) { if (l.alt) continue; for (const w of l.text.split(/\s+/)) { const c = w.replace(/[^\p{L}\p{M}]/gu, ''); if (c.length >= 3) cnt.set(c, (cnt.get(c) || 0) + 1); } }
       const out = [...cnt.keys()].sort((a, b) => b.length - a.length); svTermsCache.set(k, out); return out;
     };
-    if (song && Svc.okId === song.id && Date.now() - Svc.okAt < 15000) return words(song).slice(0, 50);
+    // The open song, confirmed: only the words of the next lines (and the one before), nearest first. With the whole
+    // song's words Sarvam wrote words of far verses over the music ("அக்கினியே", "எழும்பினார்" in the first verse),
+    // and those pulled the screen to the wrong verse (seen live: 28 s on verse 4 while verse 2 was sung).
+    if (song && Svc.okId === song.id && Date.now() - Svc.okAt < 15000) {
+      const out = [], from = Math.max(0, follow.cur - 1);
+      for (let i = from; i < lines.length && i <= from + 7 && out.length < 50; i++) {
+        const l = lines[i]; if (!l || l.alt) continue;
+        for (const w of l.text.split(/\s+/)) { const c = w.replace(/[^\p{L}\p{M}]/gu, ''); if (c.length >= 3 && !out.includes(c) && out.length < 50) out.push(c); }
+      }
+      return out.length ? out : words(song).slice(0, 50);
+    }
     const list = service.map(songById).filter(Boolean); if (song && !list.includes(song)) list.push(song);
     if (!list.length) return [];
     const per = Math.max(4, Math.floor(50 / list.length)), out = [];

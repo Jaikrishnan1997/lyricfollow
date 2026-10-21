@@ -631,14 +631,20 @@
           const better = set.filter(i => (T[i].m.get(id) || {}).top >= ((T[i].m.get(st.song) || {}).top || 0) + .1).length;
           if (better < 2 || rows.filter(x => x.top >= .7).length < 2 || rows.reduce((t, x) => t + x.n, 0) < 3) continue;
         }
-        let ok = null;
+        let ok = null, here = false;
         for (const a of rows[0].ps) {
           const b = rows[1].ps.filter(x => x >= a && x <= a + 3).sort((x, y) => x - y)[0]; if (b == null) continue;
           const c = rows[2].ps.filter(x => x >= b && x <= b + 3).sort((x, y) => x - y)[0]; if (c == null) continue;
+          // the words fit a run that ends where the screen is: nothing to move (a line like "இயேசுவைத் துதியுங்கள்"
+          // is in two verses - seen live: the screen jumped from the end of verse 2 back to verse 1)
+          if (cPos !== -9 && c >= cPos - 1 && c <= cPos + 1) { here = true; break; }
           // the same line three times says where only when the screen is far from it
           if (c === a && !(cPos !== -9 && Math.abs(c - cPos) >= 3)) continue;
-          ok = c; break;
+          // of several runs, the one nearest the screen (ahead first)
+          if (ok == null || (cPos !== -9 && Math.abs(c - cPos - .5) < Math.abs(ok - cPos - .5))) ok = c;
+          if (cPos === -9) break;
         }
+        if (here) break;
         if (ok == null) continue;
         if (!found || (id === st.song && found.song !== st.song)) found = { song: id, p: ok };
         break;
@@ -827,7 +833,7 @@
     else if (stuck && d > 1 && d <= 8 && s >= .5 && n >= 2) ok = true;            // the screen has not moved for 10 s
     else if (c < 0) ok = (best <= 1 && s >= .5) || (conf && s >= .55 && n >= 2);  // before the song: its start
     else if (d === 1) ok = s >= .4;
-    else if (d === 2) ok = (s >= .45 && n >= 2) || (conf && s >= .38);
+    else if (d === 2) ok = (s >= .45 && n >= 2) || (conf && s >= .38) || (s >= .85 && n >= 1);   // one clear word of the line after next ("சூரியனே")
     else if (d <= 4 && d > 0) ok = (s >= .55 && n >= 2) || (conf && s >= .42 && n >= 1);
     else if (d > 4) ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);       // far ahead: rare, needs a lot
     else if (d === -1) ok = (s >= .55 && n >= 2) || (s >= .7 && n >= 1) || (conf && s >= .42);
