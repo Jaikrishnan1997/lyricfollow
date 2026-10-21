@@ -1363,9 +1363,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const main = lines.filter(l => !l.alt);
       // (Not the opening lines of every service song: seen live, Whisper then writes those lines over talk and music.)
       if (follow.cur < 0) return main.slice(0, 1).map(l => l.text).join(' ');
-      // The current line and the next two only: lyrics further ahead in the hint get "heard" in unclear audio.
+      // The line before and the current line only - never lines ahead. Seen live: with the next two lines in the
+      // hint, Whisper wrote them out over music breaks, the screen moved on, the hint moved on with it, and the
+      // screen ran a whole verse ahead of the singer. Moving on must come from what is really sung.
       const at = Math.max(0, main.indexOf(lines[follow.cur]));
-      return main.slice(at, at + 3).map(l => l.text).join(' ').slice(0, 400);
+      return main.slice(Math.max(0, at - 1), at + 1).map(l => l.text).join(' ').slice(0, 400);
     },
     async send(a, clipEnd) {
       this.busy = true;
