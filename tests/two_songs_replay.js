@@ -14,7 +14,8 @@ const run = JSON.parse(fs.readFileSync(__dirname + '/' + (process.env.RUN || 'li
 const truthAt = t => { let r = null; for (const x of run.truth) if (t >= x[0]) r = x; return r; };
 const st = { song: 'A', cur: -1 }; let ok = 0, near = 0, n = 0, sw = null; const rows = [];
 for (const [t, txt] of run.clips) {
-  const r = txt ? Core.trackStep(T, st, txt, t * 1000) : null;
+  const tx = process.env.WIN && txt ? Core.trackWin(st, txt, t * 1000) : txt;
+  const r = tx ? Core.trackStep(T, st, tx, t * 1000) : null;
   if (r) { if (r.song !== st.song && r.song === 'E' && sw == null) sw = t; st.song = r.song; st.cur = r.line; }
   const tr = truthAt(t); if (!tr) continue; n++;
   const shown = SONGS[st.song] && SONGS[st.song][st.cur], want = SONGS[tr[1]][tr[2]];

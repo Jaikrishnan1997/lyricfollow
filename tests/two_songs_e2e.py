@@ -4,8 +4,9 @@
 #   python3 tests/two_songs_e2e.py [v]
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-R='/home/claude/lyricfollow/'
-srv = subprocess.Popen([sys.executable,'-m','http.server','8771','-d',R],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+import os
+R=os.environ.get('ROOT','/home/claude/lyricfollow/')
+srv = subprocess.Popen([sys.executable,'-m','http.server',os.environ.get('PORT','8771'),'-d',R],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
 S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
 import os
 run=json.load(open(R+'tests/'+os.environ.get('RUN','live_two_songs.json')))
@@ -36,12 +37,13 @@ try:
     br=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
     ctx=br.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.route('https://api.sarvam.ai/**', handle)
-    pg.goto('http://localhost:8771/index.html'); pg.wait_for_timeout(9000)
+    pg.goto('http://localhost:'+os.environ.get('PORT','8771')+'/index.html'); pg.wait_for_timeout(9000)
     pg.evaluate("""()=>{document.querySelector('[data-net=online]').click(); document.querySelector('.seg [data-lm=songs]').click();}""")
     pg.evaluate(f"LF_DEBUG.addSong('Enthan test', 'ta-IN', {json.dumps(E, ensure_ascii=False)})"); pg.wait_for_timeout(800)
     pg.evaluate(f"LF_DEBUG.addSong('Alleluya test', 'ta-IN', {json.dumps(A, ensure_ascii=False)})"); pg.wait_for_timeout(1500)
     pg.evaluate("""()=>{const go=(id,v)=>{const e=document.getElementById(id); if(e.type==='checkbox'){e.checked=v} else e.value=v; e.dispatchEvent(new Event('change'));}; go('stSvKey','sv_test_key_123'); go('stSvOn',true); go('stBlank','8');}""")
     pg.click('#btnListen'); pg.wait_for_timeout(300)
+    shown=[]; tl2=[]; refs={}
     T0[0]=time.time(); cnt={'right':0,'one off':0,'wrong':0,'blank':0}; cA={'right':0,'one off':0,'wrong':0,'blank':0}; tl=[]; last=None; sw=None
     while time.time()-T0[0] < float(os.environ.get('END','270'))-R0:
         st=pg.evaluate("(()=>{const s=LF_DEBUG.state(); const L=LF_DEBUG.lines(); return [s.song, s.cur, L.map(x=>x.replace(/^\\d+[~ ] /,''))]})()")
@@ -57,7 +59,31 @@ try:
             cnt[k]+=1
             if tr[1]=='A': cA[k]+=1
         if (song,cur)!=last: tl.append((round(r,1),(song or '')[:4],cur, tr and tr[1]+str(tr[2]))); last=(song,cur)
+        if song and 0<=cur<len(L): shown.append((r,song,cur,L[cur],None))
+        if tr: tl2.append((r,song,cur,k))
+        if song and song.startswith('Alleluya'): refs.update({('A',i):x for i,x in enumerate(L)})
+        if song and song.startswith('Enthan'): refs.update({('E',i):x for i,x in enumerate(L)})
         time.sleep(0.25)
+    # display delay: for each sung line (truth entry), seconds until the screen shows its text (p50 / p95);
+    # longest stretch on a wrong line; lead/timer moves undone by a 'back' to the line before within 4 s (the two
+    # paths fighting); two lines advanced within 1.5 s on lead/timer alone
+    import statistics as stx
+    samp=[]; t_=None
+    delays=[]; wrongrun=0; maxwrong=0; prevk=None
+    for x in tl2:
+        pass
+    for i,(r,song,cur,ok) in enumerate(tl2):
+        if ok=='wrong': wrongrun = wrongrun + (r - tl2[i-1][0] if i and tl2[i-1][3]=='wrong' else 0); maxwrong=max(maxwrong,wrongrun)
+        else: wrongrun=0
+    for k,x in enumerate(run['truth']):
+        if not (R0 <= x[0] < R0 + (float(os.environ.get('END','270'))-R0) - 3): continue
+        want_song='Alleluya' if x[1]=='A' else 'Enthan'; nxt = run['truth'][k+1][0] if k+1 < len(run['truth']) else x[0]+8
+        hit=[r for (r,song,cur,L,ok) in shown if r>=x[0]-1 and r<nxt+4 and song.startswith(want_song) and L==refs.get((x[1],x[2]))]
+        if hit: delays.append(max(0,hit[0]-x[0]))
+    mv=pg.evaluate('LF_DEBUG.state().moves')
+    fights=sum(1 for i,m in enumerate(mv) if m[3] in ('lead','timer') and any(n[3]=='back' and n[2]==m[1] and n[1]==m[2] and 0<n[0]-m[0]<4 for n in mv[i+1:i+4]))
+    double=sum(1 for i in range(1,len(mv)) if mv[i][3] in ('lead','timer') and mv[i-1][3] in ('lead','timer','fwd') and mv[i][1]==mv[i-1][2] and mv[i][0]-mv[i-1][0]<1.5)
+    if delays: print(f'display delay p50 {stx.median(delays):.1f}s p95 {sorted(delays)[int(.95*(len(delays)-1))]:.1f}s (of {len(delays)} sung lines, missed {sum(1 for x in run["truth"] if R0<=x[0])-len(delays)})  longest on a wrong line {maxwrong:.1f}s  lead/timer undone by a back move {fights}  two lines in 1.5 s {double}')
     ta=sum(cA.values()); print('Alleluya only', {k: f'{100*v/ta:.0f}%' for k,v in cA.items()})
     tot=sum(cnt.values()); print('both', {k: f'{100*v/tot:.0f}%' for k,v in cnt.items()}, 'switch to Enthan at', sw, '(sung from', run['switchAt'], ')', 'clips used', len(used), 'with key words', kt[0])
     if len(sys.argv)>1:

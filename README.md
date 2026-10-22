@@ -154,6 +154,32 @@ phrase is scored against the lines in two ways (sound trigrams and fuzzy word ma
 screen moves to the next line as soon as it is clearly heard; a jump to any other line must be heard twice in a row
 (three times for a long jump), so one noisy phrase never makes the screen skip around.
 
+## Following measurements and what was tried (22 Oct 2026)
+
+Recorded live runs (Alleluya then Enthan, laptop speakers, Sarvam without key words) are kept in
+`tests/live_two_songs*.json` and replayed two ways: the tracker alone (`node tests/two_songs_replay.js`, RUN=file)
+and the whole app in real time (`python3 tests/two_songs_e2e.py`, RUN/R0/END), which also prints display delay
+(p50/p95), the longest stretch on a wrong line, and whether the timing helper and the tracker undo each other.
+`tests/tracker_bench.js` simulates many singing patterns (lines twice, choruses repeated, random go-backs, a verse
+skipped, a 15 s break, a song that speeds up, song switches) at three tempos; `SPARSE=1` gives 1-2 words a clip.
+
+- **Joining the clip before with this one (Core.trackWin) was measured and not used.** On the four live runs it
+  lowered the right-line share from 64-68% to 45-56% (and the simulated bench from 59% to 35-43%): the previous
+  line's words pull the screen back. Evidence across clips is already kept by the tracker itself (per-song
+  evidence, the pending second clip, the run of clips in order, and the line filter).
+- **The timing helper and the tracker do not fight:** in all replays no lead/timer move was undone by a "back"
+  move within 4 s; two lines in 1.5 s happened 1-4 times a run.
+- **Stale answers:** clips are sent one at a time, so answers cannot arrive out of order. An answer that arrives
+  after the operator moved the screen or opened a song is now ignored for following
+  (`tests/stale_result_e2e.py`: before, a late clip moved the screen back from 13 to 10).
+- **Timing in the app:** `LF_DEBUG.timing()` gives p50/p95 of audio end -> answer and answer -> screen;
+  `LF_DEBUG.clips()` the per-clip log (provider, text, score, line before/after, reason). Memory only - nothing is
+  saved or sent.
+- **Audio capture:** the ScriptProcessor buffer is 2048 samples at 16 kHz = 128 ms, against clips every 2.4 s and
+  answers 0.25-0.35 s after sending; an AudioWorklet would save under 0.13 s. Not changed.
+- **Not measured yet:** shorter send intervals or windows need recorded church audio sent to Sarvam again
+  (cost and accuracy together); to be done with a recording from the mixer feed.
+
 ## Which song is being sung
 
 Today's service list is tried first, on its own. Only when nothing in the service list has matched for 5 seconds is the

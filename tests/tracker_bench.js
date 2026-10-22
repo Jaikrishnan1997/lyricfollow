@@ -52,6 +52,10 @@ songs.forEach((s, si) => {
   const nx = (si + 1) % songs.length, half = linear(s).slice(0, Math.ceil(linear(s).length / 2));
   SC.push({ name: s.title.slice(0, 12) + ' ->switch', open: si, seq: half.map(l => [si, l]).concat(linear(songs[nx]).map(l => [nx, l])) });
   SC.push({ name: s.title.slice(0, 12) + ' none-open', open: -1, seq: linear(s).slice(0, 12).map(l => [si, l]) });
+  // a verse left out, a 15 s break (instrumental) in the middle, and a song that speeds up half-way
+  if (s.slides.length >= 4) SC.push({ name: s.title.slice(0, 12) + ' skipverse', open: si, seq: s.slides.filter((x, k) => k !== 2).flat().map(l => [si, l]) });
+  SC.push({ name: s.title.slice(0, 12) + ' pause', open: si, gapAt: Math.floor(linear(s).length / 2), seq: linear(s).map(l => [si, l]) });
+  SC.push({ name: s.title.slice(0, 12) + ' faster', open: si, fastAt: Math.floor(linear(s).length / 2), seq: linear(s).map(l => [si, l]) });
 });
 const L = +(process.argv[2] || .18), V = process.argv[3];
 const HM = { n: 0, good: 0, ok: 0, tot: 0 }; const AG = {}; let tot = 0, good = 0, b1 = 0, bad = 0, wrongSong = 0, rows = [];
@@ -62,7 +66,9 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
   sc.seq.forEach(([si, li], k) => {
     const sl = songs[si].lines[li].slide; if (k && (sl !== prevSlide || si !== prevSong)) t += si !== prevSong ? 6 : 1.5 + rnd() * 3; prevSlide = sl; prevSong = si;
     const ws = songs[si].lines[li].text.split(/\s+/).filter(Boolean);
-    ws.forEach(w => { words.push({ t, w, si, li, k }); t += spw * (.8 + rnd() * .4); }); t += spw * .6;
+    if (sc.gapAt === k) t += 15;
+    const sp = sc.fastAt != null && k >= sc.fastAt ? spw * .6 : spw;
+    ws.forEach(w => { words.push({ t, w, si, li, k }); t += sp * (.8 + rnd() * .4); }); t += sp * .6;
   });
   const end = t + 1; const st = { song: sc.open >= 0 ? songs[sc.open].id : null, cur: -1 };
   let g = 0, n = 0, bb = 0, ws = 0;

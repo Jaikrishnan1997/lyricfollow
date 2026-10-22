@@ -25,7 +25,7 @@
   let songs = [];                              // all songs
   let service = [];                            // song ids for today
   const media = new Map();                     // id -> {id,name,type,url}
-  let song = null, lines = [], slides = [], slideParts = '';
+  let song = null, lines = [], slides = [], slideParts = '', navGen = 0;   // navGen: bumped when the operator moves the screen or opens a song
   const follow = { cur: -1, pend: -1, hits: 0, score: 0 };
   const screen = { kind: 'idle', black: false, bgOnly: false, autoBlank: false, bible: null };
   let tab = 'live', editingId = null, selBg = null;
@@ -105,7 +105,7 @@
     if (song && song.id === id && follow.cur >= 0 && !(opts && (opts.line != null || opts.restart))) {
       const s2 = songById(id); if (s2 && s2.lyrics === song.lyrics) { song = s2; renderService(); renderLive(); Track.show(song.yt); return; }
     }
-    song = songById(id) || null;
+    song = songById(id) || null; navGen++;
     // A song the operator opened is trusted like one the audio confirmed: Whisper gets its lyrics as the hint
     // straight away (that is what made it write the lines almost word for word). Songs opened automatically
     // must first be confirmed by the singing.
@@ -194,6 +194,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   /* ---------- navigation on screen ---------- */
   function jumpLine(i) {
     if (!lines.length) return;
+    navGen++;
     screen.kind = 'song'; screen.bgOnly = false; screen.autoBlank = false;
     i = Math.max(0, Math.min(lines.length - 1, i)); if (lines[i] && lines[i].alt) i = lines[i].main;
     follow.cur = i; follow.pend = -1; heardKey = ''; lastMatchAt = Date.now();
@@ -201,6 +202,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   }
   function jumpSlide(dir) {
     if (!lines.length) return;
+    navGen++;
     const cur = follow.cur < 0 ? (dir > 0 ? -1 : 0) : lines[follow.cur].slide;
     const s = Math.max(0, Math.min(slides.length - 1, cur + dir));
     jumpLine(slides[s][0]);
@@ -1515,7 +1517,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
 
   const Whisper = {
-    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null, quiet: 0, sentTo: 0,
+    timer: null, busy: false, fails: 0, backoffUntil: 0, lastSent: 0, clipSec: 3.2, sent: 0, left: null, local: false, lastMs: 0, goodRun: 0, cur: null, quiet: 0, sentTo: 0, tlog: [],
     start() { this.stop(); this.fails = 0; this.goodRun = 0; this.quiet = 0; this.sentTo = 0; this.clipSec = 3.2; this.lastSent = Date.now(); Trk.fitAt = Date.now(); this.tick(); },
     stop() { clearTimeout(this.timer); this.timer = null; },
     tick() {
@@ -1647,7 +1649,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // "temperature", plain json (measured on a GTX 1650: 6.5-12 s a clip -> about 1.2-3 s).
         url = LOCAL_WHISPER + '/inference'; fd.append('response_format', 'json'); fd.append('audio_ctx', '768'); fd.append('temperature_inc', '0');
       }
-      const t0 = Date.now();
+      const t0 = Date.now(), gen = navGen, cur0 = follow.cur;
       try {
         const r = await fetch(url, { method: 'POST', headers, body: fd });
         if (p.kind === 'laptop') { this.lastMs = Date.now() - t0; this.clipSec = Math.max(1.2, Math.min(4, this.lastMs / 1000 * 1.15)); }
@@ -1679,10 +1681,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         // never moves the screen; the singing of a new line (not in the hint) does.
         const echo = !!(text && pr && Listen.mode === 'songs' && Core.echoOf(text, pr));
         this.quiet = text && Core.keyWords(text).replace(/\s+/g, '').length >= 4 ? 0 : this.quiet + 1;
+        const got = Date.now();
+        // The operator moved the screen or opened a song while this clip was on its way: its words are about the
+        // place before, so they do not move the screen now.
+        const stale = gen !== navGen;
         if (text && Listen.mode && !echo) {
           this.realAt = Date.now(); onText(text, [], .85);
-          if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); this.goodRun = Trk.st.mineTop >= .6 ? (this.goodRun || 0) + 1 : 0; }
+          if (Listen.mode === 'songs' && !stale) { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); this.goodRun = Trk.st.mineTop >= .6 ? (this.goodRun || 0) + 1 : 0; }
         } else if (!text) this.goodRun = 0;
+        // timing of each clip, in memory only (LF_DEBUG.timing / LF_DEBUG.clips): audio end -> sent -> answer -> screen
+        const lm = Lead.moves[Lead.moves.length - 1];
+        this.tlog.push({ end: clipEnd || t0, sent: t0, got, done: Date.now(), prov: p.kind, text: text.slice(0, 60), from: cur0, to: follow.cur, why: follow.cur !== cur0 && lm ? lm[3] : '', score: +((Trk.st && Trk.st.mineTop) || 0).toFixed(2), stale });
+        if (this.tlog.length > 300) this.tlog.shift();
         // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
         // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
         if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
@@ -2711,6 +2721,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   // Test hook: lets automated checks feed recognised text without a microphone.
   window.LF_DEBUG = {
     ns(on) { return Mic.ns(on); },
+    // per-clip timing (seconds): audio end -> answer, answer -> screen; p50 / p95 of the last clips
+    timing() {
+      const L = Whisper.tlog.filter(x => x.text), q = (a, f) => { const b = a.slice().sort((x, y) => x - y); return b.length ? +(b[Math.min(b.length - 1, Math.floor(f * b.length))] / 1000).toFixed(2) : null; };
+      const net = L.map(x => x.got - x.end), ui = L.map(x => x.done - x.got);
+      return { clips: Whisper.tlog.length, withWords: L.length, audioEndToAnswer: { p50: q(net, .5), p95: q(net, .95) }, answerToScreen: { p50: q(ui, .5), p95: q(ui, .95) }, stale: Whisper.tlog.filter(x => x.stale).length };
+    },
+    // the clip log itself, for a local copy (nothing is sent anywhere)
+    clips: () => JSON.stringify(Whisper.tlog),
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
