@@ -630,6 +630,9 @@
           // another song: clearly better than the open one in two of the clips, a good fit in each, and real words
           const better = set.filter(i => (T[i].m.get(id) || {}).top >= ((T[i].m.get(st.song) || {}).top || 0) + .1).length;
           if (better < 2 || rows.filter(x => x.top >= .7).length < 2 || rows.reduce((t, x) => t + x.n, 0) < 3) continue;
+          // and the clips must point at places, with at least one clip of two real words: one common word a clip
+          // ("துதி") fits half the lines of a praise song (seen live: a false switch to ஆத்துமாவே ஸ்தோத்தரி)
+          if (!rows.some(x => x.n >= 2) && rows.some((x, i) => i && x.ps.length > 1 && x.ps.join() === rows[i - 1].ps.join())) continue;
         }
         let ok = null, here = false;
         for (const a of rows[0].ps) {
@@ -788,13 +791,18 @@
       return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };
     }
     // ---- another service song (or the first one, when nothing is open) ----
-    if (o && mine && o.top >= .8 && o.topN >= 2 && o.top - mine.top >= .2) {
+    if (o && mine && o.top >= .6 && o.top - mine.top >= .15) {
       let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
-      if (novelFit(mine.sg, o.sg, p, hw) >= 2) {
-        st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = [];
+      const nf = novelFit(mine.sg, o.sg, p, hw);
+      // one clear clip (two words of its own), or two clips running each with a word the open song has nowhere
+      // ("என்னாவி புதுப்பாய்" then "இந்த இயேசு": 8 s to switch before)
+      const again = nf >= 1 && st.nov && st.nov.id === o.sg.id && now - st.nov.at < 9000;
+      if ((nf >= 2 && o.top >= .8 && o.topN >= 2) || (again && o.top >= .7 && o.topN >= 1 && mine.top < .45 && nf + st.nov.n >= 3)) {
+        st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = []; st.nov = null;
         return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
       }
-    }
+      st.nov = nf >= 1 ? { id: o.sg.id, at: now, n: nf } : null;
+    } else if (st.nov && now - st.nov.at > 9000) st.nov = null;
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
       const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
       st.sw = { id: o.sg.id, n: same ? st.sw.n + 1 : 1, at: now };
@@ -835,7 +843,7 @@
     // expected step is taken on the next-line bar.
     const exp = st.rate && st.last ? Math.round(st.rate * (now - st.last.t) / 1000) : 1;
     let ok;
-    if (c >= 0 && d > 1 && d <= Math.min(4, exp + 1) && s >= .45) ok = true;
+    if (c >= 0 && d > 1 && d <= Math.min(4, exp + 1) && s >= .45 && (d === 2 || n >= 2 || s >= .8)) ok = true;   // 3-4 lines on: not on one common word ("இந்த இயேசு" -> verse 4)
     else if (stuck && d > 1 && d <= 8 && s >= .5 && n >= 2) ok = true;            // the screen has not moved for 10 s
     else if (c < 0) ok = (best <= 1 && s >= .3) || (conf && s >= .55 && n >= 2 && (best <= 3 || (s >= .85 && n >= 3)));  // before the song: its start (the operator opened it)
     else if (d === 1) ok = s >= .4;

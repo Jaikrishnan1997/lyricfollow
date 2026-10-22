@@ -1283,11 +1283,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       let left = (pos.n - 1 - pos.p) * spw - late;                     // seconds until this line is finished
       let target = mj;
       // At its end already: show the next line - but a line is never skipped: one not yet shown is shown first.
-      if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj]) target = mj + 1;
+      // The end of a chorus is not stepped over on timing alone: singers repeat the chorus as often as they like, and
+      // the first line of the next verse shown over a repeated chorus is the wrong text for 10 s (seen live, twice).
+      // The verse appears when its words are heard (one clip later).
+      const chorusEnd = j => { const parts = slideParts ? slideParts.split(' ') : null; const sl = lines[j] && lines[j].slide; if (!parts || sl == null || parts[sl] !== 'C') return false; const nx = mains[mains.indexOf(j) + 1]; return nx != null && lines[nx].slide !== sl; };
+      if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj] && !chorusEnd(mains[mj])) target = mj + 1;
       else if (left <= .35) left = .35;
       if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target], 'lead');
       clearTimeout(this.timer); this.timer = null;
-      if (target === mj && mj + 1 < mains.length) {
+      if (target === mj && mj + 1 < mains.length && !chorusEnd(mains[mj])) {
         this.timer = setTimeout(() => {                                  // the singer will reach the next line now
           if (!song || this.heardJ !== mj || follow.cur !== mains[mj]) return;
           this.go(mains[mj + 1], 'timer');
