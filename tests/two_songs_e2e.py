@@ -60,6 +60,10 @@ try:
         time.sleep(0.25)
     ta=sum(cA.values()); print('Alleluya only', {k: f'{100*v/ta:.0f}%' for k,v in cA.items()})
     tot=sum(cnt.values()); print('both', {k: f'{100*v/tot:.0f}%' for k,v in cnt.items()}, 'switch to Enthan at', sw, '(sung from', run['switchAt'], ')', 'clips used', len(used), 'with key words', kt[0])
-    if len(sys.argv)>1: print('screen changes (rec s, song, line, sung):', tl)
+    if len(sys.argv)>1:
+        print('screen changes (rec s, song, line, sung):', tl)
+        stt=pg.evaluate('LF_DEBUG.state()'); t1=pg.evaluate('performance.now()/1000'); off=R0+(time.time()-T0[0])-t1
+        print('  svc', stt['svc'])
+        for x in stt['trk']: print('  trk', round(x[0]+off,1), x[1:])
     print('ERR', errs); br.close()
 finally: srv.terminate()

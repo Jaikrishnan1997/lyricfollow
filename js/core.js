@@ -556,7 +556,7 @@
       if (h.length < 4) continue;
       let bs = 0, bw = null; for (const w of lw) { const v = wsimP(h, w); if (v > bs) { bs = v; bw = w; } }
       if (bs < .75 || oSg.ix.idf(bw) < 1) continue;
-      if (mv.some(w => wsimP(h, w) >= .7)) continue;
+      if (mv.some(w => wsimP(h, w) >= .7 || (w.length > h.length && w.startsWith(h)))) continue;   // "துதி" is in "துதியுங்கள்"
       n++;
     }
     return n;
@@ -796,12 +796,13 @@
       const nf = novelFit(mine.sg, o.sg, p, hw);
       // one clear clip (two words of its own), or two clips running each with a word the open song has nowhere
       // ("என்னாவி புதுப்பாய்" then "இந்த இயேசு": 8 s to switch before)
-      const again = nf >= 1 && st.nov && st.nov.id === o.sg.id && now - st.nov.at < 9000;
-      if ((nf >= 2 && o.top >= .8 && o.topN >= 2) || (again && o.top >= .7 && o.topN >= 1 && mine.top < .45 && nf + st.nov.n >= 3)) {
+      // ... and the two clips fit the same place in it (a line apart at most), not two far lines on chance words
+      const again = nf >= 1 && st.nov && st.nov.id === o.sg.id && now - st.nov.at < 9000 && Math.abs(st.nov.p - p) <= 2;
+      if ((nf >= 2 && o.top >= .8 && o.topN >= 2) || (again && o.top >= .7 && (mine.top < .45 ? nf + st.nov.n >= 3 : nf + st.nov.n >= 2 && st.nov.w !== hw.join(' ')))) {
         st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = []; st.nov = null;
         return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
       }
-      st.nov = nf >= 1 ? { id: o.sg.id, at: now, n: nf } : null;
+      st.nov = nf >= 1 ? { id: o.sg.id, at: now, n: nf, w: hw.join(' '), p } : null;
     } else if (st.nov && now - st.nov.at > 9000) st.nov = null;
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
       const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
@@ -848,13 +849,13 @@
     else if (c < 0) ok = (best <= 1 && s >= .3) || (conf && s >= .55 && n >= 2 && (best <= 3 || (s >= .85 && n >= 3)));  // before the song: its start (the operator opened it)
     else if (d === 1) ok = s >= .4;
     else if (d === 2) ok = (s >= .45 && n >= 2) || (conf && s >= .38) || (s >= .85 && n >= 1);   // one clear word of the line after next ("சூரியனே")
-    else if (d <= 4 && d > 0) ok = (s >= .55 && n >= 2) || (conf && s >= .42 && n >= 1);
+    else if (d <= 4 && d > 0) ok = (s >= .55 && n >= 2) || (conf && s >= .42 && n >= 1 && st.pend.w !== big.join(' '));   // two clips, not the same lone word twice ("இயேசு")
     else if (d > 4) ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);       // far ahead: rare, needs a lot
     else if (d === -1) ok = (s >= .55 && n >= 2) || (s >= .7 && n >= 1) || (conf && s >= .42);
     else if (d >= -4) ok = (s >= .55 && n >= 2) || (conf && s >= .45 && n >= 2);
     else if (best === 0 || ix.first[best]) ok = (s >= .65 && n >= 2) || (conf && s >= .5 && n >= 2);   // back to the top / a verse
     else ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);
-    if (!ok) { st.pend = { p: best, at: now, s, n }; return byHmm(); }
+    if (!ok) { st.pend = { p: best, at: now, s, n, w: big.join(' ') }; return byHmm(); }
     st.pend = null;
     if (c >= 0 && d > 0 && st.last && st.last.p >= 0 && best > st.last.p) {
       const r = (best - st.last.p) / Math.max(1, (now - st.last.t) / 1000); st.rate = st.rate ? st.rate * .6 + Math.min(1.2, r) * .4 : Math.min(1.2, r);

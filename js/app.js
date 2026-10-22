@@ -1286,12 +1286,18 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // The end of a chorus is not stepped over on timing alone: singers repeat the chorus as often as they like, and
       // the first line of the next verse shown over a repeated chorus is the wrong text for 10 s (seen live, twice).
       // The verse appears when its words are heard (one clip later).
-      const chorusEnd = j => { const parts = slideParts ? slideParts.split(' ') : null; const sl = lines[j] && lines[j].slide; if (!parts || sl == null || parts[sl] !== 'C') return false; const nx = mains[mains.indexOf(j) + 1]; return nx != null && lines[nx].slide !== sl; };
-      if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj] && !chorusEnd(mains[mj])) target = mj + 1;
+      // The end of a chorus is not stepped over on timing alone: singers repeat the chorus as often as they like, and
+      // the next verse's first line shown over a repeated chorus is the wrong text for 10 s (seen live, several times).
+      // The verse appears when its words are heard - one clip later. (Verse ends keep the timing: measured, the next
+      // slide otherwise shows late or its first line is skipped.)
+      const slideEnd = j => { const parts = slideParts ? slideParts.split(' ') : null; const sl = lines[j] && lines[j].slide; if (!parts || sl == null || parts[sl] !== 'C') return false; const nx = mains[mains.indexOf(j) + 1]; return nx != null && lines[nx].slide !== sl; };
+      if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj] && !slideEnd(mains[mj])) target = mj + 1;
       else if (left <= .35) left = .35;
+      // into another slide on the words of one clip: two words that fit there, not one
+      if (target === mj && lines[mains[mj]].slide !== (lines[follow.cur] || {}).slide && pos.sc < 2) return;
       if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target], 'lead');
       clearTimeout(this.timer); this.timer = null;
-      if (target === mj && mj + 1 < mains.length && !chorusEnd(mains[mj])) {
+      if (target === mj && mj + 1 < mains.length && !slideEnd(mains[mj])) {
         this.timer = setTimeout(() => {                                  // the singer will reach the next line now
           if (!song || this.heardJ !== mj || follow.cur !== mains[mj]) return;
           this.go(mains[mj + 1], 'timer');
