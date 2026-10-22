@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, micNs: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs', psalmMode: false, psalmN: 23, psalmV: 1, quiz: 'show', quizDelay: 4
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, micNs: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs', psalmMode: false, psalmN: 23, psalmV: 1, quiz: 'show', quizDelay: 4, quizFull: true
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -2217,8 +2217,17 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   let quizTimer = 0, quizHeard = [], quizLast = { i: -1, at: 0 }, quizAsked = null, quizAskTimer = 0, quizReady = null;
   function quizLoad() {
     if (quizReady || !window.LFQuiz) return quizReady;
-    quizReady = fetch('vendor/quiz.json').then(r => r.json()).then(l => LFQuiz.load(l)).catch(() => { quizReady = null; return 0; });
+    quizReady = fetch('vendor/quiz.json').then(r => r.json()).then(l => LFQuiz.load(l)).then(n => { if (S.quizFull !== false) quizLoadFull(); return n; }).catch(() => { quizReady = null; return 0; });
     return quizReady;
+  }
+  // the verse-by-verse questions from every book: one file a book, loaded after the core list, a book at a time
+  let quizFullDone = false;
+  async function quizLoadFull() {
+    if (quizFullDone) return; quizFullDone = true;
+    try {
+      const idx = await fetch('vendor/quiz/index.json').then(r => r.json());
+      for (const x of idx) { const l = await fetch('vendor/quiz/' + x.file).then(r => r.json()).catch(() => []); LFQuiz.add(l, true); await new Promise(r => setTimeout(r, 30)); }
+    } catch (e) { quizFullDone = false; }
   }
   function quizListen(finals) {
     if (S.quiz === 'off' || !window.LFQuiz) return false;
@@ -2229,11 +2238,23 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     let m = LFQuiz.match(finals);
     if (!m && quizHeard.length > 1) m = LFQuiz.match(quizHeard.slice(-2).map(x => x.t).join(' '));
     if (!m) return false;
+    // a verse being read out is not a question about it ("Who is like unto thee, O LORD?"): most of that verse's
+    // words heard, or verses being followed just now, and the question is left alone
+    if (quizReading(m.q, quizHeard.map(x => x.t).join(' '))) return false;
     quizHeard = [];
     if (m.i === quizLast.i && now - quizLast.at < 90000) { quizLast.at = now; return true; }   // asked again: already up
     quizLast = { i: m.i, at: now };
     if (S.quiz === 'show' && S.vbAuto) showQuiz(m.q); else askQuiz(m.q);
     return true;
+  }
+  function quizReading(q, heard) {
+    if (Date.now() - VF.at < 6000 && q.full) return true;
+    const [b, c, v] = q.ref, lang = detectScript(heard);
+    const vid = lang === 'ml' ? 'mal1910' : lang === 'ta' ? 'tamov' : (S.versions.find(x => (Bible.VERSIONS.find(y => y.id === x) || {}).lang === 'en') || 'kjv');
+    if (!Bible.loaded(vid)) { Bible.load(vid).catch(() => {}); return !!q.full; }
+    const H = new Set(Core.keyWords(heard).split(/\s+/));
+    const vw = Core.keyWords(Bible.verse(vid, b, c, v)).split(/\s+/).filter(w => w.length >= 3);
+    return vw.length >= 4 && vw.filter(w => H.has(w)).length / vw.length >= .5;
   }
   function showQuiz(q, now) {
     hideQuizAsk(); clearTimeout(quizTimer);
@@ -2669,6 +2690,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     for (const id of ['psN', 'psV']) $(id).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('psGo').click(); } };
     renderPsalmUI();
     $('quizMode').value = S.quiz || 'show'; $('quizMode').onchange = e => { S.quiz = e.target.value; saveSettings(); if (S.quiz !== 'off') quizLoad(); };
+    $('quizFull').checked = S.quizFull !== false; $('quizFull').onchange = e => { S.quizFull = e.target.checked; saveSettings(); if (S.quizFull) quizLoadFull(); else toast(t('reload_to_apply')); };
     $('quizDelay').value = String(S.quizDelay == null ? 4 : S.quizDelay); $('quizDelay').onchange = e => { S.quizDelay = +e.target.value; saveSettings(); };
     $('btnQuizShow').onclick = () => { const q = quizAsked; if (q) showQuiz(q, true); };
     $('btnQuizNo').onclick = hideQuizAsk;
