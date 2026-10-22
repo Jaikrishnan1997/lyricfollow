@@ -1292,7 +1292,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       // slide otherwise shows late or its first line is skipped.)
       const slideEnd = j => { const parts = slideParts ? slideParts.split(' ') : null; const sl = lines[j] && lines[j].slide; if (!parts || sl == null || parts[sl] !== 'C') return false; const nx = mains[mains.indexOf(j) + 1]; return nx != null && lines[nx].slide !== sl; };
       if (left <= .35 && mj + 1 < mains.length && follow.cur >= mains[mj] && !slideEnd(mains[mj])) target = mj + 1;
-      else if (left <= .35) left = .35;
+      else if (left <= .35) left = 1.4;          // a line just put on screen stays long enough to be read (it flashed for 0.1 s before)
       // into another slide on the words of one clip: two words that fit there, not one
       if (target === mj && lines[mains[mj]].slide !== (lines[follow.cur] || {}).slide && pos.sc < 2) return;
       if (mains[target] !== follow.cur && target >= ci - 0) this.go(mains[target], 'lead');
