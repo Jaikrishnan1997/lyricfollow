@@ -561,6 +561,19 @@
     }
     return n;
   }
+  // Distinct heard words that the other song has and the open one has nowhere (see novelFit), over several clips.
+  function novelWords(mineSg, oSg, words) {
+    if (!mineSg) return 9;
+    const mv = mineSg.ix.voc1 || (mineSg.ix.voc1 = [...new Set(mineSg.ix.W.flat())]);
+    const ov = oSg.ix.voc1 || (oSg.ix.voc1 = [...new Set(oSg.ix.W.flat())]);
+    let n = 0;
+    for (const h of new Set(words)) {
+      if (h.length < 4) continue;
+      if (mv.some(w => wsimP(h, w) >= .7 || (w.length > h.length && w.startsWith(h)))) continue;
+      if (ov.some(w => wsimP(h, w) >= .75)) n++;
+    }
+    return n;
+  }
   function prior(ix, c, p) {
     const d = p - c;
     if (c < 0) return p === 0 ? .06 : ix.first[p] ? .02 : -.04;
@@ -609,7 +622,7 @@
   // run on in order over the last three clips: {song, p} (p = its place now) or null.
   function trajectory(st, res, big, now) {
     if (!big.length) return null;
-    const entry = { t: now, m: new Map() };
+    const entry = { t: now, m: new Map(), w: big };
     for (const r of res) {
       if (r.top < .6) continue;
       const ps = []; let n = 0; for (let p = 0; p < r.sc.length; p++) if (r.sc[p].s >= Math.max(.6, r.top - .05)) { ps.push(p); n = Math.max(n, r.sc[p].n); }
@@ -776,7 +789,10 @@
     // song (lines 1, 3, 3, 4 ...). Random matches of common words do not line up like that. Seen live: Alleluya
     // sung from the top with the screen at its end (stuck 80 s), and with another song open (40 s to switch).
     const traj = trajectory(st, res, big, now);
-    if (traj && traj.song !== st.song && (!mine || mine.top < .9)) {
+    // another song along a run of clips: only with words of its own in them (two at least) - words both songs share
+    // ("அல்லேலூயா", "தேவனைத் துதி") in order looked like ஆத்துமாவே ஸ்தோத்தரி at the end of Alleluya (seen live)
+    if (traj && traj.song !== st.song && mine && novelWords(mine.sg, res.find(r => r.sg.id === traj.song).sg, (st.traj || []).flatMap(e => e.w || [])) < 2) { /* not this one */ }
+    else if (traj && traj.song !== st.song && (!mine || mine.top < .9)) {
       st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = [];
       return { song: traj.song, line: res.find(r => r.sg.id === traj.song).sg.ix.idx[traj.p], why: 'song' };
     }
@@ -806,9 +822,11 @@
     } else if (st.nov && now - st.nov.at > 9000) st.nov = null;
     if (o && o.top >= .55 && o.topN >= 2 && o.top - (mine ? mine.top : 0) >= .25) {
       const same = st.sw && st.sw.id === o.sg.id && now - st.sw.at < 12000;
-      st.sw = { id: o.sg.id, n: same ? st.sw.n + 1 : 1, at: now };
+      st.sw = { id: o.sg.id, n: same ? st.sw.n + 1 : 1, at: now, w: (same ? st.sw.w : []).concat(big) };
       const sure = o.top >= .8 && o.topN >= 3 && (!mine || mine.top < .3);
-      if (st.sw.n >= 2 || sure || (!mine && o.top >= .7 && o.topN >= 2)) {
+      // two clips for the other song: at least one word of it the open song does not have ("தேவனைத் துதி அல்லேலூயா"
+      // is in both Alleluya and ஆத்துமாவே ஸ்தோத்தரி - seen live, a false switch at Alleluya's end)
+      if ((st.sw.n >= 2 && (!mine || novelWords(mine.sg, o.sg, st.sw.w) >= 1)) || sure || (!mine && o.top >= .7 && o.topN >= 2)) {
         let p = 0; for (let q = 0; q < o.sc.length; q++) if (o.sc[q].s > o.sc[p].s) p = q;
         st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
         return { song: o.sg.id, line: o.sg.ix.idx[p], why: 'song' };
