@@ -122,6 +122,9 @@ A presentation clicker works too.
 - **Backgrounds**: 12 built-in, plus your own photos and videos. Church default, Bible background, and a background per song.
 - **Bible**: type a few letters in any language or spelling (`jo`, `യോ`, `யோ`, `mat`) and pick the book from the list, shown in all three languages. MAL 1910, Tamil Union, KJV, WEB, BSB, ASV. Up to 3 versions side by side. Type `John 3:16`, `jn 3 16-18`, `യോഹന്നാൻ 3:16`, `யோவான் 3:16`, even `yohannan 3 16`. Word search with a fast index.
 - **Voice Bible**: hears "യോഹന്നാൻ മൂന്നാം അദ്ധ്യായം പതിനാറാം വാക്യം" or "John 3:16", or a verse read aloud, and offers it ready to show.
+- **Psalm reading** (📜 next to Preacher): pick a Psalm and a starting verse (or say "Psalm 91" / "சங்கீதம் 91" / "സങ്കീർത്തനം 91"). One verse is on screen and moves to the next as the church reads it. A repeated verse stays; one skipped verse (or going back one) moves only when it is heard clearly twice; nothing further ever moves; other references, the passage finder and the quiz are switched off. Followed in the Bible of the language being read (Malayalam 1910, Tamil OV, or the chosen English version) whatever versions are on the projector.
+- **Bible quiz** (Preacher mode): when the preacher asks "who is the son of Abraham?", "ஆபிரகாமின் மகன் யார்?" or "അബ്രാഹാമിന്റെ മകൻ ആര്?", the question goes on screen and the answer follows after a pause (0/4/8/15 s, so the church can answer aloud first) in every language the church shows, with the verse it comes from. 189 questions in `vendor/quiz.json`, each in English, Tamil and Malayalam, with names spelled as in the Tamil OV and Malayalam 1910 Bibles; every reference was checked against the Bible text (`node tools/build_quiz.js`). Matching is local: a question word must be heard (who/what/how many, யார்/என்ன/எத்தனை, ആര്/എന്ത്/എത്ര) and most of the question's own words, with a clear lead over any other question. Measured: every question finds its answer in all three languages; read-out Bible verses trigger a question 0.03% of the time (KJV, 10,770 verses). Settings: Show the answer / Ask me first (the operator taps Show) / Off. Add your own questions to `tools/quiz_src.txt` and run the build.
+- **Microphone health** (operator screen only, never on the projector): no signal / weak / too loud (clipping) / good, from the last few seconds of input.
 - **Photo to lyrics**: reads Malayalam, Tamil and English from a photo or pasted screenshot. Doubtful words are marked in orange to check before saving.
 - **Light mode** for slow computers.
 
@@ -311,3 +314,13 @@ Thalaimuraigalin Sangeetham (Tamil) / Thalamurakalude Sangeetham (Malayalam) epi
 chapter times are bundled in `vendor/yt-tracks.json`). *Match all my songs automatically* attaches tracks to songs whose
 titles sound like an episode chapter. On the Live tab the track plays through the official embedded YouTube player
 (internet needed; nothing is downloaded), with play/stop, volume and a Music (small 200 px player) / Video (large player) choice. The track never starts by itself: opening a song, a song switched automatically by the listener, or a song restored at start-up only loads its track, paused - it plays only when ▶ is pressed. YouTube's terms require the player to stay visible, so "music only" is the smallest allowed player rather than a hidden one.
+
+## Later: a hosted version for many churches (notes, not built)
+
+Planned: each church signs in, loads its own songs, and no songs are bundled (copyright). What it needs, keeping today's app as the projector client:
+
+- **Accounts and churches**: sign-in (email link or Google), one church = one workspace, roles pastor / operator / viewer.
+- **Songs per church**: the song library moves from this browser's storage to the church's workspace (a small database such as Supabase/Postgres with row-level security per church); the app keeps an offline copy so a service never depends on the internet. The bundled packs (`vendor/songs-*.json`) are removed from the hosted build; churches import their own lyrics (typed, pasted, Word/PowerPoint, photo).
+- **Keys stay server-side**: Sarvam/Groq keys belong to the church and are used through a small proxy (like `cloudflare-worker.js`), with the per-church ₹ budget enforced there instead of in the browser.
+- **Bibles and quiz**: public-domain Bibles and the quiz list stay bundled; licensed versions only where the church holds the licence.
+- **Nothing changes in the follower**: matching, Psalm reading and the quiz run in the browser exactly as now.

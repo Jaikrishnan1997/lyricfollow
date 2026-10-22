@@ -1,0 +1,190 @@
+# ref | English question | English answer | Tamil question | Tamil answer | Malayalam question | Malayalam answer
+Genesis 1:1 | Who created the heavens and the earth? | God | வானத்தையும் பூமியையும் சிருஷ்டித்தவர் யார்? | தேவன் | ആകാശവും ഭൂമിയും സൃഷ്ടിച്ചത് ആര്? | ദൈവം
+Genesis 2:19 | Who was the first man? | Adam | முதல் மனிதன் யார்? | ஆதாம் | ആദ്യ മനുഷ്യൻ ആര്? | ആദാം
+Genesis 3:20 | Who was the first woman? | Eve | முதல் பெண் யார்? | ஏவாள் | ആദ്യ സ്ത്രീ ആര്? | ഹവ്വ
+Genesis 2:8 | Where did God put Adam after creating him? | The garden of Eden | ஆதாமை தேவன் எங்கே வைத்தார்? | ஏதேன் தோட்டம் | ആദാമിനെ ദൈവം എവിടെ ആക്കി? | ഏദെൻ തോട്ടം
+Genesis 4:8 | Who killed his brother Abel? | Cain | தன் சகோதரன் ஆபேலைக் கொன்றவன் யார்? | காயீன் | സഹോദരനായ ഹാബെലിനെ കൊന്നത് ആര്? | കയീൻ
+Genesis 4:2 | Who were the first two sons of Adam and Eve? | Cain and Abel | ஆதாம் ஏவாளின் முதல் இரண்டு மகன்கள் யார்? | காயீன், ஆபேல் | ആദാമിന്റെയും ഹവ്വയുടെയും ആദ്യ രണ്ടു മക്കൾ ആര്? | കയീൻ, ഹാബെൽ
+Genesis 4:25 | Who was born to Adam and Eve after Abel died? | Seth | ஆபேலுக்குப் பதிலாக ஆதாம் ஏவாளுக்குப் பிறந்த மகன் யார்? | சேத் | ഹാബെലിന് പകരം ആദാമിന് ജനിച്ച മകൻ ആര്? | ശേത്ത്
+Genesis 5:27 | Who lived the longest in the Bible? | Methuselah, 969 years | வேதாகமத்தில் அதிக காலம் வாழ்ந்தவர் யார்? | மெத்தூசலா, 969 வருஷம் | ബൈബിളിൽ ഏറ്റവും കൂടുതൽ കാലം ജീവിച്ചത് ആര്? | മെഥൂശലഹ്, 969 വർഷം
+Genesis 5:24 | Who walked with God and was taken by God? | Enoch | தேவனோடே சஞ்சரித்து எடுத்துக்கொள்ளப்பட்டவர் யார்? | ஏனோக்கு | ദൈവത്തോടുകൂടെ നടന്ന് ദൈവം എടുത്തുകൊണ്ടത് ആരെ? | ഹാനോക്ക്
+Genesis 6:14 | Who built the ark? | Noah | பேழையைக் கட்டியவர் யார்? | நோவா | പെട്ടകം ഉണ്ടാക്കിയത് ആര്? | നോഹ
+Genesis 7:12 | How many days and nights did it rain in the flood? | Forty days and forty nights | ஜலப்பிரளயத்தில் எத்தனை நாள் மழை பெய்தது? | நாற்பது நாள் இரவும் பகலும் | ജലപ്രളയത്തിൽ എത്ര ദിവസം മഴ പെയ്തു? | നാല്പതു രാവും നാല്പതു പകലും
+Genesis 8:4 | On which mountains did the ark rest? | The mountains of Ararat | பேழை எந்த மலைகளில் தங்கிற்று? | அரராத் மலைகள் | പെട്ടകം ഏതു പർവ്വതങ്ങളിൽ ഉറെച്ചു? | അരരാത്ത് പർവ്വതങ്ങൾ
+Genesis 9:13 | What was the sign of God's covenant with Noah? | The rainbow | நோவாவோடு செய்த உடன்படிக்கையின் அடையாளம் என்ன? | வானவில் | നോഹയോടുള്ള നിയമത്തിന്റെ അടയാളം എന്ത്? | മഴവില്ല്
+Genesis 6:10 | Who were the three sons of Noah? | Shem, Ham and Japheth | நோவாவின் மூன்று மகன்கள் யார்? | சேம், காம், யாப்பேத் | നോഹയുടെ മൂന്നു പുത്രന്മാർ ആര്? | ശേം, ഹാം, യാഫെത്ത്
+Genesis 11:9 | Where did God confuse the language of the whole earth? | Babel | பூமியின் பாஷையைத் தாறுமாறாக்கின இடம் எது? | பாபேல் | ഭൂമിയിലെ ഭാഷ കലക്കിയ സ്ഥലം ഏത്? | ബാബേൽ
+Genesis 12:1 | Who did God call to leave his country and go to a land He would show? | Abram (Abraham) | தன் தேசத்தை விட்டுப் புறப்படும்படி தேவன் அழைத்தவர் யார்? | ஆபிராம் (ஆபிரகாம்) | സ്വദേശം വിട്ടു പോകുവാൻ ദൈവം വിളിച്ചത് ആരെ? | അബ്രാം (അബ്രാഹാം)
+Genesis 21:3 | Who is the son of Abraham? | Isaac | ஆபிரகாமின் மகன் யார்? | ஈசாக்கு | അബ്രാഹാമിന്റെ മകൻ ആര്? | യിസ്ഹാക്ക്
+Genesis 16:15 | Who was Abraham's son through Hagar? | Ishmael | ஆகாரின் மூலம் ஆபிரகாமுக்குப் பிறந்த மகன் யார்? | இஸ்மவேல் | ഹാഗാറിൽ അബ്രാഹാമിന് ജനിച്ച മകൻ ആര്? | യിശ്മായേൽ
+Genesis 17:5 | What was Abraham's name before God changed it? | Abram | ஆபிரகாமின் முந்தைய பெயர் என்ன? | ஆபிராம் | അബ്രാഹാമിന്റെ ആദ്യത്തെ പേര് എന്ത്? | അബ്രാം
+Genesis 17:15 | What was Sarah's name before God changed it? | Sarai | சாராளின் முந்தைய பெயர் என்ன? | சாராய் | സാറയുടെ ആദ്യത്തെ പേര് എന്ത്? | സാറായി
+Genesis 21:5 | How old was Abraham when Isaac was born? | One hundred years | ஈசாக்கு பிறந்தபோது ஆபிரகாமுக்கு எத்தனை வயது? | நூறு வயது | യിസ്ഹാക്ക് ജനിച്ചപ്പോൾ അബ്രാഹാമിന് എത്ര വയസ്സ്? | നൂറു വയസ്സ്
+Genesis 22:2 | Which son did God ask Abraham to offer as a sacrifice? | Isaac | ஆபிரகாமிடம் தேவன் பலியிடச் சொன்ன மகன் யார்? | ஈசாக்கு | ദൈവം അബ്രാഹാമിനോട് യാഗം കഴിപ്പാൻ പറഞ്ഞ മകൻ ആര്? | യിസ്ഹാക്ക്
+Genesis 19:26 | Who looked back and became a pillar of salt? | Lot's wife | திரும்பிப் பார்த்து உப்புத் தூணானவள் யார்? | லோத்தின் மனைவி | തിരിഞ്ഞുനോക്കി ഉപ്പുതൂണായത് ആര്? | ലോത്തിന്റെ ഭാര്യ
+Genesis 24:67 | Who was the wife of Isaac? | Rebekah | ஈசாக்கின் மனைவி யார்? | ரெபெக்காள் | യിസ്ഹാക്കിന്റെ ഭാര്യ ആര്? | റിബെക്കാ
+Genesis 25:25 | Who were the twin sons of Isaac? | Esau and Jacob | ஈசாக்கின் இரட்டைப் பிள்ளைகள் யார்? | ஏசா, யாக்கோபு | യിസ്ഹാക്കിന്റെ ഇരട്ട പുത്രന്മാർ ആര്? | ഏശാവ്, യാക്കോബ്
+Genesis 25:33 | Who sold his birthright for a meal? | Esau | ஒரு வேளை உணவுக்காகத் தன் சேஷ்டபுத்திர பாகத்தை விற்றவன் யார்? | ஏசா | ഒരു ഭക്ഷണത്തിന്നായി ജ്യേഷ്ഠാവകാശം വിറ്റത് ആര്? | ഏശാവ്
+Genesis 32:28 | What new name did God give Jacob? | Israel | யாக்கோபுக்கு தேவன் கொடுத்த புதிய பெயர் என்ன? | இஸ்ரவேல் | യാക്കോബിന് ദൈവം കൊടുത്ത പുതിയ പേര് എന്ത്? | യിസ്രായേൽ
+Genesis 28:12 | Who dreamed of a ladder reaching to heaven? | Jacob | வானத்தை எட்டும் ஏணியைச் சொப்பனத்தில் கண்டவர் யார்? | யாக்கோபு | സ്വർഗ്ഗത്തോളം എത്തുന്ന കോവണി സ്വപ്നം കണ്ടത് ആര്? | യാക്കോബ്
+Genesis 29:28 | Who were the two wives of Jacob who were sisters? | Leah and Rachel | யாக்கோபின் மனைவிகளான சகோதரிகள் யார்? | லேயாள், ராகேல் | യാക്കോബിന്റെ ഭാര്യമാരായ സഹോദരിമാർ ആര്? | ലേയാ, റാഹേൽ
+Genesis 35:18 | Who was the youngest son of Jacob? | Benjamin | யாக்கோபின் இளைய மகன் யார்? | பென்யமீன் | യാക്കോബിന്റെ ഇളയ മകൻ ആര്? | ബെന്യാമീൻ
+Genesis 37:3 | Which son of Jacob was given a coat of many colours? | Joseph | பலவர்ண அங்கியைப் பெற்ற யாக்கோபின் மகன் யார்? | யோசேப்பு | നിറമുള്ള അങ്കി ലഭിച്ച യാക്കോബിന്റെ മകൻ ആര്? | യോസേഫ്
+Genesis 49:28 | How many tribes of Israel were there? | Twelve | இஸ்ரவேலின் கோத்திரங்கள் எத்தனை? | பன்னிரண்டு | യിസ്രായേൽ ഗോത്രങ്ങൾ എത്ര? | പന്ത്രണ്ട്
+Genesis 37:28 | For how many pieces of silver was Joseph sold? | Twenty pieces of silver | யோசேப்பு எத்தனை வெள்ளிக்காசுக்கு விற்கப்பட்டான்? | இருபது வெள்ளிக்காசு | യോസേഫിനെ എത്ര വെള്ളിക്കാശിന്നു വിറ്റു? | ഇരുപതു വെള്ളിക്കാശ്
+Genesis 41:41 | Who became ruler over all the land of Egypt under Pharaoh? | Joseph | பார்வோனுக்கு அடுத்தபடியாக எகிப்து தேசம் முழுவதற்கும் அதிகாரியானவர் யார்? | யோசேப்பு | ഫറവോന്റെ കീഴിൽ മിസ്രയീംദേശത്തിനു മുഴുവനും അധികാരിയായത് ആര്? | യോസേഫ്
+Exodus 2:10 | Who found the baby Moses in the river? | Pharaoh's daughter | நதியில் குழந்தை மோசேயைக் கண்டெடுத்தவள் யார்? | பார்வோனின் குமாரத்தி | നദിയിൽ ശിശുവായ മോശെയെ കണ്ടെടുത്തത് ആര്? | ഫറവോന്റെ പുത്രി
+Exodus 3:2 | How did God appear to Moses in the wilderness? | In a burning bush | வனாந்தரத்தில் தேவன் மோசேக்கு எப்படித் தோன்றினார்? | எரியும் முட்செடியில் | മരുഭൂമിയിൽ ദൈവം മോശെക്ക് എങ്ങനെ പ്രത്യക്ഷനായി? | കത്തുന്ന മുൾപടർപ്പിൽ
+Exodus 4:14 | Who was the brother of Moses? | Aaron | மோசேயின் சகோதரன் யார்? | ஆரோன் | മോശെയുടെ സഹോദരൻ ആര്? | അഹരോൻ
+Exodus 15:20 | Who was the sister of Moses and Aaron? | Miriam | மோசே ஆரோனின் சகோதரி யார்? | மிரியாம் | മോശെയുടെയും അഹരോന്റെയും സഹോദരി ആര്? | മിർയ്യാം
+Exodus 7:14 | How many plagues did God send on Egypt? | Ten | எகிப்தின்மேல் தேவன் எத்தனை வாதைகளை அனுப்பினார்? | பத்து | മിസ്രയീമിന്മേൽ ദൈവം എത്ര ബാധകൾ അയച്ചു? | പത്ത്
+Exodus 12:13 | What did the Israelites put on their doors at the Passover? | The blood of the lamb | பஸ்காவில் இஸ்ரவேலர் வாசல்களில் எதைப் பூசினார்கள்? | ஆட்டுக்குட்டியின் இரத்தம் | പെസഹയിൽ യിസ്രായേല്യർ വാതിലുകളിൽ എന്തു പുരട്ടി? | കുഞ്ഞാടിന്റെ രക്തം
+Exodus 14:21 | Which sea did God divide for Israel? | The Red Sea | இஸ்ரவேலருக்காக தேவன் பிளந்த கடல் எது? | சிவந்த சமுத்திரம் | യിസ്രായേലിന്നായി ദൈവം വിഭാഗിച്ച കടൽ ഏത്? | ചെങ്കടൽ
+Exodus 16:15 | What bread did God give Israel from heaven in the wilderness? | Manna | வனாந்தரத்தில் தேவன் வானத்திலிருந்து கொடுத்த அப்பம் என்ன? | மன்னா | മരുഭൂമിയിൽ ദൈവം ആകാശത്തുനിന്നു കൊടുത്ത അപ്പം എന്ത്? | മന്നാ
+Exodus 20:3 | What is the first of the Ten Commandments? | You shall have no other gods before me | பத்துக் கட்டளைகளில் முதலாவது கட்டளை என்ன? | என்னையன்றி உனக்கு வேறே தேவர்கள் உண்டாயிருக்க வேண்டாம் | പത്തു കല്പനകളിൽ ഒന്നാമത്തെ കല്പന എന്ത്? | ഞാനല്ലാതെ അന്യദൈവങ്ങൾ നിനക്കു ഉണ്ടാകരുത്
+Exodus 19:20 | On which mountain did God give the law to Moses? | Mount Sinai | எந்த மலையில் தேவன் மோசேக்கு நியாயப்பிரமாணத்தைக் கொடுத்தார்? | சீனாய் மலை | ഏതു പർവ്വതത്തിൽ വെച്ചാണ് ദൈവം മോശെക്ക് ന്യായപ്രമാണം കൊടുത്തത്? | സീനായി പർവ്വതം
+Exodus 32:4 | What idol did Aaron make for the people? | A golden calf | ஆரோன் ஜனங்களுக்குச் செய்த விக்கிரகம் என்ன? | பொன் கன்றுக்குட்டி | അഹരോൻ ജനത്തിന്നു ഉണ്ടാക്കിയ വിഗ്രഹം എന്ത്? | പൊൻകാളക്കുട്ടി
+Numbers 22:28 | Whose donkey spoke to him? | Balaam's | கழுதை பேசினது யாரிடம்? | பிலேயாம் | കഴുത സംസാരിച്ചത് ആരോട്? | ബിലെയാം
+Numbers 14:33 | How many years did Israel wander in the wilderness? | Forty years | இஸ்ரவேலர் வனாந்தரத்தில் எத்தனை வருஷம் அலைந்தார்கள்? | நாற்பது வருஷம் | യിസ്രായേൽ മരുഭൂമിയിൽ എത്ര വർഷം അലഞ്ഞു? | നാല്പതു സംവത്സരം
+Deuteronomy 34:7 | How old was Moses when he died? | One hundred and twenty years | மோசே மரிக்கும்போது அவனுக்கு எத்தனை வயது? | நூற்றிருபது வயது | മോശെ മരിക്കുമ്പോൾ അവന് എത്ര വയസ്സ്? | നൂറ്റിരുപതു വയസ്സ്
+Joshua 1:1 | Who led Israel after Moses died? | Joshua | மோசேக்குப் பின் இஸ்ரவேலை நடத்தியவர் யார்? | யோசுவா | മോശെയുടെ മരണശേഷം യിസ്രായേലിനെ നടത്തിയത് ആര്? | യോശുവ
+Joshua 6:20 | Which city's walls fell down after Israel marched around it? | Jericho | இஸ்ரவேலர் சுற்றிவந்த பின் மதில்கள் விழுந்த பட்டணம் எது? | எரிகோ | യിസ്രായേൽ ചുറ്റിനടന്നശേഷം മതിൽ വീണ പട്ടണം ഏത്? | യെരീഹോ
+Joshua 2:1 | Who hid the two spies in Jericho? | Rahab | எரிகோவில் இரண்டு வேவுகாரரை ஒளித்து வைத்தவள் யார்? | ராகாப் | യെരീഹോവിൽ രണ്ടു ഒറ്റുകാരെ ഒളിപ്പിച്ചത് ആര്? | രാഹാബ്
+Judges 7:7 | With how many men did Gideon defeat the Midianites? | Three hundred | கிதியோன் எத்தனை பேரைக் கொண்டு மீதியானியரை முறியடித்தான்? | முந்நூறு பேர் | ഗിദെയോൻ എത്ര പേരെക്കൊണ്ട് മിദ്യാന്യരെ തോല്പിച്ചു? | മുന്നൂറു പേർ
+Judges 16:17 | Where was Samson's great strength? | In his hair | சிம்சோனின் மகா பலம் எதில் இருந்தது? | அவன் தலைமயிரில் | ശിംശോന്റെ മഹാബലം എവിടെ ആയിരുന്നു? | അവന്റെ തലമുടിയിൽ
+Judges 16:4 | Who betrayed Samson to the Philistines? | Delilah | சிம்சோனைப் பெலிஸ்தருக்குக் காட்டிக்கொடுத்தவள் யார்? | தெலீலாள் | ശിംശോനെ ഫെലിസ്ത്യർക്ക് ഏല്പിച്ചത് ആര്? | ദെലീല
+Judges 4:4 | Who was the woman judge of Israel? | Deborah | இஸ்ரவேலை நியாயம் விசாரித்த பெண் யார்? | தெபொராள் | യിസ്രായേലിന്നു ന്യായപാലനം ചെയ്ത സ്ത്രീ ആര്? | ദെബോരാ
+Ruth 1:16 | Who said to her mother-in-law, Your people shall be my people? | Ruth | உம்முடைய ஜனம் என் ஜனம் என்று தன் மாமியிடம் சொன்னவள் யார்? | ரூத் | നിന്റെ ജനം എന്റെ ജനം എന്ന് അമ്മാവിയമ്മയോടു പറഞ്ഞത് ആര്? | രൂത്ത്
+Ruth 4:13 | Who was the husband of Ruth? | Boaz | ரூத்தின் கணவன் யார்? | போவாஸ் | രൂത്തിന്റെ ഭർത്താവ് ആര്? | ബോവസ്
+Ruth 1:4 | Who was the mother-in-law of Ruth? | Naomi | ரூத்தின் மாமியார் யார்? | நகோமி | രൂത്തിന്റെ അമ്മാവിയമ്മ ആര്? | നൊവൊമി
+Ruth 4:17 | Who was the son of Ruth and Boaz? | Obed | ரூத் போவாஸின் மகன் யார்? | ஓபேத் | രൂത്തിന്റെയും ബോവസിന്റെയും മകൻ ആര്? | ഓബേദ്
+1 Samuel 1:20 | Who was the mother of Samuel? | Hannah | சாமுவேலின் தாய் யார்? | அன்னாள் | ശമൂവേലിന്റെ അമ്മ ആര്? | ഹന്നാ
+1 Samuel 3:10 | Who heard God calling his name at night in the temple? | Samuel | இரவில் ஆலயத்தில் தன் பெயரைச் சொல்லி தேவன் அழைத்ததைக் கேட்டவன் யார்? | சாமுவேல் | രാത്രി ആലയത്തിൽ ദൈവം പേർ ചൊല്ലി വിളിച്ചത് ആരെ? | ശമൂവേൽ
+1 Samuel 9:17 | Who was the first king of Israel? | Saul | இஸ்ரவேலின் முதல் ராஜா யார்? | சவுல் | യിസ്രായേലിന്റെ ആദ്യ രാജാവ് ആര്? | ശൌൽ
+1 Samuel 16:13 | Who anointed David as king? | Samuel | தாவீதை ராஜாவாக அபிஷேகம் பண்ணியவர் யார்? | சாமுவேல் | ദാവീദിനെ രാജാവായി അഭിഷേകം ചെയ്തത് ആര്? | ശമൂവേൽ
+1 Samuel 17:4 | Who was the giant that David killed? | Goliath | தாவீது கொன்ற இராட்சதன் யார்? | கோலியாத் | ദാവീദ് കൊന്ന മല്ലൻ ആര്? | ഗൊല്യാത്ത്
+1 Samuel 17:49 | What did David use to kill Goliath? | A sling and a stone | கோலியாத்தைக் கொல்ல தாவீது எதைப் பயன்படுத்தினான்? | கவணும் கல்லும் | ഗൊല്യാത്തിനെ കൊല്ലുവാൻ ദാവീദ് എന്ത് ഉപയോഗിച്ചു? | കവിണയും കല്ലും
+1 Samuel 16:1 | Who was the father of David? | Jesse | தாவீதின் தகப்பன் யார்? | ஈசாய் | ദാവീദിന്റെ അപ്പൻ ആര്? | യിശ്ശായി
+1 Samuel 18:1 | Who was David's close friend, the son of Saul? | Jonathan | சவுலின் மகனும் தாவீதின் நண்பனுமானவன் யார்? | யோனத்தான் | ശൗലിന്റെ മകനും ദാവീദിന്റെ സ്നേഹിതനുമായത് ആര്? | യോനാഥാൻ
+2 Samuel 12:24 | Which son of David became king after him? | Solomon | தாவீதுக்குப் பின் ராஜாவான அவன் மகன் யார்? | சாலொமோன் | ദാവീദിനു ശേഷം രാജാവായ മകൻ ആര്? | ശലോമോൻ
+2 Samuel 12:1 | Which prophet rebuked David about Bathsheba? | Nathan | பத்சேபாளைக் குறித்து தாவீதைக் கடிந்துகொண்ட தீர்க்கதரிசி யார்? | நாத்தான் | ബത്ത്-ശേബയെക്കുറിച്ച് ദാവീദിനെ ശാസിച്ച പ്രവാചകൻ ആര്? | നാഥാൻ
+1 Kings 3:9 | What did Solomon ask God for? | Wisdom, an understanding heart | சாலொமோன் தேவனிடம் கேட்டது என்ன? | ஞானமுள்ள இருதயம் | ശലോമോൻ ദൈവത്തോട് ചോദിച്ചത് എന്ത്? | വിവേകമുള്ള ഹൃദയം
+1 Kings 6:1 | Who built the temple of the Lord in Jerusalem? | Solomon | எருசலேமில் கர்த்தருடைய ஆலயத்தைக் கட்டியவர் யார்? | சாலொமோன் | യെരൂശലേമിൽ യഹോവയുടെ ആലയം പണിതത് ആര്? | ശലോമോൻ
+1 Kings 17:6 | Which birds fed Elijah by the brook? | Ravens | ஆற்றங்கரையில் எலியாவுக்கு உணவு கொண்டுவந்த பறவைகள் எவை? | காகங்கள் | തോട്ടിനരികെ ഏലീയാവിന്നു ആഹാരം കൊണ്ടുവന്ന പക്ഷികൾ ഏവ? | കാക്കകൾ
+1 Kings 18:38 | On which prophet's sacrifice did fire fall from heaven at Mount Carmel? | Elijah | கர்மேல் மலையில் யாருடைய பலியின்மேல் வானத்திலிருந்து அக்கினி இறங்கிற்று? | எலியா | കർമ്മേൽ പർവ്വതത്തിൽ ആരുടെ യാഗത്തിന്മേൽ ആകാശത്തുനിന്നു തീ ഇറങ്ങി? | ഏലീയാവ്
+2 Kings 2:11 | Who was taken up to heaven in a whirlwind? | Elijah | சுழல்காற்றில் பரலோகத்துக்கு எடுத்துக்கொள்ளப்பட்டவர் யார்? | எலியா | ചുഴലിക്കാറ്റിൽ സ്വർഗ്ഗത്തിലേക്ക് എടുക്കപ്പെട്ടത് ആര്? | ഏലീയാവ്
+2 Kings 2:9 | Who asked for a double portion of Elijah's spirit? | Elisha | எலியாவின் ஆவியில் இரட்டிப்பான பங்கைக் கேட்டவர் யார்? | எலிசா | ഏലീയാവിന്റെ ആത്മാവിന്റെ ഇരട്ടി പങ്ക് ചോദിച്ചത് ആര്? | എലീശാ
+2 Kings 5:14 | Who was healed of leprosy by washing seven times in the Jordan? | Naaman | யோர்தானில் ஏழுதரம் முழுகி குஷ்டம் நீங்கியவர் யார்? | நாகமான் | യോർദ്ദാനിൽ ഏഴു പ്രാവശ്യം മുങ്ങി കുഷ്ഠം മാറിയത് ആര്? | നയമാൻ
+1 Kings 16:31 | Who was the wicked wife of King Ahab? | Jezebel | ஆகாப் ராஜாவின் துன்மார்க்க மனைவி யார்? | யேசபேல் | ആഹാബ് രാജാവിന്റെ ദുഷ്ടയായ ഭാര്യ ആര്? | ഈസേബെൽ
+Jonah 1:17 | Who was swallowed by a big fish? | Jonah | பெரிய மீனால் விழுங்கப்பட்டவர் யார்? | யோனா | വലിയ മത്സ്യം വിഴുങ്ങിയത് ആരെ? | യോനാ
+Jonah 1:17 | How many days was Jonah in the belly of the fish? | Three days and three nights | யோனா மீனின் வயிற்றில் எத்தனை நாள் இருந்தான்? | மூன்று நாள் இரவும் பகலும் | യോനാ മത്സ്യത്തിന്റെ വയറ്റിൽ എത്ര ദിവസം ആയിരുന്നു? | മൂന്നു രാവും മൂന്നു പകലും
+Jonah 1:2 | To which city did God send Jonah? | Nineveh | தேவன் யோனாவை எந்தப் பட்டணத்துக்கு அனுப்பினார்? | நினிவே | ദൈവം യോനയെ ഏതു പട്ടണത്തിലേക്ക് അയച്ചു? | നീനെവേ
+Daniel 6:16 | Who was thrown into the lions' den? | Daniel | சிங்கங்களின் கெபியில் போடப்பட்டவர் யார்? | தானியேல் | സിംഹങ്ങളുടെ ഗുഹയിൽ ഇട്ടത് ആരെ? | ദാനീയേൽ
+Daniel 3:20 | Who were thrown into the fiery furnace? | Shadrach, Meshach and Abednego | அக்கினிச் சூளையில் போடப்பட்டவர்கள் யார்? | சாத்ராக், மேஷாக், ஆபேத்நேகோ | തീച്ചൂളയിൽ ഇട്ടത് ആരെ? | ശദ്രക്, മേശക്, അബേദ്-നെഗോ
+Daniel 3:1 | Which king set up a golden image to be worshipped? | Nebuchadnezzar | வணங்குவதற்குப் பொற்சிலையை நிறுத்தின ராஜா யார்? | நேபுகாத்நேச்சார் | നമസ്കരിപ്പാൻ പൊൻ ബിംബം നിർത്തിയ രാജാവ് ആര്? | നെബൂഖദ്നേസർ
+Esther 2:17 | Which Jewish woman became queen of Persia? | Esther | பெர்சியாவின் ராணியான யூதப் பெண் யார்? | எஸ்தர் | പാർസിരാജ്ഞിയായ യെഹൂദസ്ത്രീ ആര്? | എസ്ഥേർ
+Esther 2:7 | Who raised Esther as his daughter? | Mordecai | எஸ்தரைத் தன் மகளாக வளர்த்தவர் யார்? | மொர்தெகாய் | എസ്ഥേറിനെ മകളായി വളർത്തിയത് ആര്? | മൊർദ്ദെഖായി
+Job 1:1 | Which man of the land of Uz was perfect and upright and suffered greatly? | Job | ஊத்ஸ் தேசத்தில் உத்தமனும் சன்மார்க்கனுமாயிருந்து மிகுந்த உபத்திரவப்பட்டவன் யார்? | யோபு | ഊസ് ദേശത്ത് നിഷ്കളങ്കനും നേരുള്ളവനുമായിരുന്ന് വളരെ കഷ്ടം അനുഭവിച്ചത് ആര്? | ഇയ്യോബ്
+Psalms 23:1 | Complete the verse: The Lord is my shepherd | I shall not want | கர்த்தர் என் மேய்ப்பராயிருக்கிறார் என்ற வசனத்தை முடிக்கவும் | நான் தாழ்ச்சியடையேன் | യഹോവ എന്റെ ഇടയനാകുന്നു എന്ന വാക്യം പൂർത്തിയാക്കുക | എനിക്കു മുട്ടുണ്ടാകയില്ല
+Psalms 119:105 | Which verse says God's word is a lamp to my feet? | Psalm 119:105 | உம்முடைய வசனம் என் கால்களுக்குத் தீபம் என்று எந்த வசனம் சொல்லுகிறது? | சங்கீதம் 119:105 | നിന്റെ വചനം എന്റെ കാലിന്നു ദീപം എന്നു പറയുന്ന വാക്യം ഏത്? | സങ്കീർത്തനം 119:105
+Proverbs 1:7 | What is the beginning of knowledge? | The fear of the Lord | அறிவின் ஆரம்பம் எது? | கர்த்தருக்குப் பயப்படுதல் | പരിജ്ഞാനത്തിന്റെ ആരംഭം എന്ത്? | യഹോവാഭക്തി
+Isaiah 7:14 | What name did Isaiah say the virgin's son would be called? | Immanuel | கன்னிகையின் குமாரனுக்கு இடப்படும் பெயர் என்ன என்று ஏசாயா சொன்னார்? | இம்மானுவேல் | കന്യകയുടെ മകന് ഇടുന്ന പേര് എന്ത് എന്ന് യെശയ്യാവ് പറഞ്ഞു? | ഇമ്മാനൂവേൽ
+Isaiah 6:8 | Who said, Here am I, send me? | Isaiah | இதோ, அடியேன் இருக்கிறேன், என்னை அனுப்பும் என்று சொன்னவர் யார்? | ஏசாயா | ഇതാ ഞാൻ, എന്നെ അയക്കേണമേ എന്നു പറഞ്ഞത് ആര്? | യെശയ്യാവ്
+Isaiah 53:5 | By what are we healed, according to Isaiah 53? | By his stripes | ஏசாயா 53-ன்படி நாம் எதினால் குணமானோம்? | அவருடைய தழும்புகளால் | യെശയ്യാവു 53 പ്രകാരം നമുക്ക് എന്തിനാൽ സൗഖ്യം വന്നു? | അവന്റെ അടിപ്പിണരുകളാൽ
+Jeremiah 1:5 | Which prophet did God know before he was formed in the womb? | Jeremiah | கர்ப்பத்தில் உருவாகும் முன்னே தேவன் அறிந்திருந்த தீர்க்கதரிசி யார்? | எரேமியா | ഗർഭത്തിൽ ഉരുവാക്കും മുമ്പെ ദൈവം അറിഞ്ഞ പ്രവാചകൻ ആര്? | യിരെമ്യാവ്
+Nehemiah 2:17 | Who rebuilt the walls of Jerusalem? | Nehemiah | எருசலேமின் அலங்கத்தைத் திரும்பக் கட்டியவர் யார்? | நெகேமியா | യെരൂശലേമിന്റെ മതിൽ പണിതത് ആര്? | നെഹെമ്യാവ്
+Malachi 3:10 | Which book says, Bring all the tithes into the storehouse? | Malachi | தசமபாகங்களையெல்லாம் பண்டசாலையிலே கொண்டுவாருங்கள் என்று எந்தப் புஸ்தகம் சொல்லுகிறது? | மல்கியா | ദശാംശം മുഴുവനും ഭണ്ഡാരത്തിലേക്കു കൊണ്ടുവരുവിൻ എന്ന് പറയുന്ന പുസ്തകം ഏത്? | മലാഖി
+Matthew 1:18 | Who was the mother of Jesus? | Mary | இயேசுவின் தாய் யார்? | மரியாள் | യേശുവിന്റെ അമ്മ ആര്? | മറിയ
+Matthew 1:16 | Who was the husband of Mary? | Joseph | மரியாளின் கணவன் யார்? | யோசேப்பு | മറിയയുടെ ഭർത്താവ് ആര്? | യോസേഫ്
+Matthew 2:1 | Where was Jesus born? | Bethlehem | இயேசு எங்கே பிறந்தார்? | பெத்லகேம் | യേശു എവിടെ ജനിച്ചു? | ബേത്ത്ളേഹെം
+Matthew 2:11 | What gifts did the wise men bring to Jesus? | Gold, frankincense and myrrh | சாஸ்திரிகள் இயேசுவுக்குக் கொண்டுவந்த காணிக்கைகள் என்ன? | பொன், தூபவர்க்கம், வெள்ளைப்போளம் | വിദ്വാന്മാർ യേശുവിന്നു കൊണ്ടുവന്ന കാഴ്ചകൾ എന്ത്? | പൊന്നു, കുന്തുരുക്കം, മൂർ
+Matthew 2:23 | In which town did Jesus grow up? | Nazareth | இயேசு எந்த ஊரில் வளர்ந்தார்? | நாசரேத் | യേശു ഏതു പട്ടണത്തിൽ വളർന്നു? | നസറെത്ത്
+Matthew 3:13 | Who baptised Jesus? | John the Baptist | இயேசுவுக்கு ஞானஸ்நானம் கொடுத்தவர் யார்? | யோவான் ஸ்நானகன் | യേശുവിനെ സ്നാനം കഴിപ്പിച്ചത് ആര്? | യോഹന്നാൻ സ്നാപകൻ
+Matthew 3:13 | In which river was Jesus baptised? | The Jordan | இயேசு எந்த நதியில் ஞானஸ்நானம் பெற்றார்? | யோர்தான் | യേശു ഏതു നദിയിൽ സ്നാനം ഏറ്റു? | യോർദ്ദാൻ
+Matthew 4:2 | How many days did Jesus fast in the wilderness? | Forty days and forty nights | இயேசு வனாந்தரத்தில் எத்தனை நாள் உபவாசித்தார்? | நாற்பது நாள் இரவும் பகலும் | യേശു മരുഭൂമിയിൽ എത്ര ദിവസം ഉപവസിച്ചു? | നാല്പതു രാവും നാല്പതു പകലും
+Matthew 10:2 | How many apostles (disciples) did Jesus choose? | Twelve | இயேசு எத்தனை அப்போஸ்தலரைத் தெரிந்துகொண்டார்? | பன்னிரண்டு | യേശു എത്ര അപ്പൊസ്തലന്മാരെ തിരഞ്ഞെടുത്തു? | പന്ത്രണ്ട്
+Matthew 4:18 | Which two brothers were fishermen called first by Jesus? | Simon Peter and Andrew | இயேசு முதலில் அழைத்த மீன்பிடிக்கும் இரண்டு சகோதரர்கள் யார்? | சீமோன் பேதுரு, அந்திரேயா | യേശു ആദ്യം വിളിച്ച മീൻപിടിക്കുന്ന രണ്ടു സഹോദരന്മാർ ആര്? | ശിമോൻ പത്രൊസ്, അന്ത്രെയാസ്
+Matthew 4:21 | Who were the sons of Zebedee? | James and John | செபெதேயுவின் குமாரர் யார்? | யாக்கோபு, யோவான் | സെബെദിയുടെ പുത്രന്മാർ ആര്? | യാക്കോബ്, യോഹന്നാൻ
+Matthew 9:9 | Which tax collector became an apostle? | Matthew | அப்போஸ்தலனான ஆயக்காரன் யார்? | மத்தேயு | അപ്പൊസ്തലനായിത്തീർന്ന ചുങ്കക്കാരൻ ആര്? | മത്തായി
+Matthew 26:15 | For how many pieces of silver did Judas betray Jesus? | Thirty pieces of silver | யூதாஸ் இயேசுவை எத்தனை வெள்ளிக்காசுக்குக் காட்டிக்கொடுத்தான்? | முப்பது வெள்ளிக்காசு | യൂദാ യേശുവിനെ എത്ര വെള്ളിക്കാശിന്നു കാണിച്ചുകൊടുത്തു? | മുപ്പതു വെള്ളിക്കാശ്
+Matthew 26:14 | Which disciple betrayed Jesus? | Judas Iscariot | இயேசுவைக் காட்டிக்கொடுத்த சீஷன் யார்? | யூதாஸ் காரியோத்து | യേശുവിനെ കാണിച്ചുകൊടുത്ത ശിഷ്യൻ ആര്? | യൂദാ ഈസ്കര്യോത്താവ്
+Matthew 26:75 | Who denied Jesus three times? | Peter | சேவல் கூவுமுன் இயேசுவை மூன்றுதரம் மறுதலித்தவன் யார்? | பேதுரு | കോഴി കൂകുംമുമ്പെ യേശുവിനെ മൂന്നു പ്രാവശ്യം തള്ളിപ്പറഞ്ഞത് ആര്? | പത്രൊസ്
+Matthew 27:2 | Which Roman governor sentenced Jesus? | Pontius Pilate | இயேசுவுக்குத் தீர்ப்புச் செய்த ரோம தேசாதிபதி யார்? | பொந்தியு பிலாத்து | യേശുവിനെ വിധിച്ച റോമൻ നാടുവാഴി ആര്? | പൊന്തിയൊസ് പീലാത്തൊസ്
+Matthew 27:26 | Which prisoner was released instead of Jesus? | Barabbas | இயேசுவுக்குப் பதிலாக விடுதலையாக்கப்பட்டவன் யார்? | பரபாஸ் | യേശുവിനു പകരം വിട്ടയച്ചത് ആരെ? | ബറബ്ബാസ്
+Matthew 27:33 | Where was Jesus crucified? | Golgotha, the place of a skull | இயேசு எங்கே சிலுவையில் அறையப்பட்டார்? | கொல்கொதா | യേശുവിനെ എവിടെ ക്രൂശിച്ചു? | ഗൊല്ഗോഥാ
+Matthew 27:32 | Who carried the cross of Jesus? | Simon of Cyrene | இயேசுவின் சிலுவையைச் சுமந்தவன் யார்? | சிரேனே ஊரானாகிய சீமோன் | യേശുവിന്റെ ക്രൂശ് ചുമന്നത് ആര്? | കുറേനക്കാരനായ ശിമോൻ
+Matthew 27:57 | Who buried Jesus in his own new tomb? | Joseph of Arimathea | இயேசுவைத் தன் புதிய கல்லறையில் அடக்கம் பண்ணியவர் யார்? | அரிமத்தியா ஊரானாகிய யோசேப்பு | യേശുവിനെ തന്റെ പുതിയ കല്ലറയിൽ അടക്കിയത് ആര്? | അരിമഥ്യക്കാരനായ യോസേഫ്
+Matthew 28:6 | On which day did Jesus rise from the dead? | On the third day | இயேசு எத்தனையாம் நாளில் உயிர்த்தெழுந்தார்? | மூன்றாம் நாளில் | യേശു എത്രാം ദിവസം ഉയിർത്തെഴുന്നേറ്റു? | മൂന്നാം ദിവസം
+Matthew 28:19 | What did Jesus tell his disciples to do in the Great Commission? | Go and make disciples of all nations | பெரிய கட்டளையில் இயேசு சீஷர்களுக்குச் சொன்னது என்ன? | சகல ஜாதிகளையும் சீஷராக்குங்கள் | മഹാനിയോഗത്തിൽ യേശു ശിഷ്യന്മാരോടു പറഞ്ഞത് എന്ത്? | സകലജാതികളെയും ശിഷ്യരാക്കുവിൻ
+Matthew 6:9 | What prayer did Jesus teach his disciples? | The Lord's Prayer: Our Father in heaven | இயேசு சீஷர்களுக்குக் கற்றுக்கொடுத்த ஜெபம் எது? | பரமண்டலங்களிலிருக்கிற எங்கள் பிதாவே | യേശു ശിഷ്യന്മാരെ പഠിപ്പിച്ച പ്രാർത്ഥന ഏത്? | സ്വർഗ്ഗസ്ഥനായ ഞങ്ങളുടെ പിതാവേ
+Matthew 5:3 | Who are blessed, according to the first beatitude? | The poor in spirit | முதல் பாக்கியவசனத்தின்படி பாக்கியவான்கள் யார்? | ஆவியில் எளிமையுள்ளவர்கள் | ഒന്നാമത്തെ ഭാഗ്യവചനപ്രകാരം ഭാഗ്യവാന്മാർ ആര്? | ആത്മാവിൽ ദരിദ്രരായവർ
+Matthew 14:17 | With how many loaves and fishes did Jesus feed five thousand? | Five loaves and two fishes | ஐயாயிரம் பேரை இயேசு எத்தனை அப்பங்களாலும் மீன்களாலும் போஷித்தார்? | ஐந்து அப்பம், இரண்டு மீன் | അയ്യായിരം പേരെ യേശു എത്ര അപ്പവും മീനും കൊണ്ട് പോഷിപ്പിച്ചു? | അഞ്ച് അപ്പം, രണ്ട് മീൻ
+Matthew 14:29 | Who walked on the water to Jesus? | Peter | இயேசுவிடம் தண்ணீரின்மேல் நடந்து போனவன் யார்? | பேதுரு | വെള്ളത്തിന്മീതെ നടന്ന് യേശുവിന്റെ അടുക്കൽ ചെന്നത് ആര്? | പത്രൊസ്
+Matthew 17:1 | Which three disciples saw Jesus transfigured? | Peter, James and John | இயேசு மறுரூபமானதைக் கண்ட மூன்று சீஷர்கள் யார்? | பேதுரு, யாக்கோபு, யோவான் | യേശു രൂപാന്തരപ്പെട്ടത് കണ്ട മൂന്നു ശിഷ്യന്മാർ ആര്? | പത്രൊസ്, യാക്കോബ്, യോഹന്നാൻ
+Luke 1:13 | Who were the parents of John the Baptist? | Zechariah and Elizabeth | யோவான் ஸ்நானகனின் பெற்றோர் யார்? | சகரியா, எலிசபெத்து | യോഹന്നാൻ സ്നാപകന്റെ മാതാപിതാക്കൾ ആര്? | സെഖര്യാവ്, എലിസബെത്ത്
+Luke 1:26 | Which angel told Mary she would bear Jesus? | Gabriel | இயேசுவைப் பெறுவாய் என்று மரியாளுக்குச் சொன்ன தூதன் யார்? | காபிரியேல் | യേശുവിനെ പ്രസവിക്കും എന്നു മറിയയോടു പറഞ്ഞ ദൂതൻ ആര്? | ഗബ്രീയേൽ
+Luke 2:7 | Where was baby Jesus laid after he was born? | In a manger | பிறந்த குழந்தை இயேசு எங்கே கிடத்தப்பட்டார்? | முன்னணையில் | ജനിച്ച ശിശുവായ യേശുവിനെ എവിടെ കിടത്തി? | പശുത്തൊട്ടിയിൽ
+Luke 2:8 | Who first heard the news of Jesus' birth from the angels? | The shepherds | இயேசுவின் பிறப்பைத் தூதர்களிடம் முதலில் கேட்டவர்கள் யார்? | மேய்ப்பர்கள் | യേശുവിന്റെ ജനനവാർത്ത ദൂതന്മാരിൽ നിന്ന് ആദ്യം കേട്ടത് ആര്? | ഇടയന്മാർ
+Luke 2:42 | How old was Jesus when he stayed behind in the temple? | Twelve years old | இயேசு ஆலயத்தில் தங்கியிருந்தபோது அவருக்கு எத்தனை வயது? | பன்னிரண்டு வயது | യേശു ദൈവാലയത്തിൽ താമസിച്ചപ്പോൾ അവന്ന് എത്ര വയസ്സ്? | പന്ത്രണ്ടു വയസ്സ്
+Luke 3:23 | How old was Jesus when he began his ministry? | About thirty years | இயேசு ஊழியத்தைத் தொடங்கும்போது அவருக்கு எத்தனை வயது? | ஏறக்குறைய முப்பது வயது | യേശു ശുശ്രൂഷ ആരംഭിക്കുമ്പോൾ അവന്ന് എത്ര വയസ്സ്? | ഏകദേശം മുപ്പതു വയസ്സ്
+Luke 10:33 | Who helped the wounded man in Jesus' parable? | The good Samaritan | இயேசுவின் உவமையில் காயப்பட்டவனுக்கு உதவியவன் யார்? | நல்ல சமாரியன் | യേശുവിന്റെ ഉപമയിൽ മുറിവേറ്റവനെ സഹായിച്ചത് ആര്? | നല്ല ശമര്യക്കാരൻ
+Luke 15:20 | In the parable, who ran to welcome the prodigal son? | His father | ஊதாரி மகனை ஓடிவந்து ஏற்றுக்கொண்டவர் யார்? | அவன் தகப்பன் | മുടിയനായ പുത്രനെ ഓടിച്ചെന്ന് സ്വീകരിച്ചത് ആര്? | അവന്റെ അപ്പൻ
+Luke 19:4 | Who climbed a sycamore tree to see Jesus? | Zacchaeus | இயேசுவைக் காண காட்டத்திமரத்தில் ஏறியவன் யார்? | சகேயு | യേശുവിനെ കാണുവാൻ കാട്ടത്തിയിൽ കയറിയത് ആര്? | സക്കായി
+Luke 10:39 | Which sister sat at Jesus' feet and listened to his word? | Mary, the sister of Martha | இயேசுவின் பாதத்தருகே உட்கார்ந்து அவருடைய வசனத்தைக் கேட்டவள் யார்? | மார்த்தாளின் சகோதரி மரியாள் | യേശുവിന്റെ കാല്ക്കൽ ഇരുന്നു വചനം കേട്ടത് ആര്? | മാർത്തയുടെ സഹോദരി മറിയ
+Luke 23:43 | To whom did Jesus say, Today you will be with me in paradise? | The thief on the cross | இன்று நீ என்னுடனே கூட பரதீசிலிருப்பாய் என்று இயேசு யாரிடம் சொன்னார்? | சிலுவையிலிருந்த கள்ளன் | ഇന്നു നീ എന്നോടുകൂടെ പറുദീസയിൽ ഇരിക്കും എന്നു യേശു ആരോടു പറഞ്ഞു? | ക്രൂശിലെ കള്ളൻ
+Luke 24:13 | To which village were the two disciples walking when the risen Jesus met them? | Emmaus | உயிர்த்த இயேசு இரண்டு சீஷரைச் சந்தித்தபோது அவர்கள் போய்க்கொண்டிருந்த கிராமம் எது? | எம்மாவு | ഉയിർത്ത യേശു രണ്ടു ശിഷ്യന്മാരെ കണ്ടുമുട്ടുമ്പോൾ അവർ പോയിരുന്ന ഗ്രാമം ഏത്? | എമ്മവുസ്
+John 2:9 | What was Jesus' first miracle? | Turning water into wine at Cana | இயேசு செய்த முதல் அற்புதம் என்ன? | கானாவில் தண்ணீரைத் திராட்சரசமாக்கியது | യേശു ചെയ്ത ആദ്യത്തെ അത്ഭുതം എന്ത്? | കാനായിൽ വെള്ളം വീഞ്ഞാക്കിയത്
+John 3:1 | Who came to Jesus by night? | Nicodemus | இராத்திரியிலே இயேசுவினிடத்தில் வந்தவர் யார்? | நிக்கொதேமு | രാത്രിയിൽ യേശുവിന്റെ അടുക്കൽ വന്നത് ആര്? | നിക്കോദേമൊസ്
+John 3:16 | Which verse says, For God so loved the world? | John 3:16 | தேவன் இவ்வளவாய் உலகத்தில் அன்புகூர்ந்தார் என்று சொல்லும் வசனம் எது? | யோவான் 3:16 | ദൈവം ലോകത്തെ ഇത്രയധികം സ്നേഹിച്ചു എന്നു പറയുന്ന വാക്യം ഏത്? | യോഹന്നാൻ 3:16
+John 4:7 | At which well did Jesus talk with the Samaritan woman? | Jacob's well | இயேசு சமாரிய ஸ்திரீயோடு பேசின கிணறு எது? | யாக்கோபின் கிணறு | യേശു ശമര്യസ്ത്രീയോടു സംസാരിച്ച കിണർ ഏത്? | യാക്കോബിന്റെ കിണർ
+John 11:43 | Whom did Jesus raise from the dead after four days? | Lazarus | நான்கு நாள் கழித்து இயேசு உயிரோடு எழுப்பியவர் யார்? | லாசரு | നാലു ദിവസത്തിനു ശേഷം യേശു ഉയിർപ്പിച്ചത് ആരെ? | ലാസർ
+John 11:35 | What is the shortest verse in the Bible? | Jesus wept | வேதாகமத்தின் மிகச் சிறிய வசனம் எது? | இயேசு கண்ணீர் விட்டார் | ബൈബിളിലെ ഏറ്റവും ചെറിയ വാക്യം ഏത്? | യേശു കണ്ണുനീർ വാർത്തു
+John 11:1 | Who were the sisters of Lazarus? | Mary and Martha | லாசருவின் சகோதரிகள் யார்? | மரியாள், மார்த்தாள் | ലാസറിന്റെ സഹോദരിമാർ ആര്? | മറിയ, മാർത്ത
+John 13:5 | Whose feet did Jesus wash at the last supper? | His disciples' feet | கடைசி இராப்போஜனத்தில் இயேசு யாருடைய கால்களைக் கழுவினார்? | சீஷர்களின் கால்களை | അത്താഴത്തിൽ യേശു ആരുടെ കാൽ കഴുകി? | ശിഷ്യന്മാരുടെ കാൽ
+John 14:6 | Who said, I am the way, the truth and the life? | Jesus | நானே வழியும் சத்தியமும் ஜீவனுமாயிருக்கிறேன் என்று சொன்னவர் யார்? | இயேசு | ഞാൻ തന്നേ വഴിയും സത്യവും ജീവനും ആകുന്നു എന്നു പറഞ്ഞത് ആര്? | യേശു
+John 20:25 | Which disciple doubted until he saw the marks of the nails? | Thomas | ஆணிகளின் காயத்தைக் காணும்வரை சந்தேகப்பட்ட சீஷன் யார்? | தோமா | ആണിപ്പഴുതു കാണുന്നതുവരെ സംശയിച്ച ശിഷ്യൻ ആര്? | തോമാസ്
+John 20:16 | Who first saw the risen Jesus at the tomb? | Mary Magdalene | உயிர்த்தெழுந்த இயேசுவைக் கல்லறையில் முதலில் கண்டவள் யார்? | மகதலேனா மரியாள் | ഉയിർത്തെഴുന്നേറ്റ യേശുവിനെ കല്ലറക്കൽ ആദ്യം കണ്ടത് ആര്? | മഗ്ദലക്കാരത്തി മറിയ
+John 19:26 | To which disciple did Jesus entrust his mother from the cross? | John, the disciple whom he loved | சிலுவையிலிருந்து இயேசு தம் தாயை எந்தச் சீஷனிடம் ஒப்படைத்தார்? | தாம் அன்பாயிருந்த சீஷன், யோவான் | ക്രൂശിൽ നിന്ന് യേശു തന്റെ അമ്മയെ ഏതു ശിഷ്യനെ ഏല്പിച്ചു? | താൻ സ്നേഹിച്ച ശിഷ്യൻ, യോഹന്നാൻ
+Acts 1:26 | Who was chosen to replace Judas as an apostle? | Matthias | யூதாசுக்குப் பதிலாக அப்போஸ்தலனாகத் தெரிந்துகொள்ளப்பட்டவர் யார்? | மத்தியா | യൂദയ്ക്കു പകരം അപ്പൊസ്തലനായി തിരഞ്ഞെടുത്തത് ആരെ? | മത്ഥിയാസ്
+Acts 1:9 | Where did Jesus go forty days after his resurrection? | He was taken up into heaven | உயிர்த்தெழுந்து நாற்பது நாளுக்குப் பின் இயேசு எங்கே போனார்? | பரலோகத்துக்கு எடுத்துக்கொள்ளப்பட்டார் | ഉയിർപ്പിനു ശേഷം നാല്പതു ദിവസം കഴിഞ്ഞ് യേശു എവിടെ പോയി? | സ്വർഗ്ഗത്തിലേക്ക് എടുക്കപ്പെട്ടു
+Acts 2:4 | On which day was the Holy Spirit poured out on the disciples? | The day of Pentecost | சீஷர்கள்மேல் பரிசுத்த ஆவி ஊற்றப்பட்ட நாள் எது? | பெந்தெகொஸ்தே நாள் | ശിഷ്യന്മാരുടെ മേൽ പരിശുദ്ധാത്മാവ് പകരപ്പെട്ട ദിവസം ഏത്? | പെന്തെക്കൊസ്തുനാൾ
+Acts 2:41 | How many people were added to the church on the day of Pentecost? | About three thousand | பெந்தெகொஸ்தே நாளில் சபையில் எத்தனை பேர் சேர்க்கப்பட்டார்கள்? | ஏறக்குறைய மூவாயிரம் பேர் | പെന്തെക്കൊസ്തുനാളിൽ സഭയോട് എത്ര പേർ ചേർന്നു? | ഏകദേശം മൂവായിരം പേർ
+Acts 7:59 | Who was the first Christian martyr? | Stephen | முதல் இரத்தசாட்சி யார்? | ஸ்தேவான் | ആദ്യ രക്തസാക്ഷി ആര്? | സ്തെഫാനൊസ്
+Acts 9:3 | On the road to which city was Saul converted? | Damascus | எந்தப் பட்டணத்துக்குப் போகும் வழியில் சவுல் மனந்திரும்பினான்? | தமஸ்கு | ഏതു പട്ടണത്തിലേക്കുള്ള വഴിയിൽ വെച്ചാണ് ശൗൽ മാനസാന്തരപ്പെട്ടത്? | ദമസ്കൊസ്
+Acts 13:9 | What was Paul's name before he was called Paul? | Saul | பவுலின் முந்தைய பெயர் என்ன? | சவுல் | പൗലൊസിന്റെ ആദ്യത്തെ പേര് എന്ത്? | ശൌൽ
+Acts 8:38 | Whom did Philip baptise on the road to Gaza? | The Ethiopian eunuch | காசாவுக்குப் போகும் வழியில் பிலிப்பு ஞானஸ்நானம் கொடுத்தது யாருக்கு? | எத்தியோப்பிய மந்திரி | ഗസ്സയിലേക്കുള്ള വഴിയിൽ ഫിലിപ്പൊസ് ആരെ സ്നാനം കഴിപ്പിച്ചു? | എത്യോപ്യൻ ഷണ്ഡൻ
+Acts 10:1 | Which Roman centurion was the first Gentile convert visited by Peter? | Cornelius | பேதுரு சந்தித்த புறஜாதியான நூற்றுக்கு அதிபதி யார்? | கொர்நேலியு | പത്രൊസ് സന്ദർശിച്ച ജാതിക്കാരനായ ശതാധിപൻ ആര്? | കൊർന്നേല്യൊസ്
+Acts 11:26 | Where were the disciples first called Christians? | Antioch | சீஷர்கள் முதன்முதலில் கிறிஸ்தவர்கள் என்று அழைக்கப்பட்ட இடம் எது? | அந்தியோகியா | ശിഷ്യന്മാർക്ക് ആദ്യം ക്രിസ്ത്യാനികൾ എന്ന പേർ ഉണ്ടായത് എവിടെ? | അന്ത്യൊക്ക്യ
+Acts 16:25 | Who sang hymns in prison at midnight? | Paul and Silas | நடுராத்திரியில் சிறைச்சாலையில் பாடிக்கொண்டிருந்தவர்கள் யார்? | பவுலும் சீலாவும் | അർദ്ധരാത്രിയിൽ കാരാഗൃഹത്തിൽ പാടിയത് ആര്? | പൗലൊസും ശീലാസും
+Acts 16:14 | Which seller of purple cloth believed Paul's message? | Lydia | பவுலின் வார்த்தையை விசுவாசித்த இரத்தாம்பர வியாபாரி யார்? | லீதியாள் | പൗലൊസിന്റെ വചനം വിശ്വസിച്ച ധൂമ്രവസ്ത്രവ്യാപാരി ആര്? | ലുദിയ
+Acts 4:36 | Which apostle was called the son of encouragement? | Barnabas | ஆறுதலின் மகன் என்று அழைக்கப்பட்டவர் யார்? | பர்னபா | പ്രബോധനപുത്രൻ എന്നു വിളിക്കപ്പെട്ടത് ആര്? | ബർന്നബാസ്
+Acts 5:1 | Which couple lied about the price of their land? | Ananias and Sapphira | நிலத்தின் விலையைக் குறித்துப் பொய் சொன்ன தம்பதியர் யார்? | அனனியா, சப்பீராள் | നിലത്തിന്റെ വിലയെക്കുറിച്ച് ഭോഷ്കു പറഞ്ഞ ദമ്പതികൾ ആര്? | അനന്യാസ്, സഫീറ
+Romans 3:23 | Which verse says, All have sinned and fall short of the glory of God? | Romans 3:23 | எல்லாரும் பாவஞ்செய்து தேவமகிமையற்றவர்களானார்கள் என்ற வசனம் எது? | ரோமர் 3:23 | എല്ലാവരും പാപം ചെയ്തു ദൈവതേജസ്സ് ഇല്ലാത്തവരായി എന്ന വാക്യം ഏത്? | റോമർ 3:23
+Romans 6:23 | What is the wages of sin? | Death | பாவத்தின் சம்பளம் என்ன? | மரணம் | പാപത്തിന്റെ ശമ്പളം എന്ത്? | മരണം
+1 Corinthians 13:13 | What is the greatest of faith, hope and love? | Love | விசுவாசம், நம்பிக்கை, அன்பு இவைகளில் பெரியது எது? | அன்பு | വിശ്വാസം, പ്രത്യാശ, സ്നേഹം ഇവയിൽ വലിയത് ഏത്? | സ്നേഹം
+Galatians 5:22 | What is the first fruit of the Spirit? | Love | ஆவியின் கனியில் முதலாவது எது? | அன்பு | ആത്മാവിന്റെ ഫലത്തിൽ ഒന്നാമത്തേത് ഏത്? | സ്നേഹം
+Ephesians 6:17 | What is the sword of the Spirit? | The word of God | ஆவியின் பட்டயம் எது? | தேவனுடைய வசனம் | ആത്മാവിന്റെ വാൾ ഏത്? | ദൈവവചനം
+Hebrews 11:1 | What is faith, according to Hebrews 11? | The substance of things hoped for, the evidence of things not seen | எபிரெயர் 11-ன்படி விசுவாசம் என்றால் என்ன? | நம்பப்படுகிறவைகளின் உறுதியும், காணப்படாதவைகளின் நிச்சயமுமாயிருக்கிறது | എബ്രായർ 11 പ്രകാരം വിശ്വാസം എന്ത്? | ആശിക്കുന്നതിന്റെ ഉറപ്പും കാണാത്ത കാര്യങ്ങളുടെ നിശ്ചയവും
+2 Timothy 1:5 | Who were the grandmother and mother of Timothy? | Lois and Eunice | தீமோத்தேயுவின் பாட்டியும் தாயும் யார்? | லோவிசாள், ஐனிக்கேயாள் | തിമൊഥെയൊസിന്റെ വല്യമ്മയും അമ്മയും ആര്? | ലോവീസ്, യൂനീക്ക
+Revelation 1:9 | On which island did John receive the Revelation? | Patmos | யோவான் வெளிப்படுத்தலைப் பெற்ற தீவு எது? | பத்மு | യോഹന്നാൻ വെളിപ്പാട് പ്രാപിച്ച ദ്വീപ് ഏത്? | പത്മൊസ്
+Revelation 22:13 | Who is the Alpha and the Omega? | Jesus Christ | அல்பாவும் ஒமெகாவும் யார்? | இயேசு கிறிஸ்து | അല്ഫയും ഒമേഗയും ആര്? | യേശുക്രിസ്തു
+Genesis 1:31 | On which day did God create man? | The sixth day | தேவன் மனுஷனை எத்தனையாம் நாளில் சிருஷ்டித்தார்? | ஆறாம் நாள் | ദൈവം മനുഷ്യനെ എത്രാം ദിവസം സൃഷ്ടിച്ചു? | ആറാം ദിവസം
+Genesis 2:2 | On which day did God rest? | The seventh day | தேவன் எத்தனையாம் நாளில் ஓய்ந்திருந்தார்? | ஏழாம் நாள் | ദൈവം എത്രാം ദിവസം സ്വസ്ഥനായി? | ഏഴാം ദിവസം
+Genesis 1:1 | What is the first book of the Bible? | Genesis | வேதாகமத்தின் முதல் புஸ்தகம் எது? | ஆதியாகமம் | ബൈബിളിലെ ആദ്യ പുസ്തകം ഏത്? | ഉല്പത്തി
+Revelation 1:1 | What is the last book of the Bible? | Revelation | வேதாகமத்தின் கடைசிப் புஸ்தகம் எது? | வெளிப்படுத்தின விசேஷம் | ബൈബിളിലെ അവസാന പുസ്തകം ഏത്? | വെളിപ്പാട്
+Psalms 117:1 | What is the shortest chapter in the Bible? | Psalm 117 | வேதாகமத்தின் மிகச் சிறிய அதிகாரம் எது? | சங்கீதம் 117 | ബൈബിളിലെ ഏറ്റവും ചെറിയ അധ്യായം ഏത്? | സങ്കീർത്തനം 117
+Psalms 119:1 | What is the longest chapter in the Bible? | Psalm 119 | வேதாகமத்தின் மிகப் பெரிய அதிகாரம் எது? | சங்கீதம் 119 | ബൈബിളിലെ ഏറ്റവും വലിയ അധ്യായം ഏത്? | സങ്കീർത്തനം 119
+Mark 1:4 | Who prepared the way for Jesus in the wilderness? | John the Baptist | வனாந்தரத்தில் இயேசுவுக்கு வழியை ஆயத்தம் பண்ணியவர் யார்? | யோவான் ஸ்நானகன் | മരുഭൂമിയിൽ യേശുവിന്നു വഴി ഒരുക്കിയത് ആര്? | യോഹന്നാൻ സ്നാപകൻ
+Mark 10:46 | Which blind beggar did Jesus heal at Jericho? | Bartimaeus | எரிகோவில் இயேசு குணமாக்கிய குருட்டுப் பிச்சைக்காரன் யார்? | பர்திமேயு | യെരീഹോവിൽ യേശു സൗഖ്യമാക്കിയ കുരുടനായ ഭിക്ഷക്കാരൻ ആര്? | ബർത്തിമായി
+Mark 5:22 | Whose daughter did Jesus raise saying Talitha cumi? | Jairus | தலீத்தா கூமி என்று சொல்லி இயேசு யாருடைய மகளை எழுப்பினார்? | யவீரு | തലീഥാ കൂമി എന്നു പറഞ്ഞ് യേശു ആരുടെ മകളെ ഉയിർപ്പിച്ചു? | യായീറൊസ്
+Exodus 3:10 | Who led the Israelites out of Egypt? | Moses | இஸ்ரவேலரை எகிப்திலிருந்து வழிநடத்திக் கொண்டுவந்தவர் யார்? | மோசே | യിസ്രായേല്യരെ മിസ്രയീമിൽ നിന്നു നടത്തിക്കൊണ്ടുവന്നത് ആര്? | മോശെ
+Psalms 23:1 | Who wrote most of the Psalms? | David | சங்கீதங்களில் பெரும்பாலானவற்றை எழுதியவர் யார்? | தாவீது | സങ്കീർത്തനങ്ങളിൽ മിക്കതും എഴുതിയത് ആര്? | ദാവീദ്
+Proverbs 1:1 | Who wrote most of the Proverbs? | Solomon | நீதிமொழிகளில் பெரும்பாலானவற்றை எழுதியவர் யார்? | சாலொமோன் | സദൃശവാക്യങ്ങളിൽ മിക്കതും എഴുതിയത് ആര്? | ശലോമോൻ
+Matthew 1:1 | Who wrote the first Gospel? | Matthew | முதல் சுவிசேஷத்தை எழுதியவர் யார்? | மத்தேயு | ഒന്നാമത്തെ സുവിശേഷം എഴുതിയത് ആര്? | മത്തായി
+Matthew 1:1 | How many Gospels are there? | Four: Matthew, Mark, Luke and John | சுவிசேஷங்கள் எத்தனை? | நான்கு: மத்தேயு, மாற்கு, லூக்கா, யோவான் | സുവിശേഷങ്ങൾ എത്ര? | നാല്: മത്തായി, മർക്കൊസ്, ലൂക്കൊസ്, യോഹന്നാൻ
+Genesis 1:1 | How many books are in the Bible? | Sixty-six (39 Old Testament, 27 New Testament) | வேதாகமத்தில் எத்தனை புஸ்தகங்கள் உள்ளன? | அறுபத்தாறு (பழைய ஏற்பாடு 39, புதிய ஏற்பாடு 27) | ബൈബിളിൽ എത്ര പുസ്തകങ്ങൾ ഉണ്ട്? | അറുപത്താറ് (പഴയനിയമം 39, പുതിയനിയമം 27)
+Exodus 20:1 | How many commandments did God give Moses? | Ten | தேவன் மோசேக்கு எத்தனை கட்டளைகளைக் கொடுத்தார்? | பத்து | ദൈവം മോശെക്ക് എത്ര കല്പനകൾ കൊടുത്തു? | പത്ത്
+Acts 9:1 | Who wrote most of the letters in the New Testament? | Paul | புதிய ஏற்பாட்டின் பெரும்பாலான நிருபங்களை எழுதியவர் யார்? | பவுல் | പുതിയനിയമത്തിലെ മിക്ക ലേഖനങ്ങളും എഴുതിയത് ആര്? | പൗലൊസ്
+John 1:29 | Who called Jesus the Lamb of God? | John the Baptist | இயேசுவை தேவ ஆட்டுக்குட்டி என்று சொன்னவர் யார்? | யோவான் ஸ்நானகன் | യേശുവിനെ ദൈവത്തിന്റെ കുഞ്ഞാട് എന്നു പറഞ്ഞത് ആര്? | യോഹന്നാൻ സ്നാപകൻ
+Genesis 3:1 | Who tempted Eve in the garden? | The serpent | தோட்டத்தில் ஏவாளைச் சோதித்தது யார்? | சர்ப்பம் | തോട്ടത്തിൽ ഹവ്വയെ പരീക്ഷിച്ചത് ആര്? | സർപ്പം
+Genesis 3:6 | Who ate the forbidden fruit first? | Eve | விலக்கப்பட்ட கனியை முதலில் புசித்தவள் யார்? | ஏவாள் | വിലക്കപ്പെട്ട ഫലം ആദ്യം തിന്നത് ആര്? | ഹവ്വ

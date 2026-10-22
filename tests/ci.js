@@ -23,4 +23,10 @@ for (const [env, floor, wrongMax] of [[{}, 70, 5], [{ SPARSE: '1' }, 56, 14.5]])
   const m = out.match(/right line ([\d.]+)%.*wrong ([\d.]+)% \(wrong song ([\d.]+)%/);
   ok(m && +m[1] >= floor && +m[2] <= wrongMax && +m[3] <= 1, `bench${env.SPARSE ? ' sparse' : ''}: right ${m ? m[1] : '?'}% (floor ${floor}), wrong ${m ? m[2] : '?'}% (max ${wrongMax}), wrong song ${m ? m[3] : '?'}% (max 1)`);
 }
+// Bible references (spoken and typed, ta/ml/en) and the quiz questions (every question finds its answer in all
+// three languages; sermon talk finds none)
+for (const f of ['refs_test.js', 'quiz_test.js']) {
+  let out = '', code = 0; try { out = run(f); } catch (e) { out = String(e.stdout || ''); code = e.status || 1; }
+  ok(code === 0, `${f}: ${out.trim().split('\n').pop()}`);
+}
 if (fails.length) { console.log(`\n${fails.length} check(s) failed`); process.exit(1); } else console.log('\nall checks passed');

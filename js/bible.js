@@ -133,6 +133,8 @@
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i]; if (cueKind(t)) continue;
       let n = Core.numbers(t); let span = 1;
+      // "முதலாம் அதிகாரம்", "first chapter": the word for first before a chapter/verse word is the number 1
+      if (!n.length && BOOKORD.has(kn(t)) && cueKind(toks[i + 1])) n = [1];
       if (!n.length && toks[i + 1] && !cueKind(toks[i + 1])) { const j = Core.numbers(t + ' ' + toks[i + 1]); if (j.length === 1) { n = j; span = 2; } }
       if (!n.length) continue;
       let val = n[0];

@@ -38,7 +38,10 @@
   .lf-low .lf-txt,.lf-low .lf-txt p{transition:none}
   .lf-black{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none}
   .lf-black.on{opacity:1}
-  .lf-low .lf-black{transition:none}`;
+  .lf-low .lf-black{transition:none}
+  .lf-txt .qblock{display:flex;flex-direction:column;gap:.1em;width:100%}
+  .lf-txt .qq{font-size:.55em;font-weight:500;opacity:.85;line-height:1.3}
+  .lf-txt .qa{font-weight:700;line-height:1.25}`;
 
   function bgInfo(ref, media) {
     if (ref && ref.startsWith('m:')) { const m = media.get(ref.slice(2)); if (m) return { kind: m.type, url: m.url, ink: '#fff', key: ref, shade: true }; }
@@ -96,6 +99,16 @@
       });
       const r = doc.createElement('div'); r.className = 'vref'; r.textContent = payload.ref || ''; txt.appendChild(r);
       size = Math.min(W / 18, H / 7) * scale;
+    } else if (payload.kind === 'quiz' && payload.items && payload.items.length) {
+      payload.items.forEach((it, i) => {
+        if (i) { const sp = doc.createElement('div'); sp.className = 'sep'; txt.appendChild(sp); }
+        const blk = doc.createElement('div'); blk.className = 'qblock';
+        const q = doc.createElement('div'); q.className = 'qq'; q.textContent = it.q; blk.appendChild(q);
+        if (it.a) { const a = doc.createElement('div'); a.className = 'qa'; a.textContent = it.a; blk.appendChild(a); }
+        txt.appendChild(blk);
+      });
+      if (payload.ref) { const r = doc.createElement('div'); r.className = 'vref'; r.textContent = payload.ref; txt.appendChild(r); }
+      size = Math.min(W / 14, H / (payload.items.length * 2.6 + 1)) * scale;
     } else if (payload.kind === 'idle' && payload.idle) {
       const p = doc.createElement('p'); p.textContent = payload.idle; txt.appendChild(p); txt.classList.add('idle');
       size = Math.min(W / 16, H / 4);

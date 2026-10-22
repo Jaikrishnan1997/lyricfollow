@@ -12,7 +12,7 @@
     lang: 'en', mode: 'slide', thr: 50, blankAfter: 8, autoSwitch: true, low: false, net: 'online', v: 6, autoMode: false,
     bgChurch: 'b:navy', bgBible: 'b:slate', church: '',
     theme: { textScale: 1, pos: 'center', shadow: true, color: 'auto' },
-    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, micNs: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs'
+    versions: ['mal1910', 'kjv'], vbLang: 'auto', vbAuto: true, bk: 42, gemini: false, geminiKey: '', geminiModel: 'gemini-2.5-flash-lite', groq: false, groqKey: '', groqModel: 'whisper-large-v3', groqBible: false, cfUrl: '', cfKey: '', sarvamKey: '', sarvam: true, sarvamCap: 0, vbAI: true, vbAiCap: 20, followFast: true, micNs: true, trackAuto: false, trackVol: 70, trackSize: 'compact', verseFollow: true, plan: '', ch: 3, autoFollow: true, listenMode: 'songs', psalmMode: false, psalmN: 23, psalmV: 1, quiz: 'show', quizDelay: 4
   };
   const SAMPLES = [
     { title: 'Amazing Grace', lang: 'en-IN', lyrics: "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see\n\n'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed" },
@@ -27,7 +27,7 @@
   const media = new Map();                     // id -> {id,name,type,url}
   let song = null, lines = [], slides = [], slideParts = '', navGen = 0;   // navGen: bumped when the operator moves the screen or opens a song
   const follow = { cur: -1, pend: -1, hits: 0, score: 0 };
-  const screen = { kind: 'idle', black: false, bgOnly: false, autoBlank: false, bible: null };
+  const screen = { kind: 'idle', black: false, bgOnly: false, autoBlank: false, bible: null, quiz: null };
   let tab = 'live', editingId = null, selBg = null;
 
   /* ---------- text ---------- */
@@ -138,6 +138,16 @@
       p.ref = Bible.refLabel(r, lang) + (lang !== 'en' ? '  ·  ' + Bible.refLabel(r, 'en') : '');
       return p;
     }
+    if (screen.kind === 'quiz' && screen.quiz) {
+      // the question, then (after the pause the pastor set) the answer, in each language the church shows
+      p.bg = S.bgBible; p.kind = 'quiz';
+      const q = screen.quiz.q, langs = [...new Set(S.versions.map(v => (Bible.VERSIONS.find(x => x.id === v) || {}).lang).filter(Boolean))];
+      if (!langs.length) langs.push('en');
+      p.items = langs.map(l => ({ q: q.q[l] || q.q.en, a: screen.quiz.shown ? (q.a[l] || q.a.en) : '' }));
+      const [b, c, v] = q.ref, l0 = langs[0];
+      p.ref = screen.quiz.shown ? Bible.refLabel({ book: b, ch: c, v, ve: v }, l0) + (l0 !== 'en' ? '  ·  ' + Bible.refLabel({ book: b, ch: c, v, ve: v }, 'en') : '') : '';
+      return p;
+    }
     if (screen.kind === 'song' && song) {
       p.bg = song.bg || S.bgChurch;
       if (screen.bgOnly || screen.autoBlank || follow.cur < 0 || !lines[follow.cur]) { p.kind = 'blank'; return p; }
@@ -156,8 +166,8 @@
     Stage.render($('preview'), p, stageOpts(true));
     if (projWin && !projWin.closed) { try { Stage.render(projWin.document.getElementById('stage'), p, stageOpts(false)); } catch (e) {} }
     const st = $('screenState');
-    st.textContent = screen.black ? t('black') : p.kind === 'lyrics' ? t('tab_songs') : p.kind === 'bible' ? t('tab_bible') : p.kind === 'blank' ? t('bg_only') : t('screen_idle');
-    st.classList.toggle('on', !screen.black && (p.kind === 'lyrics' || p.kind === 'bible'));
+    st.textContent = screen.black ? t('black') : p.kind === 'lyrics' ? t('tab_songs') : p.kind === 'bible' ? t('tab_bible') : p.kind === 'quiz' ? t('quiz') : p.kind === 'blank' ? t('bg_only') : t('screen_idle');
+    st.classList.toggle('on', !screen.black && (p.kind === 'lyrics' || p.kind === 'bible' || p.kind === 'quiz'));
     $('btnBlack').classList.toggle('on', screen.black);
     $('btnBlack').textContent = screen.black ? t('unblack') : t('black');
     $('btnBgOnly').classList.toggle('on', screen.bgOnly);
@@ -403,7 +413,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   let lastBible = null;
   async function showBible(r) {
     await ensureVersions(); lastBible = r;
-    screen.kind = 'bible'; screen.bible = r; screen.bgOnly = false; screen.black = false; screen.autoBlank = false;
+    screen.kind = 'bible'; screen.bible = r; screen.bgOnly = false; screen.black = false; screen.autoBlank = false; screen.quiz = null; clearTimeout(quizTimer);
     if (Listen.mode === 'songs') { S.listenMode = 'bible'; saveSettings(); Listen.start('bible'); }
     if (S.bk !== r.book || S.ch !== r.ch) { S.bk = r.book; S.ch = r.ch; saveSettings(); }
     output(); renderBibleNav(); renderSlides();
@@ -580,19 +590,32 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
         const keep = this.rate * 10; while (this.chunks.length && this.total - this.chunks[0].end > keep) this.chunks.shift();
       };
       src.connect(this.proc); this.proc.connect(this.ac.destination);
-      const buf = new Uint8Array(this.an.fftSize); let last = 0;
+      const buf = new Uint8Array(this.an.fftSize); let last = 0; this.hist = [];
       const tick = ts => {
         if (!this.stream) return;
         if (ts - last > (S.low ? 200 : 70)) {
           last = ts; this.an.getByteTimeDomainData(buf);
           let p = 0; for (const v of buf) { const x = Math.abs(v - 128); if (x > p) p = x; }
           const w = Math.min(100, p / 1.1) + '%'; $('level').style.width = w; $('level2').style.width = w;
+          this.health(ts, p);
         }
         this.raf = requestAnimationFrame(tick);
       };
       this.raf = requestAnimationFrame(tick);
       return true;
     },
+    // Microphone health for the operator (never on the projector): over the last 8 s, nothing at all, only a weak
+    // signal, or the top of the waveform cut off (the mixer send or input gain is too high).
+    health(ts, p) {
+      const h = this.hist; h.push([ts, p]); while (h.length && ts - h[0][0] > 8000) h.shift();
+      if (ts - (this.hAt || 0) < 1000 || !h.length || ts - h[0][0] < 4000) return;
+      this.hAt = ts;
+      const max = Math.max(...h.map(x => x[1])), clip = h.filter(x => x[1] >= 126 && ts - x[0] < 3000).length;
+      const k = max < 2 ? 'mic_none' : clip >= 3 ? 'mic_clip' : max < 14 ? 'mic_weak' : 'mic_ok';
+      if (k === this.hk) return; this.hk = k;
+      for (const id of ['micHealth', 'micHealth2']) { const e = $(id); if (e) { e.textContent = t(k); e.className = 'pill mic ' + k; e.hidden = false; } }
+    },
+    warm() { return !IOS && location.protocol !== 'file:' && S.micWarm !== false; },
     ns(on) { const tr = this.stream && this.stream.getAudioTracks()[0]; if (tr) return tr.applyConstraints({ echoCancellation: false, noiseSuppression: !!on, autoGainControl: true }).then(() => tr.getSettings().noiseSuppression).catch(() => null); return Promise.resolve(null); },
     /** The phrase being sung right now: from the last pause to now. {from, to, ended} in sample counts. */
     phrase() {
@@ -640,7 +663,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (this.stream) this.stream.getTracks().forEach(x => x.stop());
       try { this.proc && this.proc.disconnect(); this.ac && this.ac.close(); } catch (e) {}
       this.stream = this.ac = this.proc = this.an = null;
-      $('level').style.width = '0'; $('level2').style.width = '0';
+      $('level').style.width = '0'; $('level2').style.width = '0'; this.hk = ''; for (const id of ['micHealth', 'micHealth2']) { const e = $(id); if (e) e.hidden = true; }
     }
   };
 
@@ -1833,7 +1856,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     },
     setLang(lang) { if (this.lang === lang) return; this.lang = lang; if (this.mode === 'bible') this.lastBibleLang = lang; if (!this.mode) return; if (this.engine === 'cloud') Cloud.start(lang); else if (this.engine === 'local') Local.start(lang); else if (this.engine === 'sarvam' && S.vbLang !== 'auto') SarvamLive.start(lang); updateListenUI(); },
     stopEngines() { Cloud.stop(); Local.stop(); Gemini.stop(); Whisper.stop(); SarvamLive.stop(); },
-    stop() { this.mode = null; this.stopEngines(); LangID.stop(); Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
+    // The microphone stays open between songs on a laptop: the browser's automatic gain and noise filter take
+    // several seconds to settle, and the clip cutter learns the room's noise floor - a fresh start for every song
+    // made the first lines of each run worse than a second run of the same song.
+    stop() { this.mode = null; this.stopEngines(); LangID.stop(); if (!Mic.warm()) Mic.stop(); screen.autoBlank = false; updateListenUI(); output(); }
   };
 
   // Watchdog: restart a recogniser that has gone quiet; find the spoken language when the recogniser needs one.
@@ -1904,21 +1930,25 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     const stalled = on && Listen.engine === 'cloud' && Cloud.stalled;
     for (const id of ['btnListen', 'btnListen2']) { const b = $(id); b.textContent = stalled ? t('listen_resume') : on ? t('listen_stop') : t('listen_start'); b.classList.toggle('on', on && !stalled); b.classList.toggle('primary', !on || stalled); b.disabled = disabled; }
     $('btnVB').textContent = Listen.mode === 'bible' ? t('listen_stop') : t('listen_bible'); $('btnVB').classList.toggle('on', Listen.mode === 'bible'); $('btnVB').classList.toggle('primary', Listen.mode !== 'bible'); $('btnVB').disabled = disabled;
-    document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('sel', b.dataset.lm === S.listenMode));
-    $('lmBible').hidden = !vb;
+    document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('sel', b.dataset.lm === (vb && S.psalmMode ? 'psalm' : S.listenMode)));
+    $('lmBible').hidden = !vb || !!S.psalmMode; $('lmPsalm').hidden = !(vb && S.psalmMode);
     $('autoFollow').closest('label').hidden = vb;
     const gem = cloud && S.gemini && S.geminiKey, wh = cloud && Listen.engine === 'whisper';
     document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = wh ? '🎵 Whisper AI' : gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
     if (Listen.mode && Listen.waitingMic) setStatus(t('mic_wait'), false);
     else if (Listen.mode) {
       if (Listen.engine === 'local' && !Local.ok) setStatus(t('local_connecting'), false);
-      else setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · ${Listen.engine === 'gemini' ? 'Gemini' : Listen.engine === 'whisper' ? 'Whisper' : langName(Listen.lang)}`, true);
+      else setStatus(`${Listen.mode === 'bible' ? (S.psalmMode ? t('listen_for_psalm') : t('listen_for_bible')) : t('listen_for_songs')} · ${Listen.engine === 'gemini' ? 'Gemini' : Listen.engine === 'whisper' ? 'Whisper' : langName(Listen.lang)}`, true);
     } else setStatus(disabled ? t('need_chrome') : t('not_listening'), false);
     $('matchPill').hidden = Listen.mode !== 'songs';
     if (Listen.mode !== 'songs') { $('matchPill').textContent = ''; $('matchPill').className = 'pill'; }
   }
   function setListenMode(m) {
+    const psalm = m === 'psalm'; if (psalm) m = 'bible';
+    const wasPsalm = S.psalmMode; S.psalmMode = psalm;
     S.listenMode = m; saveSettings();
+    if (psalm) { hideAsk(); hideQuizAsk(); psalmStart(S.psalmN, S.psalmV); }
+    else if (wasPsalm && m === 'bible') { VF.shown = ''; }
     if (m === 'bible') {
       Track.pause(); ensureVersions();          // Bible text ready before the first verse is heard
       // Preacher: the song leaves the screen; the last verse comes back, or the background until a verse is heard.
@@ -1938,6 +1968,10 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   };
   const LANG_KEYS = Object.fromEntries(Object.entries(LANG_MARKERS).map(([l, ws]) => [l, ws.map(w => Core.keyWords(w).replace(/\s+/g, ' ').trim())]));
   function speechLang(text) {
+    // written in Malayalam or Tamil letters: the recogniser already knows (the English-letter word lists below
+    // overlap - "ഇടയനാകുന്നു" was taken for Tamil and the Malayalam verse was then followed in the Tamil Bible)
+    const ml = (String(text).match(/[\u0D00-\u0D7F]/g) || []).length, ta = (String(text).match(/[\u0B80-\u0BFF]/g) || []).length;
+    if (ml + ta >= 4) return ml > ta ? 'ml-IN' : 'ta-IN';
     const k = ' ' + Core.keyWords(text) + ' ', score = {};
     for (const [l, ws] of Object.entries(LANG_KEYS)) score[l] = ws.reduce((n, w) => n + (w.length >= 3 && (l === 'ta-IN' && w === 'avatu' ? /avatu /.test(k) : k.includes(' ' + w)) ? 1 : 0), 0);
     if (/[a-z]+avatu /.test(k)) score['ta-IN'] += 1;          // Tamil ordinals ("மூன்றாவது")
@@ -1967,7 +2001,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     } else if (Listen.mode === 'bible') {
       onBibleSpeech(finals, interim, conf == null ? 0.75 : conf);
       // Only with automatic switching on: singing that clearly matches a song while in preacher mode moves back to the songs.
-      if (S.autoMode && songIx && (finals || interim[0])) {
+      if (S.autoMode && !S.psalmMode && songIx && (finals || interim[0])) {
         const h = Core.key(finals || interim[0]); const best = Core.songLookup(songIx, h, 1)[0];
         if (best && best.score >= .72) { singHits++; if (singHits >= 2) { singHits = 0; setListenMode('songs'); switchToSong(best.id, best.line); } } else singHits = 0;
       }
@@ -2176,9 +2210,100 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     }
   };
 
+  /* ---------- Bible quiz: the preacher asks "who is the son of Abraham?" and the answer can go on screen ----------
+   * Matched locally against vendor/quiz.json (English, Tamil, Malayalam), next to the verse search. 'show': the
+   * question goes up at once and the answer after the pause the pastor chose (the church gets a moment to answer
+   * aloud); 'suggest': the operator sees it and taps Show; 'off'. */
+  let quizTimer = 0, quizHeard = [], quizLast = { i: -1, at: 0 }, quizAsked = null, quizAskTimer = 0, quizReady = null;
+  function quizLoad() {
+    if (quizReady || !window.LFQuiz) return quizReady;
+    quizReady = fetch('vendor/quiz.json').then(r => r.json()).then(l => LFQuiz.load(l)).catch(() => { quizReady = null; return 0; });
+    return quizReady;
+  }
+  function quizListen(finals) {
+    if (S.quiz === 'off' || !window.LFQuiz) return false;
+    if (!LFQuiz.count()) { quizLoad(); return false; }
+    const now = Date.now();
+    quizHeard.push({ t: finals, at: now }); quizHeard = quizHeard.filter(x => now - x.at < 12000).slice(-3);
+    // the latest phrase by itself first (a question is usually said in one breath), then with the one before it
+    let m = LFQuiz.match(finals);
+    if (!m && quizHeard.length > 1) m = LFQuiz.match(quizHeard.slice(-2).map(x => x.t).join(' '));
+    if (!m) return false;
+    quizHeard = [];
+    if (m.i === quizLast.i && now - quizLast.at < 90000) { quizLast.at = now; return true; }   // asked again: already up
+    quizLast = { i: m.i, at: now };
+    if (S.quiz === 'show' && S.vbAuto) showQuiz(m.q); else askQuiz(m.q);
+    return true;
+  }
+  function showQuiz(q, now) {
+    hideQuizAsk(); clearTimeout(quizTimer);
+    screen.kind = 'quiz'; screen.quiz = { q, shown: !!now || !(S.quizDelay > 0), at: Date.now() }; screen.bgOnly = false; screen.black = false; screen.autoBlank = false;
+    if (!screen.quiz.shown) quizTimer = setTimeout(() => { if (screen.quiz && screen.quiz.q === q) { screen.quiz.shown = true; output(); } }, S.quizDelay * 1000);
+    output(); renderSlides();
+  }
+  function quizText(q, l) { return (q.q[l] || q.q.en) + ' → ' + (q.a[l] || q.a.en); }
+  function askQuiz(q) {
+    quizAsked = q; const b = $('quizAsk'); if (!b) return;
+    $('quizAskText').textContent = quizText(q, S.lang in q.q ? S.lang : 'en');
+    b.hidden = false; clearTimeout(quizAskTimer); quizAskTimer = setTimeout(hideQuizAsk, 20000);
+  }
+  function hideQuizAsk() { quizAsked = null; clearTimeout(quizAskTimer); const b = $('quizAsk'); if (b) b.hidden = true; }
+
+  /* ---------- Psalm reading: the church reads a Psalm together, one verse on screen at a time ----------
+   * Only the chosen Psalm is followed. The next verse moves on clear evidence, two verses ahead (a verse skipped)
+   * or one back needs it twice, nothing further ever moves, and a repeated verse stays up. No passage finder, no
+   * quiz, no other references - only "Psalm 91" / "சங்கீதம் 23" / "സങ്കീർത്തനം 1" changes the Psalm. */
+  const PS = 18;
+  const PSF = { hold: null };
+  async function psalmStart(n, v) {
+    n = Math.max(1, Math.min(150, Math.round(+n) || 1)); v = Math.max(1, Math.round(+v) || 1);
+    await ensureVersions();
+    const rv = vfVersion(); if (!Bible.loaded(rv)) await Bible.load(rv).catch(() => {});   // the Bible the church reads from
+    const cnt = Bible.chapter(S.versions.find(Bible.loaded) || 'kjv', PS, n).length; if (cnt && v > cnt) v = 1;
+    S.psalmN = n; S.psalmV = v; saveSettings(); PSF.hold = null;
+    await showBible({ book: PS, ch: n, v, ve: v });
+    renderPsalmUI();
+  }
+  function renderPsalmUI() { const a = $('psN'), b = $('psV'); if (a && document.activeElement !== a) a.value = S.psalmN; if (b && document.activeElement !== b) b.value = S.psalmV; }
+  function psalmFollow(finals, interim) {
+    if (screen.kind !== 'bible' || !screen.bible || screen.bible.book !== PS) return false;
+    const r = screen.bible; if (!vfPrepare(r)) return false;
+    if (VF.shown !== refKey(r)) { VF.shown = refKey(r); VF.st = { cur: VF.first[r.v - 1] != null ? VF.first[r.v - 1] : 0, pend: -1, hits: 0 }; VF.heard = ''; PSF.hold = null; }
+    if (finals) VF.heard = (VF.heard + ' ' + Core.keyWords(finals)).slice(-300);
+    const thr = S.thr / 100, save = JSON.stringify(VF.st);
+    let moved = false;
+    for (const alt of (interim.length ? interim.slice(0, 2) : [''])) if (Core.decide(VF.st, VF.lines, (VF.heard + ' ' + Core.keyWords(alt)).slice(-300), thr)) { moved = true; break; }
+    // where the words point, by verse: the follower itself moves piece by piece inside a verse
+    const tgt = moved ? VF.st.cur : VF.st.pend;
+    if (tgt == null || tgt < 0) return true;
+    const v = VF.vOf[tgt], d = v - r.v;
+    if (d === 0) return true;                                    // further into this verse, or it is read again: it stays
+    if (d === 1 && !moved) return true;                          // the next verse, not clear yet
+    if (d !== 1) {
+      // a verse skipped, or the one before read again: clearly, and twice; anything further never moves
+      const clear = (d === 2 || d === -1) && finals && VF.st.raw >= thr + .15;
+      const ok = clear && PSF.hold && PSF.hold.v === v && Date.now() - PSF.hold.at < 20000;
+      if (!ok) { if (clear) PSF.hold = { v, at: Date.now() }; if (moved) { VF.st = JSON.parse(save); VF.st.pend = tgt; VF.st.hits = 1; } return true; }
+      VF.st.cur = tgt; VF.st.pend = -1; VF.st.hits = 0;
+    }
+    PSF.hold = null; const nr = { book: PS, ch: r.ch, v, ve: v }; VF.shown = refKey(nr); S.psalmV = v; saveSettings();
+    showBible(nr); renderPsalmUI();
+    return true;
+  }
+  function psalmSpeech(finals, interim) {
+    if (finals) {
+      const r = Bible.parseRef(finals.slice(-120), { exactOnly: true, needChapter: true });
+      if (r && r.book === PS && (r.cue || r.tight) && !(screen.bible && screen.bible.book === PS && screen.bible.ch === r.ch && !r.hasVerse)) { psalmStart(r.ch, r.hasVerse ? r.v : 1); return; }
+    }
+    if (!(screen.kind === 'bible' && screen.bible && screen.bible.book === PS)) { if (finals) psalmStart(S.psalmN, S.psalmV); return; }
+    psalmFollow(finals, interim);
+  }
+
   function onBibleSpeech(finals, interim, conf) {
-    // after the free steps below have had their go at this phrase (a reference or a read-out verse needs no AI)
-    if (finals) setTimeout(() => VerseAI.heard(finals), 500);
+    if (S.psalmMode) { psalmSpeech(finals, interim); return; }
+    // after the free steps below have had their go at this phrase (a reference or a read-out verse needs no AI);
+    // a quiz question just matched is not a passage being retold
+    if (finals) setTimeout(() => { if (Date.now() - quizLast.at > 3000) VerseAI.heard(finals); }, 500);
     if (finals) vbText = (vbText + ' ' + finals).slice(-400);
     const tail = (vbText + ' ' + (interim[0] || '')).slice(-90);
     const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: planBooks() };
@@ -2200,6 +2325,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       return;
     }
     if (finals && pieceRef(finals)) return;
+    if (finals && quizListen(finals)) return;
     if (verseFollow(finals, interim)) return;
     const words = vbText.trim().split(/\s+/).length;
     if (finals && !quoteBusy && words - vbWordsAtQuote >= 5 && Date.now() - VF.at > 8000) {
@@ -2538,6 +2664,15 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('planInput').oninput = () => { S.plan = $('planInput').value; saveSettings(); renderPlan(); };
     renderPlan(); ensureVersions().then(renderPlan);
     $('btnAskShow').onclick = acceptAsk; $('btnAskNo').onclick = hideAsk;
+    // Psalm reading and the quiz
+    $('psGo').onclick = () => psalmStart($('psN').value, $('psV').value);
+    for (const id of ['psN', 'psV']) $(id).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('psGo').click(); } };
+    renderPsalmUI();
+    $('quizMode').value = S.quiz || 'show'; $('quizMode').onchange = e => { S.quiz = e.target.value; saveSettings(); if (S.quiz !== 'off') quizLoad(); };
+    $('quizDelay').value = String(S.quizDelay == null ? 4 : S.quizDelay); $('quizDelay').onchange = e => { S.quizDelay = +e.target.value; saveSettings(); };
+    $('btnQuizShow').onclick = () => { const q = quizAsked; if (q) showQuiz(q, true); };
+    $('btnQuizNo').onclick = hideQuizAsk;
+    if (S.quiz !== 'off') setTimeout(quizLoad, 4000);
     const listenClick = () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); else toggleListen(); };
     // On phones any tap on the page counts as the user gesture the browser wants: resume without hunting for the button.
     document.addEventListener('touchend', () => { if (Listen.mode && Listen.engine === 'cloud' && Cloud.stalled) Cloud.resume(); }, { passive: true });
@@ -2702,6 +2837,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   /* ---------- start ---------- */
   async function init() {
     setTimeout(() => { try { renderHeardRefs(); VerseAI.render(); } catch (e) {} }, 1500);
+    // Microphone already allowed: open it now, so the level and the microphone check show before the service and the
+    // audio chain has settled by the first song
+    setTimeout(() => { try { if (Mic.warm() && navigator.permissions) navigator.permissions.query({ name: 'microphone' }).then(p => { if (p.state === 'granted' && !Mic.stream) Mic.start(); }).catch(() => {}); } catch (e) {} }, 2500);
     if (location.protocol === 'file:') {
       // Opened by double-clicking index.html. If "Start Lyric Follow.bat" is running, go there (mic permission is remembered, offline voice works).
       try { const r = await fetch('http://localhost:8765/manifest.webmanifest', { mode: 'no-cors', cache: 'no-store' }); if (r) { location.replace('http://localhost:8765/index.html'); return; } } catch (e) {}
@@ -2760,7 +2898,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     handoffs: () => Diag.hand.slice(),
     // the clip log itself, for a local copy (nothing is sent anywhere)
     clips: () => JSON.stringify(Whisper.tlog),
-    feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
+    quiz: () => ({ n: window.LFQuiz ? LFQuiz.count() : 0, screen: screen.quiz ? { a: screen.quiz.q.a.en, shown: screen.quiz.shown } : null, asked: quizAsked ? quizAsked.a.en : null }),
+    psalm: (n, v) => psalmStart(n, v),
+        feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
@@ -2771,7 +2911,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     async addSong(title, lang, lyrics) { const s = await saveSong({ title, lang, lyrics }); if (!service.includes(s.id)) { service.push(s.id); saveService(); } rebuildSongIndex(); loadSong(s.id); return s.id; },
     mode(m) { Listen.mode = m; Listen.engine = S.net === 'online' ? 'cloud' : 'local'; if (m) Listen.lang = m === 'bible' ? S.vbLang : (song ? song.lang : 'ml-IN'); updateListenUI(); },
     lid: () => ({ votes: LangID.votes, disabled: LangID.disabled, lastAt: LangID.lastAt, ws: LangID.ws && LangID.ws.readyState, busy: LangID.busy, raw: LangID.raw }),
-    state: () => ({ cur: follow.cur, song: song && song.title, svc: service.map(id => (songById(id) || {}).title), screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score }, moves: Lead.moves.slice(-60), trk: Trk.log.slice(-40) })
+    state: () => ({ cur: follow.cur, song: song && song.title, svc: service.map(id => (songById(id) || {}).title), screen: Object.assign({}, screen), svcRows: Svc.ix ? Svc.ix.rows.length : 0, svcLog: Svc.log.slice(-12), cues: Track.cues || 0, favs: [...favs], heardRefs: heardRefs.map(h => Bible.refLabel(h.r, 'en')), lang: Listen.lang, asked: asked && Bible.refLabel(asked, 'en'), vf: { cur: VF.st.cur, score: VF.st.score, raw: VF.st.raw, pend: VF.st.pend, hits: VF.st.hits, v: VF.vOf[VF.st.cur], hold: PSF.hold }, moves: Lead.moves.slice(-60), trk: Trk.log.slice(-40) })
   };
   init();
 })();

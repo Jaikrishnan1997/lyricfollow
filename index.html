@@ -186,6 +186,7 @@
         <div id="supportMsg"></div>
         <button class="primary wide" id="btnListen2"></button>
         <div class="meter"><i id="level2"></i></div>
+        <span class="pill mic" id="micHealth2" hidden></span>
       </div>
       <div class="panel">
         <div class="phead"><h3 data-i18n="voice_bible">Voice Bible</h3><span class="netbadge engine-badge"></span></div>
@@ -335,6 +336,15 @@
     <div class="seg" role="group">
       <button type="button" data-lm="songs">♪ <span data-i18n="lm_songs">Singing</span></button>
       <button type="button" data-lm="bible">📖 <span data-i18n="lm_bible">Preacher (Bible)</span></button>
+      <button type="button" data-lm="psalm">📜 <span data-i18n="lm_psalm">Psalm reading</span></button>
+    </div>
+    <div id="lmPsalm" class="lmbible" hidden>
+      <div class="row tight psrow">
+        <label class="field"><span data-i18n="psalm_n">Psalm</span><input type="number" id="psN" min="1" max="150" inputmode="numeric"></label>
+        <label class="field"><span data-i18n="psalm_v">From verse</span><input type="number" id="psV" min="1" max="176" inputmode="numeric"></label>
+        <button class="primary" id="psGo" data-i18n="psalm_go">Show</button>
+      </div>
+      <p class="hint" data-i18n="psalm_hint">The church reads together: one verse on screen, moving to the next as it is read. Saying "Psalm 91" changes the Psalm.</p>
     </div>
     <div id="lmBible" class="lmbible" hidden>
       <label class="field"><span data-i18n="speaker_lang">Speaker's language</span><select id="vbLang2"></select></label>
@@ -342,16 +352,25 @@
       <label class="check"><input type="checkbox" id="vfOn"> <span data-i18n="follow_reading">Follow the verses as they are read</span></label>
       <label class="field"><span data-i18n="plan_title">Sermon plan (passages)</span><input type="text" id="planInput" autocomplete="off" spellcheck="false" data-i18n-ph="plan_ph"></label>
       <div class="vchips planchips" id="planChips"></div>
+      <div class="row tight quizrow">
+        <label class="field"><span data-i18n="quiz_mode">Bible quiz questions</span><select id="quizMode"><option value="show" data-i18n="quiz_show">Show the answer</option><option value="suggest" data-i18n="quiz_suggest">Ask me first</option><option value="off" data-i18n="quiz_off">Off</option></select></label>
+        <label class="field"><span data-i18n="quiz_delay">Answer after</span><select id="quizDelay"><option value="0">0 s</option><option value="4">4 s</option><option value="8">8 s</option><option value="15">15 s</option></select></label>
+      </div>
     </div>
     <p class="msg" id="fileWarn" hidden></p>
     <button class="wide" id="btnListen"></button>
     <div class="status"><span class="dot" id="dot"></span><span id="statusText"></span><span class="pill" id="matchPill"></span></div>
     <div class="meter"><i id="level"></i></div>
+    <span class="pill mic" id="micHealth" hidden></span>
     <p class="heardline" id="heard"></p>
     <label class="check"><input type="checkbox" id="autoFollow"> <span data-i18n="auto">Auto follow</span></label>
     <div class="suggest searchhelp" id="searchHelp" hidden>
       <span data-i18n="no_song_match">This song is not in the library.</span>
       <a id="searchLink" href="#" target="_blank" rel="noopener" data-i18n="search_web">Search the web for these lyrics</a>
+    </div>
+    <div class="suggest refask" id="quizAsk" hidden>
+      <span><span data-i18n="quiz_heard">Quiz question</span>: <b id="quizAskText"></b></span>
+      <div class="row tight"><button class="primary" id="btnQuizShow" data-i18n="show_it">Show</button><button id="btnQuizNo" data-i18n="ignore">Ignore</button></div>
     </div>
     <div class="suggest refask" id="refAsk" hidden>
       <span><span data-i18n="did_say">Did the preacher say</span> <b id="refAskLabel"></b>?</span>
@@ -377,6 +396,7 @@
 <script src="js/core.js"></script>
 <script src="js/tidy.js"></script>
 <script src="js/bible.js"></script>
+<script src="js/quiz.js"></script>
 <script src="js/store.js"></script>
 <script src="js/stage.js"></script>
 <script src="js/app.js"></script>

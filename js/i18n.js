@@ -1,6 +1,7 @@
 /* Lyric Follow — app text in English, Malayalam and Tamil. Keys missing in a language fall back to English. */
 window.LF_I18N = {
   en: {
+    lm_psalm: 'Psalm reading', psalm_n: 'Psalm', psalm_v: 'From verse', psalm_go: 'Show', psalm_hint: 'The church reads together: one verse on screen, moving to the next as it is read. Saying "Psalm 91" changes the Psalm.', listen_for_psalm: 'Following the Psalm reading', quiz: 'Quiz', quiz_mode: 'Bible quiz questions', quiz_show: 'Show the answer', quiz_suggest: 'Ask me first', quiz_off: 'Off', quiz_delay: 'Answer after', quiz_heard: 'Quiz question', mic_none: 'Mic: no signal', mic_weak: 'Mic: weak', mic_clip: 'Mic: too loud (clipping)', mic_ok: 'Mic: good', 
     lang_auto: 'Auto (detect)', lang_detected: 'Language detected', no_song_match: 'This song is not in the library.', search_web: 'Search the web for these lyrics',
     clear_history: 'Clear list',
     speech_service_down: 'The online speech service is not answering. Retrying… Switch to Offline if this continues.',
@@ -65,6 +66,7 @@ window.LF_I18N = {
     lm_songs: 'Singing', lm_bible: 'Preacher (Bible)', file_warn: 'Opened as a file, so the browser forgets the microphone permission and keeps asking. Close this and open the app with "Start Lyric Follow.bat" instead.', listen_for_songs: 'Listening to singing', listen_for_bible: 'Listening to preacher', ch_n: 'ch.', no_ref_yet: 'Say a reference like "John 3:16" or read a verse.'
   },
   ml: {
+    lm_psalm: 'സങ്കീർത്തന വായന', psalm_n: 'സങ്കീർത്തനം', psalm_v: 'വാക്യം മുതൽ', psalm_go: 'കാണിക്കുക', psalm_hint: 'സഭ ഒന്നിച്ച് വായിക്കുന്നു: ഒരു സമയം ഒരു വാക്യം, വായിക്കുന്നതനുസരിച്ച് അടുത്തതിലേക്ക്. "സങ്കീർത്തനം 91" എന്നു പറഞ്ഞാൽ സങ്കീർത്തനം മാറും.', listen_for_psalm: 'സങ്കീർത്തന വായന പിന്തുടരുന്നു', quiz: 'ക്വിസ്', quiz_mode: 'ബൈബിൾ ക്വിസ് ചോദ്യങ്ങൾ', quiz_show: 'ഉത്തരം കാണിക്കുക', quiz_suggest: 'ആദ്യം എന്നോട് ചോദിക്കുക', quiz_off: 'ഓഫ്', quiz_delay: 'ഉത്തരം കഴിഞ്ഞ്', quiz_heard: 'ക്വിസ് ചോദ്യം', mic_none: 'മൈക്ക്: ശബ്ദമില്ല', mic_weak: 'മൈക്ക്: ദുർബലം', mic_clip: 'മൈക്ക്: അധികം ഉച്ചത്തിൽ', mic_ok: 'മൈക്ക്: നല്ലത്', 
     lang_auto: 'സ്വയം (തിരിച്ചറിയുക)', lang_detected: 'ഭാഷ തിരിച്ചറിഞ്ഞു', no_song_match: 'ഈ ഗാനം ലൈബ്രറിയിൽ ഇല്ല.', search_web: 'ഈ വരികൾ വെബിൽ തിരയുക',
     clear_history: 'പട്ടിക മായ്ക്കുക',
     speech_service_down: 'ഓൺലൈൻ ശബ്ദ സേവനം പ്രതികരിക്കുന്നില്ല. വീണ്ടും ശ്രമിക്കുന്നു… തുടർന്നാൽ ഓഫ്‌ലൈനിലേക്ക് മാറുക.',
@@ -129,6 +131,7 @@ window.LF_I18N = {
     lm_songs: 'പാട്ട്', lm_bible: 'പ്രസംഗം (ബൈബിൾ)', file_warn: 'ഫയലായി തുറന്നതിനാൽ ബ്രൗസർ മൈക്ക് അനുമതി ഓർക്കില്ല, വീണ്ടും വീണ്ടും ചോദിക്കും. ഇത് അടച്ച് "Start Lyric Follow.bat" വഴി തുറക്കുക.', listen_for_songs: 'പാട്ട് കേൾക്കുന്നു', listen_for_bible: 'പ്രസംഗം കേൾക്കുന്നു', ch_n: 'അ.', no_ref_yet: '"യോഹന്നാൻ 3:16" പോലെ പറയുക അല്ലെങ്കിൽ വാക്യം വായിക്കുക.'
   },
   ta: {
+    lm_psalm: 'சங்கீத வாசிப்பு', psalm_n: 'சங்கீதம்', psalm_v: 'வசனம் முதல்', psalm_go: 'காட்டு', psalm_hint: 'சபை சேர்ந்து வாசிக்கிறது: ஒரு நேரத்தில் ஒரு வசனம், வாசிக்க வாசிக்க அடுத்தது. "சங்கீதம் 91" என்று சொன்னால் சங்கீதம் மாறும்.', listen_for_psalm: 'சங்கீத வாசிப்பைப் பின்தொடர்கிறது', quiz: 'வினாடி வினா', quiz_mode: 'வேதாகம வினாக்கள்', quiz_show: 'விடையைக் காட்டு', quiz_suggest: 'முதலில் என்னைக் கேள்', quiz_off: 'அணை', quiz_delay: 'விடை பின்னர்', quiz_heard: 'வினா', mic_none: 'மைக்: ஒலி இல்லை', mic_weak: 'மைக்: பலவீனம்', mic_clip: 'மைக்: மிக அதிகம்', mic_ok: 'மைக்: நன்று', 
     lang_auto: 'தானியங்கி (கண்டறி)', lang_detected: 'மொழி கண்டறியப்பட்டது', no_song_match: 'இந்தப் பாடல் நூலகத்தில் இல்லை.', search_web: 'இந்த வரிகளை இணையத்தில் தேடு',
     clear_history: 'பட்டியலை அழி',
     speech_service_down: 'ஆன்லைன் குரல் சேவை பதிலளிக்கவில்லை. மீண்டும் முயல்கிறது… தொடர்ந்தால் ஆஃப்லைனுக்கு மாற்றவும்.',
