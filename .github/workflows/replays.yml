@@ -1,0 +1,12 @@
+# Replays of recorded live services and the simulated singing bench (no browser, no keys): must not get worse.
+name: replays
+on: [push, pull_request]
+jobs:
+  replays:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tests/ci.js

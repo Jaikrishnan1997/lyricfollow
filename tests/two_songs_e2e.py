@@ -2,12 +2,13 @@
 # whole app in real time on the Sarvam path: each clip gets the recorded answer nearest in time. Measures how often the
 # projector shows the line being sung (by its text), one off, wrong, and when it changes to the second song.
 #   python3 tests/two_songs_e2e.py [v]
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
 import os
-R=os.environ.get('ROOT','/home/claude/lyricfollow/')
+R=os.environ.get('ROOT', ROOT)
 srv = subprocess.Popen([sys.executable,'-m','http.server',os.environ.get('PORT','8771'),'-d',R],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
+S=SCRATCH+'/sherpa'
 import os
 run=json.load(open(R+'tests/'+os.environ.get('RUN','live_two_songs.json')))
 ch=json.load(open(R+'vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா கர்த்தரையே')][0]
@@ -34,7 +35,7 @@ def truth(r):
     return t
 try:
   with sync_playwright() as p:
-    br=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
+    br=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={AUDIO}'])
     ctx=br.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.route('https://api.sarvam.ai/**', handle)
     pg.goto('http://localhost:'+os.environ.get('PORT','8771')+'/index.html'); pg.wait_for_timeout(9000)

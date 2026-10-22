@@ -1,9 +1,10 @@
 # Bible levels 2 and 3 end to end (Sarvam chat mocked): a verse read out shows; an explanation sharing its words
 # does not; a retold story is offered ("Did the preacher say...?"), shown by itself only when in today's plan;
 # talk gets nothing.
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-srv = subprocess.Popen([sys.executable,'-m','http.server','8779','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+srv = subprocess.Popen([sys.executable,'-m','http.server','8779','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
 calls=[]
 def chat(route):
     if route.request.method=='OPTIONS': route.fulfill(status=200, headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'POST, OPTIONS'}); return

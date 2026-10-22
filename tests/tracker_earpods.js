@@ -1,6 +1,6 @@
-const Core=require('/home/claude/lyricfollow/js/core.js');
+const Core=require(__dirname+'/../js/core.js');
 const T0=require('./earpods_alleluya.json');
-const ta=require('/home/claude/lyricfollow/vendor/songs-ta-fgs.json').songs, ch=require('/home/claude/lyricfollow/vendor/songs-church.json').songs;
+const ta=require(__dirname+'/../vendor/songs-ta-fgs.json').songs, ch=require(__dirname+'/../vendor/songs-church.json').songs;
 const pick=t=>ch.concat(ta).find(s=>s.title.startsWith(t));
 const parse=text=>{const ls=[];text.split(/\n\s*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean)).forEach((b,si)=>b.forEach(x=>ls.push({text:x,slide:si})));const indic=t=>/[ऀ-෿]/.test(t),latin=t=>/[a-z]/i.test(t)&&!indic(t);for(let i=1;i<ls.length;i++){const a=ls[i-1],b=ls[i];if(a.slide===b.slide&&!a.alt&&(indic(a.text)&&latin(b.text)||latin(a.text)&&indic(b.text)))(indic(a.text)?b:a).alt=true;}return ls;};
 const svc=['அல்லேலூயா கர்த்தரையே','எந்தன் நாவில்','அழகாய் நிற்கும்','அழைத்தீரே'].map(pick).map((s,i)=>({id:'S'+i,lines:parse(s.lyrics)}));

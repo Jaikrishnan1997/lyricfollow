@@ -177,6 +177,33 @@ skipped, a 15 s break, a song that speeds up, song switches) at three tempos; `S
   saved or sent.
 - **Audio capture:** the ScriptProcessor buffer is 2048 samples at 16 kHz = 128 ms, against clips every 2.4 s and
   answers 0.25-0.35 s after sending; an AudioWorklet would save under 0.13 s. Not changed.
+- **Every listening mode is timed** (v77): `LF_DEBUG.timing()` now groups by mode and service - Sarvam/Groq/
+  Cloudflare clips, the preacher's Sarvam live stream, the browser recogniser, Gemini, the offline engine - with
+  audio end -> answer where the audio end is known, answer -> screen, and the hand-overs between services
+  (`LF_DEBUG.handoffs()`: which service stopped, why, and how long the screen had no words).
+- **Hand-over between services** (v77): when a service fails (no credit, busy, no answer) the same clip goes to the
+  next one at once, and a service that fails twice in a row is paused for 2 minutes (three times before). The
+  status line shows which service is paused and why. `tests/fallback_gap_e2e.py` (MODE=500|402|net): the time
+  without words at a hand-over fell from 14.4 s (server error, cut connection) and 7.2 s (no credit) to 3.7 s.
+- **Tests run anywhere**: browser tests take their paths from `tests/lfpaths.py` (LF_ROOT, LF_AUDIO, LF_SCRATCH)
+  and use `tests/fixtures/fake_mic.wav` as the microphone; `node tests/ci.js` runs the replays and the bench with
+  floors they must not fall below (also on every push: `.github/workflows/replays.yml`).
+- **Crowd noise** (`tests/live_crowd.json`, `node tests/crowd_replay.js`, `tests/crowd_e2e.py`): 2 minutes of a
+  real capture of Alleluya under a synthetic hall crowd - 100 or 150 people clapping in time, murmuring and
+  shouting "Praise the Lord", "Hallelujah", "Amen", "സ്തോത്രം" - sent to Sarvam:
+
+  | condition (singing : crowd) | clips with words | right line | one off | wrong place | other song |
+  |---|---|---|---|---|---|
+  | clean | 42 / 49 | 67% | 24% | 6% | 0% |
+  | 100 clapping (+6 dB) | 27 / 49 | 16% | 24% | 35% | 0% |
+  | 150 clapping (+3 dB) | 23 / 49 | 16% | 12% | 47% | 0% |
+  | 100 shouting (+6 dB) | 25 / 49 | 24% | 14% | 31% | 0% (18% before v77) |
+  | 150 shouting + clapping (+3 dB) | 12 / 49 | 0% | 0% | 71% | 0% |
+  | 150 shouting + clapping (0 dB) | 6 / 49 | - | - | - | 0% |
+
+  Sarvam writes almost nothing a crowd covers ("ஆமென்", "ராம் ராம் ராம்" instead), so the screen stays where it
+  is instead of following; it no longer jumps to another song on such words (one did, "ராம் ராம் ராம்" -> Enthan,
+  fixed in v77). Following through a loud congregation needs the mixer feed.
 - **Not measured yet:** shorter send intervals or windows need recorded church audio sent to Sarvam again
   (cost and accuracy together); to be done with a recording from the mixer feed.
 

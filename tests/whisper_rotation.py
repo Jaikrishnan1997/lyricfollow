@@ -1,8 +1,9 @@
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json, threading
 from playwright.sync_api import sync_playwright
-srv = subprocess.Popen([sys.executable,'-m','http.server','8776','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
-ch=json.load(open('/home/claude/lyricfollow/vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
+srv = subprocess.Popen([sys.executable,'-m','http.server','8776','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+S=SCRATCH+'/sherpa'
+ch=json.load(open(ROOT+'vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
 L=[l for l in al['lyrics'].split('\n') if l.strip()][:16]
 DUR=float(sys.argv[1]) if len(sys.argv)>1 else 4.5
 sched=[]; T0=[None]
@@ -24,7 +25,7 @@ def handle(route):
     route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps({'text':txt,'segments':[{'text':txt,'no_speech_prob':0.05,'avg_logprob':-0.2}]}, ensure_ascii=False))
 try:
   with sync_playwright() as p:
-    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
+    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={AUDIO}'])
     ctx=b.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     def lim(route, msg):
         route.fulfill(status=429, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps({'error':{'message':msg}}))

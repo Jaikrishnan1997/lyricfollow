@@ -1,9 +1,10 @@
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
+srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+S=SCRATCH+'/sherpa'
 T=["ஏனென்னால் நான் பார்க்கலாம்","ஏனென்னால் நான் கருத்தரையே ஏகமாய்த் துதியுங்கள்","இயேசுராஜன்","ஏற்றுக்கொள்ளும் இயேசுராஜன்","அல்லவா ஏற்றுக்கொள்ளுங்கள்","இயேசுவைத் துதியுங்கள்","விரும்பும் பாதுகாப்புகள்","சில் கெள்ளாம் மாற்கோரிக்குதி","தேவனைத் துதியுங்கள்","அல்லது யார் என்னிடிய செய்யும்","நையிலுரைக் குதியுங்கள்","நெல்லாரியா, பீஞ்சில்","விரைசாரை பார்வேயால்"]
-ch=json.load(open('/home/claude/lyricfollow/vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
+ch=json.load(open(ROOT+'vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
 q=list(T); out=[]
 def handle(route):
     txt=q.pop(0) if q else ''
@@ -11,7 +12,7 @@ def handle(route):
     route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps({'text':txt,'segments':[{'text':txt,'no_speech_prob':0.05,'avg_logprob':-0.3}]}, ensure_ascii=False))
 try:
   with sync_playwright() as p:
-    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
+    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={AUDIO}'])
     ctx=b.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.route('https://api.groq.com/**', handle)
     pg.goto('http://localhost:8768/index.html'); pg.wait_for_timeout(9000)

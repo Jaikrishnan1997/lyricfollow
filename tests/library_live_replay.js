@@ -1,6 +1,6 @@
 // node tests/library_live_replay.js live_lib_thudhi.json live_alleluya_sarvam.json
 // Replay live Sarvam clips: service = user's 4 songs, Alleluya open; does the library find Thudhi Kanam? does Alleluya-only replay stay?
-const R='/home/claude/lyricfollow/';const Core=require(R+'js/core.js');
+const R=require('path').join(__dirname,'..')+'/';const Core=require(R+'js/core.js');
 const all=['songs-ta-fgs','songs-church','songs-ml-wikisource','songs-en-wikisource'].flatMap(f=>require(R+'vendor/'+f+'.json').songs);
 function parse(text){const blocks=text.replace(/\r/g,'').split(/\n\s*\n/).map(b=>b.split('\n').map(l=>l.trim()).filter(Boolean)).filter(b=>b.length);const ls=[];blocks.forEach((b,si)=>b.forEach(x=>ls.push({text:x,slide:si})));
  const indic=t=>/[ऀ-෿]/.test(t),latin=t=>/[a-z]/i.test(t)&&!indic(t);for(let i=1;i<ls.length;i++){const a=ls[i-1],b=ls[i];if(a.slide===b.slide&&!a.alt&&(indic(a.text)&&latin(b.text)||latin(a.text)&&indic(b.text)))(indic(a.text)?b:a).alt=true;}

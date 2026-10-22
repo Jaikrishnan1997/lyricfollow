@@ -1,9 +1,10 @@
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
+srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+S=SCRATCH+'/sherpa'
 T=['ஏதாவது பார்த்துக்கொள்ளுங்கள்', 'ஏனென்றால் நான் கருத்தரையே ஏகமாய்த் துதியுங்கள்', 'ஏற்றுக்கொள்ளும்', 'வல்லோரையாய் கிரியை செய்யும்', 'நான் கர்த்துறையே இயகப் பைத்துவியே', 'வணக்கம்', 'அவன் அடுத்தும் செய்யகளெல்லாம்', 'காட்டுரை குதியுங்கள்', 'நல்ல பயால் திவீர்', 'ஐயா', 'ஐயா', 'ஏன் செல்லுவில்லையோ, ஏன் செல்லுவில்லோ, ஏசா,', 'ஏசோ வெற்றுவியுங்க', 'நாட்டாலி ஆஜேதா பீசு நாட்டு', 'பார்த்துக்கொள்ளுங்கள்', 'அன்றி செய்யுங்கள் அல்லவே உயா', 'அல்லவு யார் அல்லவு யார்', 'தேவாலிக்கும் நியம்க்கல்', 'அல்லேலுயா, அல்லேலுயா', 'அல்லேலுயா தேவான துதியுங்கள்', 'இயேசுராஜன்', 'தீரியை நெய்யும் கத்தரிக்கும்', 'கடந்தையைக் குழியுங்கள்', 'கெட்டத்திடால் பாவன் கிடை', 'பாவங்களை ஓம்பி நாம் துருந்தியுங்கள்', 'சுங்கரே குப்புக்கின் காயமூன்', 'கைந்தாரும் உளைபிலும்', 'பிரியாக விரும்புகிறேன்', 'ஏறு காலதி மாடாது வெள்ளி', 'ஏஸுவைக் குதியுங்கள்', 'நான் சாதிதான் நிலாம் பேசுகிறேன்', 'சிலாகிலாம் பேசுகாது உமியுடாட்சி', 'மின்னாட்சி செய்தார் அடலே', 'அல்லேயுயா அல்லேயுயா', 'ஏவாரிக்கும் நியூங்கள்']
-ch=json.load(open('/home/claude/lyricfollow/vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
+ch=json.load(open(ROOT+'vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]
 q=list(T); out=[]
 def handle(route):
     txt=q.pop(0) if q else ''
@@ -11,7 +12,7 @@ def handle(route):
     route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps({'text':txt,'segments':[{'text':txt,'no_speech_prob':0.05,'avg_logprob':-0.3}]}, ensure_ascii=False))
 try:
   with sync_playwright() as p:
-    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
+    b=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={AUDIO}'])
     ctx=b.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.route('https://api.groq.com/**', handle)
     pg.goto('http://localhost:8768/index.html'); pg.wait_for_timeout(9000)

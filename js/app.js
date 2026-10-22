@@ -542,6 +542,13 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   const LOCAL_PORTS = { ml: 6011, ta: 6012, en: 6013, hi: 6014 };
   const HOSTED = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const localUrl = lang => 'ws://127.0.0.1:' + (LOCAL_PORTS[String(lang || 'ml').slice(0, 2)] || 6011);
+  /* Diagnostics, in memory only (nothing is saved or sent): every recognised text from every listening mode with
+   * its times - audio end (clip modes), answer, screen updated - and every hand-over between recognition services. */
+  const Diag = {
+    log: [], hand: [], clipEnd: 0, prov: '',
+    add(e) { this.log.push(e); if (this.log.length > 400) this.log.shift(); },
+    handoff(e) { this.hand.push(Object.assign({ at: Date.now() }, e)); if (this.hand.length > 60) this.hand.shift(); }
+  };
   let heardKey = '', lastMatchAt = Date.now(), lastSpeechAt = 0, lastEventAt = 0, vbText = '', vbWordsAtQuote = 0;
   let detect = { id: null, n: 0 }, lastDetectAt = 0, suggestId = null, songIx = null, quoteBusy = false;
 
@@ -731,7 +738,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   /** A recognised clip of singing (offline engine): shown as heard, then the service tracker and the line timing. */
   function songClip(text, clipEnd) {
     if (!text || !Listen.mode) return;
-    onText(text, [], .85);
+    Diag.clipEnd = clipEnd || 0; onText(text, [], .85);
     if (Listen.mode === 'songs') { Trk.heard(text); Lead.heard(text, clipEnd || Date.now()); }
   }
   const Local = {
@@ -1209,7 +1216,7 @@ ${lyric ? 'LYRIC LINES:\n' + lyric : ''}
 Previous clip's words: ${this.lastText || '(none)'}`;
     },
     async send(a) {
-      this.busy = true;
+      this.busy = true; const clipEnd = Date.now();
       const model = S.geminiModel || 'gemini-2.5-flash-lite';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.geminiKey)}`;
       const body = { contents: [{ parts: [{ text: this.prompt() }, { inline_data: { mime_type: 'audio/wav', data: this.wav(a) } }] }],
@@ -1221,7 +1228,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         const j = await r.json(); this.fails = 0;
         const txt = (((j.candidates || [])[0] || {}).content || {}).parts?.map(p => p.text).join('') || '';
         let out = {}; try { out = JSON.parse(txt); } catch (e) { out = { text: txt }; }
-        this.apply(out);
+        Diag.clipEnd = clipEnd; this.apply(out);
       } catch (e) {
         this.fails++; if (this.fails >= 3) { toast(t('gemini_failed')); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
       } finally { this.busy = false; }
@@ -1607,11 +1614,14 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     block(id, ms, why) {
       const b = this.blocked(); b[id] = Date.now() + ms; this._bl = b;
       try { localStorage.setItem('lf-wh-block', JSON.stringify(b)); } catch (e) {}
-      const next = this.pick(); toast(t('whisper_quota') + (next ? ' → ' + next.name + (next.model ? ' ' + next.model.replace('whisper-', '') : '') : ''));
+      const next = this.pick(), from = this.providers().find(q => q.id === id);
+      this.paused = { name: from ? from.name : id, why: why || 'quota', at: Date.now() };
+      Diag.handoff({ from: id, why: why || 'quota', ms, next: next ? next.id : null });
+      toast((why === 'credit' ? (from ? from.name + ': ' : '') + t('key_or_credit') : why === 'down' ? (from ? from.name + ': ' : '') + t('no_answer') : t('whisper_quota')) + (next ? ' → ' + next.name + (next.model ? ' ' + next.model.replace('whisper-', '') : '') : ''));
     },
-    pick() {
+    pick(skip) {
       const b = this.blocked(), now = Date.now();
-      return this.providers().find(p => !(b[p.id] > now) && (p.kind !== 'laptop' || LocalWh.ok)) || null;
+      return this.providers().find(p => !(b[p.id] > now) && (p.kind !== 'laptop' || LocalWh.ok) && !(skip && skip.includes(p.id))) || null;
     },
     // Fewer clips to the free services while the screen is following with confidence: one every 6 s instead of every
     // 3.2 s (the line timing fills the gap); back to 3.2 s at once when unsure, before the song starts or when a
@@ -1624,9 +1634,12 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       const n = (i => (lines[i] && lines[i].w ? lines[i].w.length : 4))(follow.cur), dur = Math.max(2, n) * Lead.spw + .6;
       return Math.max(3.2, Math.min(5, dur));
     },
-    async send(a, clipEnd) {
-      this.busy = true;
-      let p = this.pick();
+    async send(a, clipEnd, tried) {
+      this.busy = true; tried = tried || [];
+      // A service that fails (no credit, busy, no answer): the same clip goes to the next one at once, so the words
+      // of these seconds are not lost (measured: 7-14 s without words at a hand-over before).
+      const again = async () => { const q = this.pick(tried.concat([p.id])); if (q && tried.length < 2 && Listen.mode && Listen.engine === 'whisper') { this.busy = false; return this.send(a, clipEnd, tried.concat([p.id])); } };
+      let p = this.pick(tried);
       if (!p && !LocalWh.ok && await LocalWh.check()) p = this.pick();
       if (!p) { this.busy = false; this.backoffUntil = Date.now() + 10000; setStatus(t('whisper_quota'), false); return; }
       this.cur = p;
@@ -1658,11 +1671,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
           // Groq: per minute -> 1 min; audio seconds per hour -> 30 min; per day -> 3 h (rolling), then tried again.
           // Cloudflare: the free allocation resets at 00:00 UTC.
           const day = /per day|RPD|ASD|daily|neuron|allocation/i.test(msg), hour = /per hour|ASH|audio seconds/i.test(msg);
-          if (p.kind === 'cf' && day) { const n = new Date(); this.block(p.id, Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + 1) - Date.now() + 60000); }
-          else this.block(p.id, day ? 3 * 3600000 : hour ? 30 * 60000 : 60000);
-          return;
+          if (p.kind === 'cf' && day) { const n = new Date(); this.block(p.id, Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + 1) - Date.now() + 60000, 'quota'); }
+          else this.block(p.id, day ? 3 * 3600000 : hour ? 30 * 60000 : 60000, 'quota');
+          return await again();
         }
-        if (r.status === 401 || r.status === 402 || r.status === 403) { this.block(p.id, 3600000); if (p.kind !== 'laptop') toast(p.name + ': ' + t('key_or_credit')); return; }
+        if (r.status === 401 || r.status === 402 || r.status === 403) { this.block(p.id, 3600000, 'credit'); return await again(); }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json(); this.fails = 0; this.sent++;
         if (p.kind === 'sarvam') SvUse.add(a.length / 16000);
@@ -1691,21 +1704,26 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         } else if (!text) this.goodRun = 0;
         // timing of each clip, in memory only (LF_DEBUG.timing / LF_DEBUG.clips): audio end -> sent -> answer -> screen
         const lm = Lead.moves[Lead.moves.length - 1];
-        this.tlog.push({ end: clipEnd || t0, sent: t0, got, done: Date.now(), prov: p.kind, text: text.slice(0, 60), from: cur0, to: follow.cur, why: follow.cur !== cur0 && lm ? lm[3] : '', score: +((Trk.st && Trk.st.mineTop) || 0).toFixed(2), stale });
+        this.tlog.push({ end: clipEnd || t0, sent: t0, got, done: Date.now(), prov: p.kind, text: text.slice(0, 60), from: cur0, to: follow.cur, why: follow.cur !== cur0 && lm ? lm[3] : '', score: +((Trk.st && Trk.st.mineTop) || 0).toFixed(2), stale, retry: tried.length });
         if (this.tlog.length > 300) this.tlog.shift();
+        Diag.add({ eng: 'whisper', prov: p.id, end: clipEnd || t0, sent: t0, got, done: Date.now(), text: text.slice(0, 60), final: true, from: cur0, to: follow.cur, why: follow.cur !== cur0 && lm ? lm[3] : '', retry: tried.length });
+        if (text) { if (this.okProv && this.okProv !== p.id) Diag.handoff({ to: p.id, from: this.okProv, gap: got - this.okAt }); this.okProv = p.id; this.okAt = got; }
         // While the singing is clearly going on (a clip with new words in the last 8 s) the hinted line is most
         // likely really being sung, and its timing still shows the next line on time; over a longer break it is not.
         if (echo) { Svc.mineAt = Date.now(); if (follow.cur >= 0 && Date.now() - (this.realAt || 0) < 8000) Lead.heard(text, clipEnd || Date.now()); }
-        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper (${p.name})`, true);
+        const pz = this.paused && Date.now() - this.paused.at < 120000 && this.paused.name !== p.name ? this.paused : null;
+        setStatus(`${Listen.mode === 'bible' ? t('listen_for_bible') : t('listen_for_songs')} · Whisper (${p.name})` + (pz ? ` · ${pz.name} ${t('paused')}: ${pz.why === 'credit' ? t('key_or_credit') : pz.why === 'down' ? t('no_answer') : t('whisper_quota')}` : ''), true);
       } catch (e) {
         this.fails++;
-        // A service that keeps failing (no internet, Worker down, laptop engine stopped) is skipped for 2 minutes.
-        if (this.fails >= 3) {
+        // A service that keeps failing (no internet, Worker down, laptop engine stopped) is skipped for 2 minutes -
+        // after two failures in a row (three before); this clip is tried on the next service straight away.
+        if (this.fails >= 2) {
           this.fails = 0;
           if (p.kind === 'laptop' && this.local && !this.providers().some(q => q.kind !== 'laptop')) { this.stop(); LocalWh.ok = false; Listen.engine = 'local'; Local.start(Listen.lang); updateListenUI(); return; }
-          if (p.kind === 'laptop') LocalWh.ok = false; else this.block(p.id, 120000);
-          if (!this.pick() && !this.local) { toast(t('whisper_failed')); Listen.fellAt = Date.now(); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); }
+          if (p.kind === 'laptop') LocalWh.ok = false; else this.block(p.id, 120000, 'down');
+          if (!this.pick() && !this.local) { toast(t('whisper_failed')); Listen.fellAt = Date.now(); Listen.engine = 'cloud'; this.stop(); if (SR) Cloud.start(Listen.lang); updateListenUI(); return; }
         }
+        if (p.kind !== 'laptop') return await again();
       } finally { this.busy = false; }
     }
   };
@@ -1928,6 +1946,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   }
   function onText(finals, interim, conf) {
     lastSpeechAt = Date.now();
+    if (Listen.engine !== 'whisper') {      // Whisper/Sarvam clips are logged with more detail in Whisper.send
+      const e = { eng: Listen.engine, prov: Listen.engine === 'sarvam' ? 'sarvam-live' : Listen.engine, end: Diag.clipEnd || 0, got: Date.now(), text: String(finals || (interim && interim[0]) || '').slice(0, 60), final: !!finals, from: follow.cur };
+      Diag.clipEnd = 0;
+      setTimeout(() => { e.done = Date.now(); e.to = follow.cur; Diag.add(e); }, 0);
+    }
     if (Listen.mode === 'bible' && S.vbLang === 'auto' && Listen.engine === 'cloud' && (finals || interim[0])) {
       const l = speechLang(finals || interim[0]);
       if (l && l !== Listen.lang) { hunt.lockedAt = Date.now(); Listen.setLang(l); toast(t('lang_detected') + ': ' + langName(l)); }
@@ -2721,12 +2744,20 @@ Previous clip's words: ${this.lastText || '(none)'}`;
   // Test hook: lets automated checks feed recognised text without a microphone.
   window.LF_DEBUG = {
     ns(on) { return Mic.ns(on); },
-    // per-clip timing (seconds): audio end -> answer, answer -> screen; p50 / p95 of the last clips
+    // timing per listening mode and service (seconds, p50 / p95): audio end -> answer (clip modes), answer -> screen,
+    // and the hand-overs between services with the gap without words
     timing() {
-      const L = Whisper.tlog.filter(x => x.text), q = (a, f) => { const b = a.slice().sort((x, y) => x - y); return b.length ? +(b[Math.min(b.length - 1, Math.floor(f * b.length))] / 1000).toFixed(2) : null; };
-      const net = L.map(x => x.got - x.end), ui = L.map(x => x.done - x.got);
-      return { clips: Whisper.tlog.length, withWords: L.length, audioEndToAnswer: { p50: q(net, .5), p95: q(net, .95) }, answerToScreen: { p50: q(ui, .5), p95: q(ui, .95) }, stale: Whisper.tlog.filter(x => x.stale).length };
+      const q = (a, f) => { const b = a.filter(x => x >= 0).sort((x, y) => x - y); return b.length ? +(b[Math.min(b.length - 1, Math.floor(f * b.length))] / 1000).toFixed(2) : null; };
+      const by = {};
+      for (const e of Diag.log) { if (!e.text) continue; const k = e.eng + ':' + e.prov; (by[k] = by[k] || []).push(e); }
+      const out = {};
+      for (const [k, L] of Object.entries(by)) {
+        const net = L.filter(x => x.end).map(x => x.got - x.end), ui = L.filter(x => x.done).map(x => x.done - x.got);
+        out[k] = { texts: L.length, moved: L.filter(x => x.to !== x.from).length, audioEndToAnswer: net.length ? { p50: q(net, .5), p95: q(net, .95) } : null, answerToScreen: { p50: q(ui, .5), p95: q(ui, .95) }, retried: L.filter(x => x.retry).length };
+      }
+      return { modes: out, handoffs: Diag.hand.slice(-10), stale: Whisper.tlog.filter(x => x.stale).length };
     },
+    handoffs: () => Diag.hand.slice(),
     // the clip log itself, for a local copy (nothing is sent anywhere)
     clips: () => JSON.stringify(Whisper.tlog),
     feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },

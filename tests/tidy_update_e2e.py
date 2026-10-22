@@ -1,13 +1,14 @@
 # Pack update to the tidied songs: a browser that has the old (untidy) packs gets the tidy text for every song it
 # has not changed, keeps a song the user edited, shows slide labels, and tidies an own song with Undo.
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json, os
 from playwright.sync_api import sync_playwright
-OLD = sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/vendor_before_tidy'
-srv = subprocess.Popen([sys.executable,'-m','http.server','8780','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+OLD = sys.argv[1] if len(sys.argv) > 1 else SCRATCH+'/vendor_before_tidy'
+srv = subprocess.Popen([sys.executable,'-m','http.server','8780','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
 phase = {'old': True}
 def vendor(route):
     name = route.request.url.split('/vendor/')[1].split('?')[0]
-    path = os.path.join(OLD if phase['old'] else '/home/claude/lyricfollow/vendor', name)
+    path = os.path.join(OLD if phase['old'] else ROOT+'vendor', name)
     if not os.path.exists(path): route.continue_(); return
     route.fulfill(status=200, content_type='application/json', body=open(path,'rb').read())
 try:

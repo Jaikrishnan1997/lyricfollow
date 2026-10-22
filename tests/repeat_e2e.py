@@ -1,7 +1,8 @@
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d','/home/claude/lyricfollow'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-ch=json.load(open('/home/claude/lyricfollow/vendor/songs-church.json'))['songs']
+srv = subprocess.Popen([sys.executable,'-m','http.server','8768','-d',ROOT[:-1]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
+ch=json.load(open(ROOT+'vendor/songs-church.json'))['songs']
 AL=[s for s in ch if s['title'].startswith('அல்லேலூயா')][0]; TK=[s for s in ch if s['title'].startswith('துதி')][0]; EN=[s for s in ch if s['title'].startswith('எந்தன்')][0]
 def lines(s, tamil=True): 
     import re

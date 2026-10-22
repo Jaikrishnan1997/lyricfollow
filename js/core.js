@@ -801,10 +801,13 @@
       if (c0 < 0 || Math.abs(traj.p - c0) >= 2) { st.pend = null; st.last = { p: traj.p, t: now }; st.traj = []; if (st.hmm) st.hmm.c = traj.p; return { song: st.song, line: ix0.idx[traj.p], why: traj.p < c0 ? 'back' : 'fwd' }; }
     }
     const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
-    if (lead && st.song && big.length >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
+    if (lead && st.song && new Set(big).size >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
       let p = 0; for (let q = 0; q < lead.sc.length; q++) if (lead.sc[q].s > lead.sc[p].s) p = q;
-      st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
-      return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };
+      // ... and a word of its own in this clip ("ராம் ராம் ராம்" over 100 people shouting moved Alleluya to Enthan)
+      if (!mine || novelWords(mine.sg, lead.sg, big) >= 1) {
+        st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {};
+        return { song: lead.sg.id, line: lead.sg.ix.idx[p], why: 'song' };
+      }
     }
     // ---- another service song (or the first one, when nothing is open) ----
     if (o && mine && o.top >= .6 && o.top - mine.top >= .15) {

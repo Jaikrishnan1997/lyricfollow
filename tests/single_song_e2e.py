@@ -1,11 +1,12 @@
 # The whole live Alleluya run (tests/live_single_alleluya.json) replayed through the app in real time: the recorded
 # Sarvam answers come back at the moments they came live. Measures how often the projector shows the line being sung,
 # one behind, or one ahead.  python3 tests/single_song_e2e.py
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__))); from lfpaths import ROOT, AUDIO, SCRATCH
 import sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
-R='/home/claude/lyricfollow/'
+R=ROOT
 srv = subprocess.Popen([sys.executable,'-m','http.server','8770','-d',R],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(1)
-S='/tmp/claude-0/-home-claude/75b7af5e-7062-5e5d-a087-c193c46c265e/scratchpad/sherpa'
+S=SCRATCH+'/sherpa'
 run=json.load(open(R+'tests/live_single_alleluya.json'))
 ch=json.load(open(R+'vendor/songs-church.json'))['songs']; al=[s for s in ch if s['title'].startswith('அல்லேலூயா கர்த்தரையே')][0]
 b=al['lyrics'].split('\n\n'); once='\n\n'.join([b[0],b[1],b[2],b[4],b[6],b[8]])
@@ -30,7 +31,7 @@ def handle(route):
 sung = len(sys.argv) > 1 and sys.argv[1] == 'typed'
 try:
   with sync_playwright() as p:
-    b_=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={S}/real_song3.wav'])
+    b_=p.chromium.launch(args=['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',f'--use-file-for-fake-audio-capture={AUDIO}'])
     ctx=b_.new_context(service_workers='block', permissions=['microphone']); pg=ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.route('https://api.sarvam.ai/**', handle)
     pg.goto('http://localhost:8770/index.html'); pg.wait_for_timeout(9000)
