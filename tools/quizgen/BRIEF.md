@@ -39,3 +39,8 @@ Example:
 After each chapter run: `node /home/claude/qgen/check.js /home/claude/qgen/out/<NN-Book>/<ch>.txt`
 Fix every error it lists. Its "answer words not found near the verse" count should be small: when it is not, the
 Tamil or Malayalam names are probably not spelled as in that Bible - fix them.
+
+## Density
+Aim for at least one question for almost every verse: a typical chapter gets roughly as many questions as it has
+verses (20-40), narrative chapters more. Poetry and speeches too: ask what each verse says or teaches
+("What did Job say man is born unto?" | "Trouble"). A chapter with only 6-10 questions is too thin - go back and add.
