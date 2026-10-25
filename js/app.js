@@ -2248,7 +2248,6 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     return true;
   }
   function quizReading(q, heard) {
-    if (Date.now() - VF.at < 6000 && q.full) return true;
     const [b, c, v] = q.ref, lang = detectScript(heard);
     const vid = lang === 'ml' ? 'mal1910' : lang === 'ta' ? 'tamov' : (S.versions.find(x => (Bible.VERSIONS.find(y => y.id === x) || {}).lang === 'en') || 'kjv');
     if (!Bible.loaded(vid)) { Bible.load(vid).catch(() => {}); return !!q.full; }

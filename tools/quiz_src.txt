@@ -107,7 +107,7 @@ Matthew 4:18 | Which two brothers were fishermen called first by Jesus? | Simon 
 Matthew 4:21 | Who were the sons of Zebedee? | James and John | செபெதேயுவின் குமாரர் யார்? | யாக்கோபு, யோவான் | സെബെദിയുടെ പുത്രന്മാർ ആര്? | യാക്കോബ്, യോഹന്നാൻ
 Matthew 9:9 | Which tax collector became an apostle? | Matthew | அப்போஸ்தலனான ஆயக்காரன் யார்? | மத்தேயு | അപ്പൊസ്തലനായിത്തീർന്ന ചുങ്കക്കാരൻ ആര്? | മത്തായി
 Matthew 26:15 | For how many pieces of silver did Judas betray Jesus? | Thirty pieces of silver | யூதாஸ் இயேசுவை எத்தனை வெள்ளிக்காசுக்குக் காட்டிக்கொடுத்தான்? | முப்பது வெள்ளிக்காசு | യൂദാ യേശുവിനെ എത്ര വെള്ളിക്കാശിന്നു കാണിച്ചുകൊടുത്തു? | മുപ്പതു വെള്ളിക്കാശ്
-Matthew 26:14 | Which disciple betrayed Jesus? | Judas Iscariot | இயேசுவைக் காட்டிக்கொடுத்த சீஷன் யார்? | யூதாஸ் காரியோத்து | യേശുവിനെ കാണിച്ചുകൊടുത്ത ശിഷ്യൻ ആര്? | യൂദാ ഈസ്കര്യോത്താവ്
+Matthew 26:14 | Which disciple betrayed Jesus? / Who betrayed Jesus? | Judas Iscariot | இயேசுவைக் காட்டிக்கொடுத்த சீஷன் யார்? | யூதாஸ் காரியோத்து | യേശുവിനെ കാണിച്ചുകൊടുത്ത ശിഷ്യൻ ആര്? | യൂദാ ഈസ്കര്യോത്താവ്
 Matthew 26:75 | Who denied Jesus three times? | Peter | சேவல் கூவுமுன் இயேசுவை மூன்றுதரம் மறுதலித்தவன் யார்? | பேதுரு | കോഴി കൂകുംമുമ്പെ യേശുവിനെ മൂന്നു പ്രാവശ്യം തള്ളിപ്പറഞ്ഞത് ആര്? | പത്രൊസ്
 Matthew 27:2 | Which Roman governor sentenced Jesus? | Pontius Pilate | இயேசுவுக்குத் தீர்ப்புச் செய்த ரோம தேசாதிபதி யார்? | பொந்தியு பிலாத்து | യേശുവിനെ വിധിച്ച റോമൻ നാടുവാഴി ആര്? | പൊന്തിയൊസ് പീലാത്തൊസ്
 Matthew 27:26 | Which prisoner was released instead of Jesus? | Barabbas | இயேசுவுக்குப் பதிலாக விடுதலையாக்கப்பட்டவன் யார்? | பரபாஸ் | യേശുവിനു പകരം വിട്ടയച്ചത് ആരെ? | ബറബ്ബാസ്
@@ -188,3 +188,8 @@ Acts 9:1 | Who wrote most of the letters in the New Testament? | Paul | பு�
 John 1:29 | Who called Jesus the Lamb of God? | John the Baptist | இயேசுவை தேவ ஆட்டுக்குட்டி என்று சொன்னவர் யார்? | யோவான் ஸ்நானகன் | യേശുവിനെ ദൈവത്തിന്റെ കുഞ്ഞാട് എന്നു പറഞ്ഞത് ആര്? | യോഹന്നാൻ സ്നാപകൻ
 Genesis 3:1 | Who tempted Eve in the garden? | The serpent | தோட்டத்தில் ஏவாளைச் சோதித்தது யார்? | சர்ப்பம் | തോട്ടത്തിൽ ഹവ്വയെ പരീക്ഷിച്ചത് ആര്? | സർപ്പം
 Genesis 3:6 | Who ate the forbidden fruit first? | Eve | விலக்கப்பட்ட கனியை முதலில் புசித்தவள் யார்? | ஏவாள் | വിലക്കപ്പെട്ട ഫലം ആദ്യം തിന്നത് ആര്? | ഹവ്വ
+1 Samuel 17:50 | Who killed Goliath? | David | கோலியாத்தைக் கொன்றது யார்? | தாவீது | ഗൊല്യാത്തിനെ കൊന്നത് ആര്? | ദാവീദ്
+Genesis 25:33 | What did Esau sell for a meal? | His birthright | ஏசா ஒரு வேளை உணவுக்காக எதை விற்றான்? | சேஷ்டபுத்திர பாகம் | ഏശാവ് ഒരു ഭക്ഷണത്തിന്നായി എന്തു വിറ്റു? | ജ്യേഷ്ഠാവകാശം
+Luke 1:13 | Who was the father of John the Baptist? | Zechariah | யோவான் ஸ்நானகனின் தகப்பன் யார்? | சகரியா | യോഹന്നാൻ സ്നാപകന്റെ അപ്പൻ ആര്? | സെഖര്യാവ്
+Luke 1:13 | Who was the mother of John the Baptist? | Elizabeth | யோவான் ஸ்நானகனின் தாய் யார்? | எலிசபெத்து | യോഹന്നാൻ സ്നാപകന്റെ അമ്മ ആര്? | എലിസബെത്ത്
+Daniel 5:5 | Which king saw the writing on the wall? | Belshazzar | சுவரில் எழுதின எழுத்தைக் கண்ட ராஜா யார்? | பெல்ஷாத்சார் | ചുവരിൽ എഴുത്തു കണ്ട രാജാവ് ആര്? | ബേൽശസ്സർ

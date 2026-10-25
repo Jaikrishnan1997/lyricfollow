@@ -24,7 +24,11 @@ for (const line of fs.readFileSync(path.join(__dirname, 'quiz_src.txt'), 'utf8')
   const near = []; for (let d = -6; d <= 6; d++) near.push(verse('kjv', b, c, v + d)); const txt = near.join(' ').toLowerCase();
   const keys = f[2].toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP.has(w));
   if (keys.length && !keys.some(k => txt.includes(k.slice(0, 5))) && !/verse|psalm \d|^\w+ \d+:\d+$/i.test(f[2])) bad.push('ANSWER? ' + f[0] + ' :: ' + f[2]);
-  out.push({ q: { en: f[1], ta: f[3], ml: f[5] }, a: { en: f[2], ta: f[4], ml: f[6] }, ref: [b, c, v] });
+  // "Which disciple betrayed Jesus? / Who betrayed Jesus?": other ways the same question is asked
+  const en = f[1].split(' / ').map(x => x.trim());
+  const item = { q: { en: en[0], ta: f[3], ml: f[5] }, a: { en: f[2], ta: f[4], ml: f[6] }, ref: [b, c, v] };
+  if (en.length > 1) item.alt = en.slice(1);
+  out.push(item);
 }
 fs.writeFileSync(path.join(ROOT, 'vendor/quiz.json'), JSON.stringify(out));
 console.log(out.length, 'questions;', bad.length, 'to check'); bad.forEach(x => console.log(' ', x));
