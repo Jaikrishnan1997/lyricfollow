@@ -469,8 +469,12 @@
   /** Part of a reference, for references spoken in pieces or with one misheard number:
    *  "மத்தேயு ஒண்ணாவது வசனம் <misheard> அதிகாரம்" -> { book: Matthew, v: 1 }; then "அஞ்சாம் அதிகாரம்" -> { ch: 5 }.
    *  Without a book name only numbers labelled by a chapter/verse word count ("verse 17", "17-ാം വാക്യം"). */
+  // "next verse" / "அடுத்த வசனம்" / "അടുത്ത വാക്യം" / "अगला पद": the word for next right before a verse word, no number.
+  const NEXTW = new Set(['next', 'அடுத்த', 'അടുത്ത', 'अगला', 'अगले', 'अगली', 'atutha', 'adutha', 'agla', 'agle'].map(w => kn(Core.hindiPre(w))));
   function parsePartial(text) {
     const toks = prepToks(text); if (!toks.length) return null;
+    const ni = toks.findIndex((t, i) => NEXTW.has(t) && cueKind(toks[i + 1]) === 'v');
+    if (ni >= 0 && !toks.some(t => Core.numbers(t).length) && !findBook(toks, true)) return { book: null, ch: null, v: null, next: true };
     const f = findBook(toks, true);
     const lab = labelledNumbers(f ? toks.slice(f.end) : toks);
     const c = lab.find(x => x.kind === 'ch'), v = lab.find(x => x.kind === 'v');
@@ -607,6 +611,12 @@
   function pieceStep(st, text, ctx) {
     const p = parsePartial(text); if (!p) return null;
     const now = ctx.now, plan = ctx.plan || [], scr = ctx.screen, any = ctx.screenAny;
+    if (p.next) {                     // the verse after the one on screen, if it was shown in the last 5 minutes
+      if (!scr || now - ctx.lastRefAt >= 300000) return null;
+      const v = (scr.ve || scr.v) + 1; if (!validRef(scr.book, scr.ch, v)) return null;
+      st.partRef = null; st.vbText = '';
+      return { kind: 'ref', r: { book: scr.book, ch: scr.ch, v, ve: v }, sure: true };
+    }
     if (p.book != null) st.partRef = { book: p.book, ch: p.ch, v: p.v, at: now };
     else if (st.partRef && now - st.partRef.at < 30000) { if (p.ch != null) st.partRef.ch = p.ch; if (p.v != null) st.partRef.v = p.v; st.partRef.at = now; }
     else if (p.ch != null && plan.filter(x => x.ch === p.ch).length === 1 && !(any && any.ch === p.ch)) {

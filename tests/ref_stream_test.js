@@ -76,6 +76,18 @@ S('a revised partial does not show it twice', [], { events: [['p', 'Genesis chap
 S('the live Sarvam transcript (ta): ஆதி அகம மூன்றாவது தவத்து மூணாவது வசனம்', ['ஆதி அகம மூன்றாவது தவத்து மூணாவது வசனம்'], {}, ['Genesis 3:3'], 1);
 S('the same reference said again later in the utterance: shown once', ['John 3 16 that is John 3 16'], {}, ['John 3:16'], 1);
 
+// ---------- "same chapter" and "next verse": move within what is on screen (only if shown in the last 5 minutes) ----------
+for (const [lang, first, same, next] of [
+  ['en', 'Genesis chapter 3 verse 4', 'same chapter verse 10', 'next verse'],
+  ['ta', 'ஆதியாகமம் மூன்றாவது அதிகாரம் நான்காவது வசனம்', 'அதே அதிகாரம் பத்தாவது வசனம்', 'அடுத்த வசனம்'],
+  ['ml', 'ഉല്പത്തി മൂന്നാം അദ്ധ്യായം നാലാം വാക്യം', 'അതേ അദ്ധ്യായം പത്താം വാക്യം', 'അടുത്ത വാക്യം'],
+  ['hi', 'उत्पत्ति अध्याय तीन पद चार', 'उसी अध्याय का दसवाँ पद', 'अगला पद']]) {
+  S(`${lang}: next verse after ${G}`, [first, next], {}, [G, 'Genesis 3:5'], 2);
+  S(`${lang}: same chapter, verse 10, then next verse`, [first, same, next], {}, [G, 'Genesis 3:10', 'Genesis 3:11'], 3);
+  S(`${lang}: next verse with nothing shown does nothing`, [next], {}, [], 0);
+  S(`${lang}: next verse 6 minutes later does nothing`, [first, next], { gap: 360000 }, [G], 1);
+}
+
 // ---------- latency: partials after the last word of the reference until it is on screen (0 = on that word) ----------
 const LAT = {
   en: 'John chapter 3 verse 16', ta: 'யோவான் மூன்றாம் அதிகாரம் பதினாறாம் வசனம்', ml: 'യോഹന്നാൻ മൂന്നാം അദ്ധ്യായം പതിനാറാം വാക്യം', hi: 'यूहन्ना अध्याय तीन पद सोलह',
