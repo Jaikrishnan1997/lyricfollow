@@ -397,6 +397,83 @@
     if (out.book == null && out.ch == null && out.v == null) return null;
     return out;
   }
+  /* ---------- What the two Preach modes do with each recognised update ----------
+   * Pure (no DOM, no clock of its own): app.js and tests/ref_stream_test.js call the same code, so the stream test
+   * sees exactly what the screen would get. st is kept by the caller between updates: { vbText, partRef }. */
+  function newRefState() { return { vbText: '', partRef: null }; }
+  /** ev: { finals, interim (best alternative), conf }. ctx: { engine, prefer (Set of planned books), plan ([{book,ch,v}]),
+   *  inPlan(r), singing(text) -> bool, screen (verse on screen while the Bible is shown, else null), screenAny
+   *  (the last verse shown, even under a song), lastRefAt, now }.
+   *  Returns { acts: [{ kind: 'ref', r, sure } | { kind: 'piece', r }], stop } - stop: nothing else may use this update. */
+  function refStep(st, ev, ctx) {
+    const finals = ev.finals || '', interim = ev.interim || '', conf = ev.conf == null ? .75 : ev.conf;
+    if (finals) st.vbText = (st.vbText + ' ' + finals).slice(-400);
+    const tail = (st.vbText + ' ' + interim).slice(-90);
+    const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: ctx.prefer };
+    // A reference said at the start of a long sentence ("John 3 16, for God so loved...") would fall off the
+    // 90-character tail, so the whole finished phrase is tried first.
+    let r = finals && finals.length > 90 ? parseRef(finals, opts) : null;
+    if (!r) r = parseRef(tail, opts);
+    if (r) {
+      // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
+      const singing = !!(ctx.singing && ctx.singing(tail));
+      // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
+      // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
+      const indic = /[஀-௿ഀ-ൿ]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
+      const need = r.ch === r.v ? .85 : indic ? .4 : .72;
+      // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
+      const bookOk = !r.fuzzy || ctx.engine === 'local';
+      const planned = !!(ctx.inPlan && ctx.inPlan(r));
+      const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9) || (planned && (r.tight || conf >= .5)));
+      if (sure || finals) { st.vbText = ''; st.partRef = null; return { acts: [{ kind: 'ref', r: { book: r.book, ch: r.ch, v: r.v, ve: r.ve }, sure }], stop: true }; }
+      return { acts: [], stop: true };
+    }
+    if (finals) { const p = pieceStep(st, finals, ctx); if (p) return { acts: [p], stop: true }; }
+    return { acts: [], stop: false };
+  }
+  // A reference said in pieces, or with one number misheard: "மத்தேயு 1-ஆம் வசனம் <misheard> அதிகாரம்" keeps
+  // Matthew ?:1 waiting, and "அஞ்சாம் அதிகாரம்" said next completes it. "Verse 17" alone, said soon after a
+  // verse was shown, moves within that chapter. The screen never sits on an old verse without saying what it heard.
+  function pieceStep(st, text, ctx) {
+    const p = parsePartial(text); if (!p) return null;
+    const now = ctx.now, plan = ctx.plan || [], scr = ctx.screen, any = ctx.screenAny;
+    if (p.book != null) st.partRef = { book: p.book, ch: p.ch, v: p.v, at: now };
+    else if (st.partRef && now - st.partRef.at < 30000) { if (p.ch != null) st.partRef.ch = p.ch; if (p.v != null) st.partRef.v = p.v; st.partRef.at = now; }
+    else if (p.ch != null && plan.filter(x => x.ch === p.ch).length === 1 && !(any && any.ch === p.ch)) {
+      const m = plan.find(x => x.ch === p.ch); st.partRef = { book: m.book, ch: p.ch, v: p.v, at: now };   // another planned chapter
+    }
+    else if (p.v != null && scr && now - ctx.lastRefAt < 300000) st.partRef = { book: scr.book, ch: p.ch != null ? p.ch : scr.ch, v: p.v, at: now };
+    else if (p.ch != null) {                  // "<misheard book> 5-ാം അധ്യായം 3-ാം വാക്യം": the one planned chapter 5
+      const m = plan.filter(x => x.ch === p.ch); if (m.length !== 1) return null;
+      st.partRef = { book: m[0].book, ch: p.ch, v: p.v, at: now };
+    }
+    else return null;
+    const r = st.partRef;
+    if (r.ch == null) { const m = plan.filter(x => x.book === r.book); if (m.length && m.every(x => x.ch === m[0].ch)) r.ch = m[0].ch; }
+    if (r.ch == null && r.v == null) return null;           // only a book name so far: wait quietly
+    if (r.ch != null && r.v != null) {
+      st.partRef = null;
+      if (!validRef(r.book, r.ch, r.v)) return null;
+      st.vbText = '';
+      return { kind: 'ref', r: { book: r.book, ch: r.ch, v: r.v, ve: r.v }, sure: true };
+    }
+    return { kind: 'piece', r: { book: r.book, ch: r.ch, v: r.v } };
+  }
+  const refKey = r => `${r.book}.${r.ch}.${r.v}.${r.ve}`;
+  /** The heard-reference list (newest first, at most 10). o: { auto (show sure ones on screen), screenKey }.
+   *  Returns { h (the entry), dup (it was already there), show (put it on screen) }. */
+  function heardAdd(list, r, src, sure, now, o) {
+    o = o || {}; const k = refKey(r);
+    const prev = list.find(x => refKey(x.r) === k);
+    if (prev && now - prev.at < 30000) {
+      // Same reference again within half a minute: no duplicate in the list; re-show it only if the screen moved away.
+      prev.at = now; if (sure) prev.sure = true;
+      return { h: prev, dup: true, show: !!o.auto && (sure || prev.sure) && o.screenKey !== k };
+    }
+    const h = { r, src, at: now, sure: !!sure }; list.unshift(h); list.length = Math.min(list.length, 10);
+    return { h, dup: false, show: !!o.auto && !!sure };
+  }
+
   /** True when the verse exists (checked against a loaded Bible when there is one). */
   function validRef(book, ch, v) {
     const b = BOOKS[book]; if (!b || !(ch >= 1 && ch <= b.ch) || !(v >= 1 && v <= 176)) return false;
@@ -569,6 +646,6 @@
     return [...best.entries()].sort((x, y) => x[1] - y[1] || x[0] - y[0]).slice(0, limit || 8).map(([b]) => b);
   }
 
-  const Bible = { parsePartial, validRef, suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
+  const Bible = { newRefState, refStep, pieceStep, heardAdd, refKey, parsePartial, validRef, suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
   if (typeof module !== 'undefined' && module.exports) module.exports = Bible; else root.LFBible = Bible;
 })(typeof window !== 'undefined' ? window : globalThis);
