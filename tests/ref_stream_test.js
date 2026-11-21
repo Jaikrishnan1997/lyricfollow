@@ -39,6 +39,7 @@ function run(utts, o) {
   return { screen, heard: heard.map(h => label(h.r)), sureN: heard.filter(h => h.sure).length, asks, shownAt, marks };
 }
 
+if (require.main !== module) { module.exports = { run }; return; }
 let fails = 0; const V = !!process.env.VERBOSE;
 function check(name, cond, info) { if (!cond) fails++; if (!cond || V) console.log((cond ? 'ok   ' : 'FAIL ') + name + (info ? '  ' + info : '')); }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -101,8 +102,7 @@ for (const [k, u] of Object.entries(LAT)) {
   check(`latency ${k}: shown ${lat[k]} partial(s) after the last word`, ev != null && lat[k] <= 1);
 }
 console.log('latency (partials after the last word):', JSON.stringify(lat));
-module.exports = { run };
-if (require.main === module) { console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
+{ console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
 // ---------- the must-not-match sentences, word by word: nothing reaches the screen ----------
 { const NEG = require('./ref_negatives.js'); let sure = 0, ask = 0; const bad = [];
   for (const line of NEG) { const r = run([line], {}); sure += r.screen.length; ask += r.asks.length; if (r.screen.length) bad.push(`${JSON.stringify(r.screen)} | ${line}`); }

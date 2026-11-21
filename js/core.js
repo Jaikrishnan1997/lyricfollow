@@ -309,6 +309,8 @@
     ['eleven',11],['twelve',12],['thirteen',13],['fourteen',14],['fifteen',15],['sixteen',16],['seventeen',17],['eighteen',18],['nineteen',19],
     ['twenty',20],['thirty',30],['forty',40],['fifty',50],['sixty',60],['seventy',70],['eighty',80],['ninety',90],['hundred',100],
     ['first',1],['second',2],['third',3],['fifth',5],['eighth',8],['ninth',9],['twelfth',12],
+    ['fourth',4],['sixth',6],['seventh',7],['tenth',10],['eleventh',11],['thirteenth',13],['fourteenth',14],['fifteenth',15],['sixteenth',16],['seventeenth',17],
+    ['eighteenth',18],['nineteenth',19],['twentieth',20],['thirtieth',30],['fortieth',40],['fiftieth',50],['sixtieth',60],['seventieth',70],['eightieth',80],['ninetieth',90],['hundredth',100],
     ['ഒന്ന്',1],['ഒന്നാം',1],['രണ്ട്',2],['രണ്ടാം',2],['മൂന്ന്',3],['നാല്',4],['അഞ്ച്',5],['ആറ്',6],['ഏഴ്',7],['എട്ട്',8],['ഒമ്പത്',9],['ഒൻപത്',9],['പത്ത്',10],
     ['പതിനൊന്ന്',11],['പന്ത്രണ്ട്',12],['പതിമൂന്ന്',13],['പതിനാല്',14],['പതിനഞ്ച്',15],['പതിനാറ്',16],['പതിനേഴ്',17],['പതിനെട്ട്',18],['പത്തൊമ്പത്',19],['പത്തൊൻപത്',19],
     ['ഇരുപത്',20],['മുപ്പത്',30],['നാല്പത്',40],['നാൽപ്പത്',40],['അമ്പത്',50],['അൻപത്',50],['അറുപത്',60],['എഴുപത്',70],['എൺപത്',80],['തൊണ്ണൂറ്',90],['നൂറ്',100],
@@ -317,7 +319,10 @@
     ['ரெண்டு',2],['ரெண்டாவது',2],['ஒம்பது',9],['ഒൻപത്',9],['ஒண்ணு',1],['மூணு',3],['நாலு',4],['அஞ்சு',5],['ஒன்னு',1],
     ['ஒன்று',1],['ஒன்றாம்',1],['இரண்டு',2],['மூன்று',3],['நான்கு',4],['ஐந்து',5],['ஆறு',6],['ஏழு',7],['எட்டு',8],['ஒன்பது',9],['பத்து',10],
     ['பதினொன்று',11],['பன்னிரண்டு',12],['பதிமூன்று',13],['பதினான்கு',14],['பதினைந்து',15],['பதினாறு',16],['பதினேழு',17],['பதினெட்டு',18],['பத்தொன்பது',19],
-    ['இருபது',20],['முப்பது',30],['நாற்பது',40],['ஐம்பது',50],['அறுபது',60],['எழுபது',70],['எண்பது',80],['தொண்ணூறு',90],['நூறு',100]
+    ['இருபது',20],['முப்பது',30],['நாற்பது',40],['ஐம்பது',50],['அறுபது',60],['எழுபது',70],['எண்பது',80],['தொண்ணூறு',90],['நூறு',100],
+    // colloquial Tamil (as preachers say them): நாப்பது 40, அம்பது 50 (above), எம்பது 80, பன்னெண்டு 12, பதினொண்ணு 11, பதிமூணு 13,
+    // பதினாலு 14, நூத்தி / நூற்று- (hundred-, "நூத்தி பத்தொம்பது" = 119)
+    ['நாப்பது',40],['எம்பது',80],['பன்னெண்டு',12],['பன்னண்டு',12],['பதினொண்ணு',11],['பதிமூணு',13],['பதினாலு',14],['இருவது',20],['நூத்தி',100],['நூற்றி',100],['நூற்றுப்',100],['நூற்று',100]
   ];
   let NUMKEYS = null;
   function numKeys() {
@@ -499,12 +504,16 @@
       if (k.length >= 4 && toks[ti + 1] && !/^\d/.test(toks[ti + 1])) {
         const j = wordNumber(k + toks[ti + 1].replace(/[^a-z]/g, ''));
         // (not when the first word already gives that number: "ഇരുപത്തിമൂന്നാം ഒന്നാം" is 23 and 1)
-        if (j != null && wordNumberExact(k) == null && j !== wordNumber(k)) { n = j; ti++; }
+        // (and only when it says more: "നാല്പത്തിയഞ്ച് വാക്യം" is 45 and a verse word, not "നാല്പത്" + something)
+        if (j != null && wordNumberExact(k) == null && j > (wordNumber(k) || 0)) { n = j; ti++; }
       }
       if (n == null && k) n = wordNumber(k);
+      // "a hundred and nineteen": the "and" after a hundred joins (not "verses 4 and 5")
+      if (n == null && /^(and|ant)$/.test(k) && prevWord && out.length && out[out.length - 1] % 100 === 0) continue;
       if (n == null) { prevWord = false; continue; }
       const last = out.length - 1;
-      if (prevWord && last >= 0 && ((out[last] % 10 === 0 && out[last] >= 20 && n < 10) || (out[last] === 100 && n < 100))) out[last] += n;
+      if (prevWord && last >= 0 && out[last] < 10 && n === 100) { out[last] *= 100; continue; }      // "one hundred"
+      if (prevWord && last >= 0 && ((out[last] % 10 === 0 && out[last] >= 20 && n < 10) || (out[last] % 100 === 0 && out[last] >= 100 && n < 100))) out[last] += n;
       else out.push(n);
       prevWord = true;
     }

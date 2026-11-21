@@ -116,7 +116,7 @@
   const LETTER = /^(lekan|nirup)(am|at(il|ile|in|inte)?)$|^(leter|epistle)$/;
   const FILLER = new Set(['അതായത്', 'പിന്നെ', 'അതാവത്', 'அதாவது', 'அந்த', 'இந்த', 'uh', 'um', 'the', 'that', 'okay', 'ok', 'so', 'is'].map(kn));
   // "first/second/third" in the three languages, as said before a book name.
-  const BOOKORD = new Map([['മുതലാം', 1], ['முதலாம்', 1], ['முதல்', 1], ['மூதலாம்', 1]].map(([w, n]) => [kn(w), n]));
+  const BOOKORD = new Map([['മുതലാം', 1], ['முதலாம்', 1], ['முதல்', 1], ['மூதலாம்', 1], ['முதலாவது', 1]].map(([w, n]) => [kn(w), n]));
   // Case and possessive endings that hang on a book name in speech ("യോഹന്നാന്റെ", "റോമർക്കുള്ള", "ஆதியாகமத்தில்", "ரோமருக்கு").
   const SUFFIXES = ['ukkulla', 'kkulla', 'kulla', 'ukula', 'kula', 'arkku', 'ukku', 'kku', 'uku', 'ku', 'inte', 'nte', 'yute', 'ute', 'tile', 'til', 'ttil', 'yil', 'il', 'atil', 'in', 'e', 'um', 'ai', 'utaiya', 'ate'];
   function stemBook(k) {
@@ -157,17 +157,19 @@
    *  Tamil and Malayalam often say the verse first ("2-ாம் வசனம் 3-ாம் அதிகாரம்" = chapter 3 verse 2). */
   const HICUE = /^(atyay|ayat)$/;      // Hindi chapter/verse words after Core.hindiPre
   function labelledNumbers(toks) {
-    const out = [], claimed = new Set();
+    const out = [], claimed = new Map();   // cue word index -> index of the number it labels
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i]; if (cueKind(t)) continue;
       let n = Core.numbers(t); let span = 1;
       // "முதலாம் அதிகாரம்", "first chapter": the word for first before a chapter/verse word is the number 1
       if (!n.length && BOOKORD.has(kn(t)) && cueKind(toks[i + 1])) n = [1];
-      if (!n.length && toks[i + 1] && !cueKind(toks[i + 1])) { const j = Core.numbers(t + ' ' + toks[i + 1]); if (j.length === 1) { n = j; span = 2; } }
+      if (!n.length && t.length >= 3 && toks[i + 1] && !cueKind(toks[i + 1])) { const j = Core.numbers(t + ' ' + toks[i + 1]); if (j.length === 1) { n = j; span = 2; } }   // (not "of | fourth")
       if (!n.length) continue;
       let val = n[0];
       const prev = out[out.length - 1];
-      if (prev && prev.end === i && prev.word && !/^\d/.test(t) && prev.val % 10 === 0 && prev.val >= 20 && val < 10) { prev.val += val; prev.end = i + span; continue; }
+      // one number said in words over several tokens: "twenty | three", "one | hundred", "hundred | twenty | eight",
+      // "நூற்றி | பத்தொன்பது" (the next number's chapter/verse word then labels the whole, if it had none)
+      const join = prev && prev.end === i && prev.word && !/^\d/.test(t) && ((prev.val % 10 === 0 && prev.val >= 20 && val < 10) || (prev.val % 100 === 0 && val < 100) || (prev.val < 10 && val === 100));
       // English says the word first ("chapter 3"); Malayalam/Tamil say it after the number ("3-ാം അധ്യായം"),
       // sometimes with an ordinal particle in between ("16 ஆம் வசனம்").
       // (tokens arrive as phonetic keys: "chapter" is "capter", "ch" is "c")
@@ -184,28 +186,41 @@
         // an ordinal takes the word after it; a plain number the word before it, unless the words come after the numbers
         // throughout ("तीन अध्याय सोलह पद"); "भजन संहिता 119 पद 105": the word between two numbers labels the second
         const ord = /^\d+[a-z]+$/.test(t), after = HICUE.test(toks[toks.length - 1] || '');
-        const useNext = hn && (ord || after || (!hp && !/^\d/.test(toks[nx + 1] || '')));
-        if (useNext || hp) { kind = cueKind(useNext ? next : prevTok); claimed.add(useNext ? nx : i - 1); } else kind = '';
+        const nn = toks[nx + 1] || '', numAfter = /^\d/.test(nn) && !(/^[123]$/.test(nn) && toks[nx + 2] && stemBook(nn + toks[nx + 2]));   // (a 1-3 starting "1 शमूएल" is no number)
+        const useNext = hn && (ord || after || (!hp && !numAfter));
+        if (useNext || hp) { kind = cueKind(useNext ? next : prevTok); claimed.set(useNext ? nx : i - 1, i); } else kind = '';
       }
+      if (join) { prev.val = prev.val < 10 && val === 100 ? prev.val * 100 : prev.val + val; prev.end = i + span; if (!prev.kind) prev.kind = kind; i += span - 1; continue; }
       out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind });
       i += span - 1;
     }
+    out.claimed = claimed;
     return out;
   }
+  // A Hindi chapter/verse word that already labels the number before it ("12 वचन | का 1 कुरिन्थियों"): the digit after
+  // it then starts a numbered book. One that is still free labels the digit ("पद | एक का यूहन्ना", "बाब | तीन का यूहन्ना").
+  function hiCueTaken(toks, at) { const from = Math.max(0, at - 12), L = labelledNumbers(toks.slice(from, at + 3)), by = L.claimed.get(at - from); return by != null && by !== at + 1 - from; }
   // The book is the last word that matters: at most two words after it, none a number or a chapter/verse word.
-  function bookIsLast(toks, end) { const rest = toks.slice(end); return rest.length <= 2 && rest.every(t => !/\d/.test(t) && !Core.numbers(t).length && !cueKind(t)); }
+  // Lead-out words that may follow a reference ("... of John and we read", "... யோவான் வாசிப்போம்"), any number of them.
+  const LEADOUT = new Set(['and', 'we', 'read', 'let', 'us', 'it', 'says', 'said', 'from', 'today', 'now', 'there', 'here', 'please', 'together',
+    'வாசிப்போம்', 'வாசிக்கலாம்', 'பார்ப்போம்', 'பாருங்க', 'பாருங்கள்', 'திருப்புங்க', 'எடுத்துக்கோங்க', 'சொல்லுது', 'சொல்லுகிறது', 'சொல்லப்பட்டிருக்கிறது', 'நாம்', 'இப்போ', 'கவனியுங்கள்',
+    'വായിക്കാം', 'നോക്കാം', 'തുറക്കാം', 'എടുക്കാം', 'പറയുന്നു', 'നമുക്ക്', 'ഇപ്പോൾ', 'ശ്രദ്ധിക്കുക', 'देखिए', 'खोलिए', 'देखें', 'खोलें', 'padhenge', 'dekhiye', 'kholiye'].map(w => kn(Core.hindiPre(w))));
+  // The book is the last word that matters: lead-out words and at most two other words after it, none a number or a
+  // chapter/verse word.
+  function bookIsLast(toks, end) { const rest = toks.slice(end).filter(t => !LEADOUT.has(t)); return rest.length <= 2 && rest.every(t => !/\d/.test(t) && !Core.numbers(t).length && !cueKind(t)); }
   // Number words said as ordinals, on their sound key: "மூணாவது", "മൂന്നാം", "3-ஆம்" (3am), "third" (tirt), "16वाँ" (16t).
   const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth'].map(w => Core.keyWords(w)).join('|') + ')$');
   // Book names that are also everyday words in the other languages (Tamil "வெளி" = outside, "roma"): not enough alone.
   const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா', 'गिनती', 'उपदेशक', 'भजन', 'यहूदा'].map(w => kn(Core.hindiPre(w))));
   // What people count in sermon talk, on the sound key (prefix): days, people, times, years, money, hours...
-  const COUNT = ['day', 'days', 'people', 'person', 'persons', 'times', 'time', 'year', 'years', 'rupees', 'rupee', 'minute', 'hour', 'week', 'month', 'children', 'kilomet', 'men', 'women', 'oclock', 'lakh', 'thousand', 'brothers', 'sisters',
-    'நாட்கள்', 'பேர்', 'தடவை', 'முறை', 'வருஷம்', 'வருடம்', 'மணி', 'நிமிஷம்', 'ரூபாய்', 'மாசம்', 'மாதம்', 'வாரம்', 'பிள்ளைகள்', 'கிலோமீட்டர்', 'வயது', 'லட்சம்', 'ஆயிரம்',
-    'ദിവസം', 'ദിവസങ്ങൾ', 'പേർ', 'പ്രാവശ്യം', 'തവണ', 'വർഷം', 'മണി', 'മിനിറ്റ്', 'രൂപ', 'ആഴ്ച', 'മാസം', 'മക്കൾ', 'കിലോമീറ്റർ', 'വയസ്സ്', 'ലക്ഷം', 'ആയിരം',
+  const COUNT = ['day', 'days', 'people', 'person', 'persons', 'times', 'time', 'year', 'years', 'rupees', 'rupee', 'minute', 'hour', 'week', 'month', 'children', 'kilomet', 'men', 'women', 'oclock', 'lakh', 'lakhs', 'thousand', 'brothers', 'sisters', 'weeks', 'hours', 'months', 'minutes',
+    'நாட்கள்', 'பேர்', 'தடவை', 'முறை', 'வருஷம்', 'வருடம்', 'மணி', 'மணிக்கு', 'நிமிஷம்', 'ரூபாய்', 'மாசம்', 'மாதம்', 'வாரம்', 'பிள்ளைகள்', 'கிலோமீட்டர்', 'வயது', 'லட்சம்', 'ஆயிரம்',
+    'ദിവസം', 'ദിവസങ്ങൾ', 'പേർ', 'പ്രാവശ്യം', 'തവണ', 'വർഷം', 'മണി', 'മണിക്ക്', 'മണിക്കൂർ', 'മിനിറ്റ്', 'രൂപ', 'ആഴ്ച', 'ആഴ്ചയായി', 'മാസം', 'മക്കൾ', 'കിലോമീറ്റർ', 'വയസ്സ്', 'ലക്ഷം', 'ആയിരം',
     'दिन', 'लोग', 'बार', 'साल', 'वर्ष', 'बजे', 'मिनट', 'रुपये', 'हफ्ते', 'महीने', 'बच्चे', 'घंटे', 'किलोमीटर', 'हज़ार'].map(kn);
   // (Hindi chapter/verse words are not in the sets above: Core.hindiPre turns them into "adhyay"/"aayat", and as sound
   // keys "पद" is "बाद" (after) and Malayalam "പട".)  "day": Tamil நாள் after prepToks.
-  const isCount = t => !!t && !/\d/.test(t) && (t === 'day' || COUNT.some(c => t === c || (c.length >= 4 && t.startsWith(c))));
+  // (a case ending may follow: "மணிக்கு"; only keys of 5+ letters as a start - "बार" (times) is "para", the start of "പറയുന്നു")
+  const isCount = t => !!t && !/\d/.test(t) && (t === 'day' || COUNT.some(c => t === c || (c.length >= 5 && t.startsWith(c))));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
   // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
@@ -230,8 +245,9 @@
       for (let len = 1; len <= 4 && i + len <= toks.length; len++) {
         let k = toks.slice(i, i + len).join('');
         if (k.length < 2 || /^\d+$/.test(k)) continue;
-        // "verse 16 chapter 3 John": a number straight after an English chapter/verse word is not "3 John".
-        if (/^\d/.test(toks[i]) && i > 0 && (ENCUE.has(toks[i - 1]) || HICUE.test(toks[i - 1]))) continue;
+        // "verse 16 chapter 3 John": a number straight after an English chapter/verse word is not "3 John" (but in Hindi
+        // "12 वचन का 1 कुरिन्थियों" the word already has its number, so the 1 starts the book).
+        if (/^\d/.test(toks[i]) && i > 0 && (ENCUE.has(toks[i - 1]) || (HICUE.test(toks[i - 1]) && !hiCueTaken(toks, i - 1)))) continue;
         // A book name split in two by the recogniser loses its "y" glide: "ஆதி ஆகமம்" = ஆதியாகமம் (ati + akamam).
         if (len === 2 && !ALIAS.has(k) && /[aeiou]$/.test(toks[i]) && /^[aeiou]/.test(toks[i + 1]) && ALIAS.has(toks[i] + 'y' + toks[i + 1])) k = toks[i] + 'y' + toks[i + 1];
         if (exactOnly && k.length < 4 && !FULLNAMES.has(k) && !SPOKENKEYS.has(k)) continue;
@@ -280,6 +296,8 @@
     let raw = Core.keyWords(Core.hindiPre(text)).split(/\s+/).filter(Boolean);
     // Tamil "நாள்" (day) has the same sound key as Malayalam "നാല്" (four): in Tamil text it is a day, never a number.
     if (/[\u0B80-\u0BFF]/.test(text)) raw = raw.map(t => t === 'nal' ? 'day' : t);
+    // "ഒന്ന്" (one) and Tamil-letter "ஃபோர்" (four) have the sound keys of English "on" / "for", which are not numbers in English text.
+    if (/[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(text)) raw = raw.map(t => t === 'on' ? '1' : t === 'for' ? '4' : t);
     raw = joinBookParts(raw);
     // "<book> (written) first letter" -> "1 <book>", before the letter word is dropped as decoration.
     for (let i = 2; i < raw.length; i++) {
@@ -305,7 +323,7 @@
       const f = findBook([toks[p]], true); if (!f || f.book !== 18) continue;
       const lab = labelledNumbers(toks.slice(p + 1)); if (!lab.length || lab[0].kind !== 'v' || lab[0].start > (cueKind(toks[p + 1]) ? 1 : 0)) continue;
       let k = 0;
-      if (p >= 2 && Core.numbers(toks[p - 2]).length && Core.numbers(toks.slice(p - 2, p).join(' ')).length === 1 && !cueKind(toks[p - 2])) k = 2;
+      if (p >= 2 && Core.numbers(toks[p - 2]).length && Core.numbers(toks[p - 1]).length && Core.numbers(toks.slice(p - 2, p).join(' ')).length === 1 && !cueKind(toks[p - 2])) k = 2;   // (not "thirty two of Psalms")
       else if (Core.numbers(toks[p - 1]).length === 1 && !cueKind(toks[p - 1])) k = 1;
       if (!k || cueKind(toks[p - k - 1]) || Core.numbers(toks.slice(p - k, p).join(' '))[0] > 150) continue;
       const moved = toks.splice(p - k, k); toks.splice(p - k + 1, 0, ...moved); break;
@@ -331,11 +349,15 @@
     // Words said twice ("യോഹന്നാൻ യോഹന്നാൻ", "പതിമൂന്നാം പതിമൂന്നാം") count once; a number said twice ("Hebrews 7 7 28",
     // "Isaiah 5 5 5") counts once when another number still follows (after an optional chapter/verse word).
     toks = toks.filter((t, i) => {
-      if (/^\d+$/.test(t) && toks[i + 1] && toks[i + 1] !== t && toks[i + 1].replace(/\D+$/, '') === t) return false;   // "3 3ஆம்"
+      // "3 3ஆம்" (the same number twice), but not "अध्याय 6 6वें पद" (6:6) or "पद 7 से 8 तक का 8वाँ अध्याय" (a range end, then the chapter)
+      if (/^\d+$/.test(t) && toks[i + 1] && toks[i + 1] !== t && toks[i + 1].replace(/\D+$/, '') === t && !cueKind(toks[i - 1] || '') && !/^(to|tu|and|ant)$/.test(toks[i - 1] || '')) return false;
       if (i === 0 || t !== toks[i - 1]) return true;
+      if (/^(to|tu|and|ant)$/.test(toks[i - 2] || '')) return true;      // a range end, then the chapter ('पद 1 से 4 4 अध्याय')
       if (!/^\d+$/.test(t) && !Core.numbers(t).length) return false;      // "Genesis one one" keeps both
       let j = i + 1; while (j < toks.length && cueKind(toks[j])) j++;
-      return !(j < toks.length && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
+      // (a 1-3 that starts a numbered book is not such a number: "अध्याय 3 3 पद का 1 शमूएल" is 3:3 of 1 Samuel)
+      const startsBook = /^[123]$/.test(toks[j] || '') && toks[j + 1] && stemBook(toks[j] + toks[j + 1]);
+      return !(j < toks.length && !startsBook && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
     });
     toks.digits = new Set(String(text).match(/\d+/g) || []);    // digits as said (not Hindi number words made digits)
     return toks;
@@ -370,16 +392,18 @@
   // A numbered book's key from a number and a book word with its case ending ("കൊരിന്ത്യർക്ക്", "கொரிந்தியருக்கு"), or null.
   function numberedStem(n, w) {
     if (!w) return null;
-    for (const c of [w, w.replace(/(uku|ku|k)$/, '')]) { const st = stemBook(n + c); if (st && /^\d/.test(BOOKS[ALIAS.get(st)].en)) return st; }
+    // ("தீமோத்தேயுவுக்கு" = timoteyu + vuku)
+    for (const c of [w, w.replace(/(vuku|uku|ku|k)$/, '')]) { const st = stemBook(n + c); if (st && /^\d/.test(BOOKS[ALIAS.get(st)].en)) return st; }
     return null;
   }
   function parseToks(toks, opts) {
     let f = findBook(toks, opts.exactOnly);
     // Speech: a badly spelled book name right before "chapter verse" numbers ("vohmar 8 28" = Romans 8:28).
-    if (!f && opts.exactOnly) {
+    if (!f && opts.exactOnly && !opts.noFuzzy) {
       for (let i = toks.length - 2; i >= 0; i--) {
         let nx = i + 1; while (nx < toks.length && cueKind(toks[nx])) nx++;          // "യിരെമ്യാവ് chapter 23"
         if (/\d/.test(toks[i]) || toks[i].length < 3 || cueKind(toks[i]) || nx >= toks.length || !Core.numbers(toks[nx]).length) continue;   // must sit right before the numbers
+        if (Core.numbers(toks[i]).length) continue;           // a number word ("முப்பத்தி") is no misheard book ("ഉല്പത്തി")
         const after = Core.numbers(toks.slice(nx).join(' ')); if (after.length < 2 && !(after.length === 1 && after[0] >= 100)) continue;
         // The word before the numbers, or that word glued to the previous one ("yo kanan" = yohanan).
         const cands = [[toks[i], i]]; if (i > 0 && !/\d/.test(toks[i - 1])) { cands.push([toks[i - 1] + toks[i], i - 1]); if (/[aeiou]$/.test(toks[i - 1]) && /^[aeiou]/.test(toks[i])) cands.push([toks[i - 1] + 'y' + toks[i], i - 1]); }
@@ -404,8 +428,8 @@
     // are Genesis's, and Deuteronomy waits for its own (the live flip: Genesis, Deuteronomy 3:4, Genesis...).
     let numToks = toks.slice(f.end), bookLast = false;
     if (!nums.length && f.start > 0 && bookIsLast(toks, f.end)) {
-      let from = Math.max(0, f.start - 6);
-      const prev = parseToks(toks.slice(0, f.start), { exactOnly: opts.exactOnly, needChapter: true, needVerse: true, prefer: opts.prefer });
+      let from = Math.max(0, f.start - 12);
+      const prev = parseToks(toks.slice(0, f.start), { exactOnly: opts.exactOnly, needChapter: true, needVerse: true, prefer: opts.prefer, noFuzzy: true });
       if (prev) from = Math.max(from, prev.used);
       const before = toks.slice(from, f.start);
       if (Core.numbers(before.join(' ')).length >= 1 && hasCue(before)) { numToks = before; nums = Core.numbers(before.join(' ')); bookLast = true; }
@@ -414,12 +438,17 @@
     // The book in the middle: "verse 16 of John chapter 3", "in the third chapter of John verse 16". Only when the number
     // on each side carries its own chapter/verse word and the two words differ.
     let split = null;
-    if (f.start > 0 && nums.length === 1) {
-      const la = labelledNumbers(toks.slice(f.end)), lb = labelledNumbers(toks.slice(Math.max(0, f.start - 6), f.start));
+    if (f.start > 0 && nums.length >= 1 && nums.length <= 2) {
+      let from = Math.max(0, f.start - 12);
+      if (from > 0 || f.start > 2) { const prev = parseToks(toks.slice(0, f.start), { exactOnly: opts.exactOnly, needChapter: true, needVerse: true, prefer: opts.prefer, noFuzzy: true }); if (prev) from = Math.max(from, prev.used); }
+      const la = labelledNumbers(toks.slice(f.end)), lb = labelledNumbers(toks.slice(from, f.start));
       // "verse 1 of Psalm 23": a bare number straight after the book is the chapter when the verse word came before it.
       if (la.length === 1 && !la[0].kind && la[0].start === 0 && lb.length === 1 && lb[0].kind === 'v') la[0] = Object.assign({}, la[0], { kind: 'ch' });
-      if (la.length === 1 && lb.length === 1 && la[0].kind && lb[0].kind && lb[0].kind !== la[0].kind) {
-        split = la[0].kind === 'ch' ? { ch: la[0].val, v: lb[0].val } : { ch: lb[0].val, v: la[0].val };
+      // one labelled number on each side, the verse side perhaps with a range end ("verses 16 to 18 of 2 Timothy chapter 4")
+      const one = L => L.length === 1 || (L.length === 2 && L[0].kind === 'v' && L[1].kind !== 'ch' && L[1].val > L[0].val && L[1].start - L[0].end <= 3);
+      if (la.length && lb.length && one(la) && one(lb) && la[0].kind && lb[0].kind && lb[0].kind !== la[0].kind) {
+        const V = la[0].kind === 'v' ? la : lb, Cc = la[0].kind === 'ch' ? la : lb;
+        split = { ch: Cc[0].val, v: V[0].val, ve: V[1] ? V[1].val : V[0].val };
         nums = [split.ch, split.v]; numToks = [];
       }
     }
@@ -452,6 +481,7 @@
     const near = (x, y) => x && y && y.start - x.end <= 2;
     let ch = nums[0] || 1, v = nums[1] || 1, ve = nums[2] && nums[2] > v && (bare || split || lab.length < 3 || near(lab[1], lab[2])) ? nums[2] : v;
     if (book.ch === 1 && nums.length === 1) { v = ch; ve = v; ch = 1; }
+    if (split) ve = split.ve;
     // Spoken order may be verse-first: trust the chapter/verse words when both kinds are present.
     const chs = lab.filter(x => x.kind === 'ch'), vs = lab.filter(x => x.kind === 'v');
     let usedIn = lab.length >= 2 ? Math.max(lab[0].end, lab[1].end) : numToks.length;   // tokens of numToks this reference used
