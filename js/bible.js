@@ -371,7 +371,7 @@
       }
     }
     // The number of a numbered book said twice ("2 2 शमूएल"): once.
-    toks = toks.filter((t, i) => !(/^[123]$/.test(t) && toks[i + 1] === t && toks[i + 2] && stemBook(t + toks[i + 2]) && !cueKind(toks[i - 1] || '')));   // (not "अध्याय 2 2 शमूएल": chapter 2 of 2 Samuel)
+    toks = toks.filter((t, i) => !(/^[123]$/.test(t) && toks[i + 1] === t && toks[i + 2] && stemBook(t + toks[i + 2]) && !(cueKind(toks[i - 1] || '') && !(Core.numbers(toks[i - 2] || '').length && !cueKind(toks[i - 3] || '') && !RANGEW.test(toks[i - 3] || '')))));   // (not "अध्याय 2 2 शमूएल": chapter 2 of 2 Samuel; but "3 बाब का 2 2 शमूएल" is a stutter)
     // Words said twice ("യോഹന്നാൻ യോഹന്നാൻ", "പതിമൂന്നാം പതിമൂന്നാം") count once; a number said twice ("Hebrews 7 7 28",
     // "Isaiah 5 5 5") counts once when another number still follows (after an optional chapter/verse word).
     toks = toks.filter((t, i) => {
