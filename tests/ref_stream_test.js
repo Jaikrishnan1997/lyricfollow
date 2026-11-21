@@ -102,7 +102,6 @@ for (const [k, u] of Object.entries(LAT)) {
   check(`latency ${k}: shown ${lat[k]} partial(s) after the last word`, ev != null && lat[k] <= 1);
 }
 console.log('latency (partials after the last word):', JSON.stringify(lat));
-{ console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
 // ---------- the must-not-match sentences, word by word: nothing reaches the screen ----------
 { const NEG = require('./ref_negatives.js'); let sure = 0, ask = 0; const bad = [];
   for (const line of NEG) { const r = run([line], {}); sure += r.screen.length; ask += r.asks.length; if (r.screen.length) bad.push(`${JSON.stringify(r.screen)} | ${line}`); }
@@ -120,3 +119,4 @@ console.log('latency (partials after the last word):', JSON.stringify(lat));
   }
   console.log('sermon talk (300 lines each):', JSON.stringify(res));
 }
+{ console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }

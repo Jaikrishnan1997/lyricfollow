@@ -36,11 +36,16 @@ for (const f of ['operator_test.js', 'lead_pause_test.js', 'stream_test.js']) {
 // Bible references (spoken and typed, ta/ml/en; every spoken order), verses read without their reference (with floors
 // and sermon talk that must put nothing on screen), and the quiz questions (every question finds its answer in all
 // three languages; sermon talk finds none)
-for (const f of ['refs_test.js', 'ref_orders_test.js', 'quote_test.js', 'quiz_test.js']) {
+// v83: references as live recognisers deliver them (growing partials, finals, several in a row): the Gen/Deut flip,
+// no flicker, ranges, "next verse", the must-not-match sentences and 300 lines of sermon talk per language word by
+// word (0 sure), and the partials it takes to show (max 1 after the last word)
+for (const f of ['refs_test.js', 'ref_orders_test.js', 'ref_stream_test.js', 'quote_test.js', 'quiz_test.js']) {
   let out = '', code = 0; try { out = run(f); } catch (e) { out = String(e.stdout || ''); code = e.status || 1; }
   ok(code === 0, `${f}: ${out.trim().split('\n').pop()}`);
 }
-// 3000 generated spoken references per language and channel (native script, English letters, mixed, disfluent): every one found
-{ const out = run('refgen.js', {}, ['3000']).trim().split('\n').find(l => l.startsWith('{')) || '{}'; let r = {}; try { r = JSON.parse(out); } catch (e) {}
-  const low = Object.entries(r).filter(([, v]) => parseFloat(v) < 100); ok(Object.keys(r).length === 10 && !low.length, `refgen 3000: ${low.length ? low.map(x => x.join(' ')).join(', ') : Object.keys(r).length + ' columns at 100.0%'}`); }
+// Generated spoken references: the v82 columns (native script, English letters, mixed, disfluent; ml/ta/en) and v83's
+// six orders in en/ta/ml/hi, romanised ta/ml/hi, Hindi disfluent, and each language word by word through the stream
+// harness (exactly that reference on screen): every column 100.0%. 2000 per column here (5000 measured for the release).
+{ const out = run('refgen.js', { STREAM_N: '500' }, ['2000']).trim().split('\n').find(l => l.startsWith('{')) || '{}'; let r = {}; try { r = JSON.parse(out); } catch (e) {}
+  const low = Object.entries(r).filter(([, v]) => parseFloat(v) < 100); ok(Object.keys(r).length === 42 && !low.length, `refgen 2000: ${low.length ? low.map(x => x.join(' ')).join(', ') : Object.keys(r).length + ' columns at 100.0%'}`); }
 if (fails.length) { console.log(`\n${fails.length} check(s) failed`); process.exit(1); } else console.log('\nall checks passed');

@@ -264,6 +264,8 @@ function spoken(lang, ord) {
 function romanised(lang, u) { return lang === 'hi' ? C.romanHi(u.text) : latin(u.text); }
 if (require.main !== module) { module.exports = { utter, latin, mixed, disfluent, spoken, romanised, ORDERS }; return; }
 const N = +process.argv[2] || 300, fails = [];
+// (one decimal, never rounded up to 100.0% while one reference in N still fails)
+const pct = (ok, n) => (ok < n ? Math.min(99.9, Math.floor(1000 * ok / n) / 10).toFixed(1) : '100.0') + '%';
 const res = {};
 for (const lang of ['ml', 'ta', 'en']) for (const chan of lang === 'en' ? ['native', 'disfluent'] : ['native', 'latin', 'mixed', 'disfluent']) {
   let ok = 0;
@@ -274,7 +276,7 @@ for (const lang of ['ml', 'ta', 'en']) for (const chan of lang === 'en' ? ['nati
     if (p && p.book === u.want[0] && p.ch === u.want[1] && p.v === u.want[2]) ok++;
     else fails.push(`${lang}/${chan}  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[2] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${text}`);
   }
-  res[lang + '/' + chan] = (100 * ok / N).toFixed(1) + '%';
+  res[lang + '/' + chan] = pct(ok, N);
 }
 // v83 columns: per language and order, Hindi, romanised, and word by word through the stream harness
 const ok3 = (p, w) => p && p.book === w[0] && p.ch === w[1] && p.v === w[2] && (w[3] === w[2] || p.ve === w[3]);
@@ -282,17 +284,17 @@ for (const lang of ['en', 'ta', 'ml', 'hi']) {
   for (let o = 0; o < 6; o++) {
     let ok = 0;
     for (let i = 0; i < N; i++) { const u = spoken(lang, o), p = B.parseRef(u.text, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`${lang}/${ORDERS[o]}  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${u.text}`); }
-    res[lang + '/' + ORDERS[o]] = (100 * ok / N).toFixed(1) + '%';
+    res[lang + '/' + ORDERS[o]] = pct(ok, N);
   }
   if (lang !== 'en') {
     let ok = 0;
     for (let i = 0; i < N; i++) { const u = spoken(lang, i % 6), t = romanised(lang, u), p = B.parseRef(t, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`${lang}/roman  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${t}`); }
-    res[lang + '/roman'] = (100 * ok / N).toFixed(1) + '%';
+    res[lang + '/roman'] = pct(ok, N);
   }
   if (lang === 'hi') {
     let ok = 0;
     for (let i = 0; i < N; i++) { const u = disfluent(spoken('hi', i % 6), 'hi'), p = B.parseRef(u.text, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`hi/disfluent  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${u.text}`); }
-    res['hi/disfluent'] = (100 * ok / N).toFixed(1) + '%';
+    res['hi/disfluent'] = pct(ok, N);
   }
   if (!process.env.NOSTREAM) {   // word by word through the stream harness: exactly this one reference reaches the screen
     const { run } = require('./ref_stream_test.js'); let ok = 0; const SN = +process.env.STREAM_N || N;
@@ -300,7 +302,7 @@ for (const lang of ['en', 'ta', 'ml', 'hi']) {
       const u = spoken(lang, i % 6), want = B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en'), r = run([u.text], {});
       if (r.screen.length && r.screen[r.screen.length - 1] === want && r.heard.length === 1 && r.screen.every(x => x.split(/[–]/)[0] === want.split(/[–]/)[0])) ok++; else fails.push(`${lang}/stream  want ${want}  got ${JSON.stringify(r.screen)} asks ${JSON.stringify(r.asks)}  | ${u.text}`);
     }
-    res[lang + '/stream'] = (100 * ok / SN).toFixed(1) + '%';
+    res[lang + '/stream'] = pct(ok, SN);
   }
 }
 console.log(JSON.stringify(res));

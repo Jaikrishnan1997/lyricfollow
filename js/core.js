@@ -469,7 +469,8 @@
       const all = raw.filter(w => key(w) && hiNumber(w, true)).length, nums = raw.filter(w => !EN.test(w) && key(w) && hiNumber(w, true)).length, digits = raw.filter(w => /^\d/.test(w)).length;
       // ("pad" only as spelled: "pat" is Malayalam പത്ത് (10) in English letters)
       const cue = raw.some((w, i) => S0.rch.has(ws[i]) || (S0.rv.has(ws[i]) && !/^pat$/i.test(w)));
-      roman = (cue && all + digits >= 1) || (all >= 2 && nums >= 1) || (nums >= 1 && digits >= 1);
+      const link = ws.some(k => S0.rdrop.has(k));      // "kee", "kitaab", "ka"...: Hindi around the numbers
+      roman = (cue && all + digits >= 1) || (all >= 2 && (nums >= 1 || link)) || (nums >= 1 && digits >= 1);
       if (!roman) return text;
     }
     const S = hiSets(), out = [];
