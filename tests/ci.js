@@ -2,7 +2,7 @@
 // Run before every push (and in CI): node tests/ci.js
 const { execFileSync } = require('child_process'), path = require('path');
 const T = f => path.join(__dirname, f);
-const run = (f, env) => execFileSync(process.execPath, [T(f)], { env: Object.assign({}, process.env, env || {}), encoding: 'utf8', maxBuffer: 1 << 26 });
+const run = (f, env, args) => execFileSync(process.execPath, [T(f)].concat(args || []), { env: Object.assign({}, process.env, env || {}), encoding: 'utf8', maxBuffer: 1 << 26 });
 const fails = [], ok = (cond, what) => { console.log((cond ? 'ok   ' : 'FAIL ') + what); if (!cond) fails.push(what); };
 // live runs, tracker alone: right line and song switch time
 for (const [file, floor] of [['live_two_songs.json', 60], ['live_two_songs2.json', 60], ['live_two_songs3.json', 60], ['live_two_songs4.json', 60]]) {
@@ -23,10 +23,14 @@ for (const [env, floor, wrongMax] of [[{}, 70, 5], [{ SPARSE: '1' }, 56, 14.5]])
   const m = out.match(/right line ([\d.]+)%.*wrong ([\d.]+)% \(wrong song ([\d.]+)%/);
   ok(m && +m[1] >= floor && +m[2] <= wrongMax && +m[3] <= 1, `bench${env.SPARSE ? ' sparse' : ''}: right ${m ? m[1] : '?'}% (floor ${floor}), wrong ${m ? m[2] : '?'}% (max ${wrongMax}), wrong song ${m ? m[3] : '?'}% (max 1)`);
 }
-// Bible references (spoken and typed, ta/ml/en) and the quiz questions (every question finds its answer in all
+// Bible references (spoken and typed, ta/ml/en; every spoken order), verses read without their reference (with floors
+// and sermon talk that must put nothing on screen), and the quiz questions (every question finds its answer in all
 // three languages; sermon talk finds none)
-for (const f of ['refs_test.js', 'quiz_test.js']) {
+for (const f of ['refs_test.js', 'ref_orders_test.js', 'quote_test.js', 'quiz_test.js']) {
   let out = '', code = 0; try { out = run(f); } catch (e) { out = String(e.stdout || ''); code = e.status || 1; }
   ok(code === 0, `${f}: ${out.trim().split('\n').pop()}`);
 }
+// 3000 generated spoken references per language and channel (native script, English letters, mixed, disfluent): every one found
+{ const out = run('refgen.js', {}, ['3000']).trim().split('\n').find(l => l.startsWith('{')) || '{}'; let r = {}; try { r = JSON.parse(out); } catch (e) {}
+  const low = Object.entries(r).filter(([, v]) => parseFloat(v) < 100); ok(Object.keys(r).length === 10 && !low.length, `refgen 3000: ${low.length ? low.map(x => x.join(' ')).join(', ') : Object.keys(r).length + ' columns at 100.0%'}`); }
 if (fails.length) { console.log(`\n${fails.length} check(s) failed`); process.exit(1); } else console.log('\nall checks passed');
