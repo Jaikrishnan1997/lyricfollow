@@ -70,7 +70,25 @@ const cases=[
 ['മർക്കൊസ് രണ്ടു ദിവസം അഞ്ചു പേരോടൊപ്പം','null'],['യോഹന്നാൻ മൂന്നു പേരോടൊപ്പം പതിനാറു ദിവസം താമസിച്ചു','null'],['we sang 3 songs and read 2 psalms','null'],
 // negatives (must be null)
 ['John said to him three times','null'],['there were 3 men and 16 women','null'],['the book is on the table','null'],['അവൻ മൂന്നു ദിവസം അവിടെ പാർത്തു','null'],['அவர் மூன்று நாள் அங்கே இருந்தார்','null'],
+// English words in Malayalam/Tamil letters (parsed in v80, lost in v81), glued and split book names (v83)
+['ജെനസിസ് ചാപ്റ്റർ 1 വേഴ്സ് 1','Genesis 1:1'],['ജോൺ ചാപ്റ്റർ 3 വേഴ്സ് 16','John 3:16'],['ജോൺ 3 16','John 3:16'],['ജെനസിസ് ചാപ്റ്റർ 1 വേർസ് 1','Genesis 1:1'],
+['யோவான் சாப்டர் 3 வெர்ஸ் 16','John 3:16'],['ஜான் சாப்டர் 3 வெர்ஸ் 16','John 3:16'],['ஜெனிசிஸ் சாப்டர் 1 வெர்சஸ் 1','Genesis 1:1'],
+['ആവർത്തനപുസ്തകം ആറാം അദ്ധ്യായം നാലാം വാക്യം','Deuteronomy 6:4'],['ആവർത്തന പുസ്തകം 6 അദ്ധ്യായം 4 വാക്യം','Deuteronomy 6:4'],['ലേവ്യ പുസ്തകം 19 അദ്ധ്യായം 18 വാക്യം','Leviticus 19:18'],
+['ഉല്പത്തിപുസ്തകം 1 അദ്ധ്യായം 1 വാക്യം','Genesis 1:1'],['പുറപ്പാടുപുസ്തകം 20 അദ്ധ്യായം 3 വാക്യം','Exodus 20:3'],['ആവർത്തനപുസ്തകത്തിൽ 6 അദ്ധ്യായം 4 വാക്യം','Deuteronomy 6:4'],
+['ஆதி அகம மூன்றாவது தவத்து மூணாவது வசனம்','Genesis 3:3'],['ஆதி ஆகமம் 3 ஆம் அதிகாரம் 4 ஆம் வசனம்','Genesis 3:4'],['உப ஆகமம் 6 ஆம் அதிகாரம் 4 ஆம் வசனம்','Deuteronomy 6:4'],
+['யாத்திர ஆகமம் 20 அதிகாரம் 3 வசனம்','Exodus 20:3'],['യാത്തിര ആഗമം 20 അദ്ധ്യായം 3 വാക്യം','Exodus 20:3'],['எண் ஆகமம் 6 அதிகாரம் 24 வசனம்','Numbers 6:24'],['லேவிய ஆகமம் 19 அதிகாரம் 18 வசனம்','Leviticus 19:18'],
+// the flip: a book said after a complete reference waits for its own numbers
+['genesis chapter 3 verse 4 deuteronomy','null'],['ஆதியாகமம் மூன்றாவது அதிகாரம் நான்காவது வசனம் உபாகமம்','null'],
+// Hindi
+['यूहन्ना तीन सोलह','John 3:16'],['यूहन्ना अध्याय तीन पद सोलह','John 3:16'],['यूहन्ना के तीसरे अध्याय का सोलहवाँ पद','John 3:16'],['तीसरा अध्याय सोलहवाँ पद यूहन्ना','John 3:16'],
+['भजन संहिता तेईस का पहला पद','Psalms 23:1'],['उत्पत्ति एक एक','Genesis 1:1'],['पद सोलह अध्याय तीन यूहन्ना','John 3:16'],['yuhanna adhyay teen pad solah','John 3:16'],
+['पहला कुरिन्थियों अध्याय तेरह पद चार','1 Corinthians 13:4'],['कुरिन्थियों की पहली पत्री तेरह अध्याय चार पद','1 Corinthians 13:4'],['प्रेरितों के काम दो अड़तीस','Acts 2:38'],
+['भजन संहिता एक सौ उन्नीस पद एक सौ पाँच','Psalms 119:105'],['दूसरी पतरस अध्याय तीन पद नौ','2 Peter 3:9'],['उत्पत्ति की पुस्तक अध्याय एक पद एक','Genesis 1:1'],
 ];
 let bad=0;for(const [s,want] of cases){const r=Bible.parseRef(s,o);const got=r?Bible.refLabel({book:r.book,ch:r.ch,v:r.v,ve:r.v},'en'):'null';if(got!==want){bad++;console.log('FAIL',JSON.stringify(s),'->',got,'want',want);}}
-console.log(cases.length-bad,'ok of',cases.length);
+// never sure: null, or found but only to be offered (asked)
+const NEG=require('./ref_negatives.js');let nbad=0;
+for(const s of NEG){const r=Bible.parseRef(s,o);if(r&&Bible.sureOf(r,s,.75,{engine:'sarvam'})){nbad++;bad++;console.log('FAIL negative is sure',JSON.stringify(s),'->',Bible.refLabel(r,'en'));}}
+console.log(`negatives: ${NEG.length-nbad} of ${NEG.length} never sure`);
+console.log(cases.length+NEG.length-bad,'ok of',cases.length+NEG.length);
 if(bad)process.exitCode=1;

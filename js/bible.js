@@ -135,10 +135,17 @@
   // Full book names (any language). In speech, short abbreviations like "is", "am", "ps" are too easy to hear by accident.
 
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
-  const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','വാക്യത്തിൽ','വാക്യങ്ങൾ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','வசனம்','வசனங்கள்','வசனத்தில்','अध्याय','पद','आयत',
+  const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','വാക്യത്തിൽ','വാക്യങ്ങൾ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','வசனம்','வசனங்கள்','வசனத்தில்',
     'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','adhayam','athayam','adhyam','athikaram','adhikaram','vasanam','vasanam','adhyay','adhayam','athayam','adhyam','vakkam','vakam','vakem','vaakkam','aayat'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
-  const CH_CUE = new Set(['chapter','chapters','ch','അദ്ധ്യായം','അധ്യായം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','अध्याय','adhyayam','athyayam','adyayam','adhyaayam','athikaram','adhikaram','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
-  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','വാക്യങ്ങൾ','வசனம்','வசனங்கள்','வசனத்தில்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam','vakkam','vakam','vakem','vaakkam','aayat'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  const CH_CUE = new Set(['chapter','chapters','ch','അദ്ധ്യായം','അധ്യായം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','adhyayam','athyayam','adyayam','adhyaayam','athikaram','adhikaram','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','വാക്യങ്ങൾ','வசனம்','வசனங்கள்','வசனத்தில்','vakyam','vaakyam','vachanam','vakyem','vasanam','vakkam','vakam','vakem','vaakkam','aayat'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  // English "chapter"/"verse" as the Malayalam, Tamil and Hindi recognisers write them ("ജെനസിസ് ചാപ്റ്റർ 1 വേഴ്സ് 1",
+  // "சாப்டர்", "வெர்ஸ்", "चैप्टर"): chapter/verse words said before their number, as in English. They parsed in v80 only
+  // because nothing checked the words between book and numbers; v81's bare-number rule (needed against casual talk)
+  // then refused them. (Not "वर्स": its sound key is that of वर्ष, year.)
+  const TR_CH = ['ചാപ്റ്റർ', 'ചാപ്ടർ', 'ചാപ്റ്റേഴ്സ്', 'சாப்டர்', 'சாப்டர்ஸ்', 'சேப்டர்', 'चैप्टर', 'चेप्टर'].map(kn), TR_V = ['വേഴ്സ്', 'വേർസ്', 'വേഴ്സസ്', 'வெர்ஸ்', 'வெர்சஸ்', 'வெர்ஸஸ்', 'வெர்சு'].map(kn);
+  TR_CH.forEach(k => { CUE.add(k); CH_CUE.add(k); }); TR_V.forEach(k => { CUE.add(k); V_CUE.add(k); });
+  const ENCUE = new Set(['chapter', 'chapters', 'capter', 'capters', 'ch', 'c', 'verse', 'verses', 'versus', 'v', 'vs'].concat(TR_CH, TR_V));
   function cueKind(tok) {
     if (!tok) return '';
     const k = tok.replace(/[^a-z]/g, ''); if (!k) return '';
@@ -164,17 +171,22 @@
       // English says the word first ("chapter 3"); Malayalam/Tamil say it after the number ("3-ാം അധ്യായം"),
       // sometimes with an ordinal particle in between ("16 ஆம் வசனம்").
       // (tokens arrive as phonetic keys: "chapter" is "capter", "ch" is "c")
-      const EN = /^(chapter|chapters|capter|capters|ch|c|verse|verses|versus|v|vs)$/;
       let next = toks[i + span]; if (next && !cueKind(next) && /^(am|aam|vatu|avatu|m)$/.test(next.replace(/[^a-z]/g, ''))) next = toks[i + span + 1];
       const prevTok = toks[i - 1] || '';
       // A Malayalam/Tamil cue word belongs to the number before it, so it never labels the number that follows it.
-      const prevEn = cueKind(prevTok) && EN.test(prevTok.replace(/[^a-z]/g, ''));
+      const prevEn = cueKind(prevTok) && ENCUE.has(prevTok.replace(/[^a-z]/g, ''));
       let kind = prevEn ? cueKind(prevTok) : (cueKind(next) || '');
       // Hindi says the chapter/verse word before a plain number ("अध्याय तीन पद सोलह") and after an ordinal ("तीसरा
       // अध्याय सोलहवाँ पद"); each word labels one number.
       const nx = next === toks[i + span] ? i + span : i + span + 1, hp = HICUE.test(prevTok) && !claimed.has(i - 1), hn = HICUE.test(next || '') && !claimed.has(nx);
       if (hn && !hp && /^(to|tu)$/.test(prevTok) && prev && prev.kind === 'v') kind = '';     // "आयत 4 से 6 अध्याय 3": 6 ends the range
-      else if (hp || hn) { const ord = /^\d+[a-z]+$/.test(t); const useNext = hn && (ord || !hp); kind = cueKind(useNext ? next : prevTok); claimed.add(useNext ? nx : i - 1); }
+      else if (hp || hn) {
+        // an ordinal takes the word after it; a plain number the word before it, unless the words come after the numbers
+        // throughout ("तीन अध्याय सोलह पद"); "भजन संहिता 119 पद 105": the word between two numbers labels the second
+        const ord = /^\d+[a-z]+$/.test(t), after = HICUE.test(toks[toks.length - 1] || '');
+        const useNext = hn && (ord || after || (!hp && !/^\d/.test(toks[nx + 1] || '')));
+        if (useNext || hp) { kind = cueKind(useNext ? next : prevTok); claimed.add(useNext ? nx : i - 1); } else kind = '';
+      }
       out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind });
       i += span - 1;
     }
@@ -191,7 +203,9 @@
     'நாட்கள்', 'பேர்', 'தடவை', 'முறை', 'வருஷம்', 'வருடம்', 'மணி', 'நிமிஷம்', 'ரூபாய்', 'மாசம்', 'மாதம்', 'வாரம்', 'பிள்ளைகள்', 'கிலோமீட்டர்', 'வயது', 'லட்சம்', 'ஆயிரம்',
     'ദിവസം', 'ദിവസങ്ങൾ', 'പേർ', 'പ്രാവശ്യം', 'തവണ', 'വർഷം', 'മണി', 'മിനിറ്റ്', 'രൂപ', 'ആഴ്ച', 'മാസം', 'മക്കൾ', 'കിലോമീറ്റർ', 'വയസ്സ്', 'ലക്ഷം', 'ആയിരം',
     'दिन', 'लोग', 'बार', 'साल', 'वर्ष', 'बजे', 'मिनट', 'रुपये', 'हफ्ते', 'महीने', 'बच्चे', 'घंटे', 'किलोमीटर', 'हज़ार'].map(kn);
-  const isCount = t => !!t && !/\d/.test(t) && COUNT.some(c => t === c || (c.length >= 4 && t.startsWith(c)));
+  // (Hindi chapter/verse words are not in the sets above: Core.hindiPre turns them into "adhyay"/"aayat", and as sound
+  // keys "पद" is "बाद" (after) and Malayalam "പട".)  "day": Tamil நாள் after prepToks.
+  const isCount = t => !!t && !/\d/.test(t) && (t === 'day' || COUNT.some(c => t === c || (c.length >= 4 && t.startsWith(c))));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
   // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
@@ -217,7 +231,7 @@
         let k = toks.slice(i, i + len).join('');
         if (k.length < 2 || /^\d+$/.test(k)) continue;
         // "verse 16 chapter 3 John": a number straight after an English chapter/verse word is not "3 John".
-        if (/^\d/.test(toks[i]) && i > 0 && /^(capter|capters|c|verse|verses|versus|v|vs|atyay|ayat)$/.test(toks[i - 1])) continue;
+        if (/^\d/.test(toks[i]) && i > 0 && (ENCUE.has(toks[i - 1]) || HICUE.test(toks[i - 1]))) continue;
         // A book name split in two by the recogniser loses its "y" glide: "ஆதி ஆகமம்" = ஆதியாகமம் (ati + akamam).
         if (len === 2 && !ALIAS.has(k) && /[aeiou]$/.test(toks[i]) && /^[aeiou]/.test(toks[i + 1]) && ALIAS.has(toks[i] + 'y' + toks[i + 1])) k = toks[i] + 'y' + toks[i + 1];
         if (exactOnly && k.length < 4 && !FULLNAMES.has(k) && !SPOKENKEYS.has(k)) continue;
@@ -829,6 +843,6 @@
     return [...best.entries()].sort((x, y) => x[1] - y[1] || x[0] - y[0]).slice(0, limit || 8).map(([b]) => b);
   }
 
-  const Bible = { newRefState, refStep, pieceStep, heardAdd, refKey, parsePartial, validRef, suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
+  const Bible = { sureOf, newRefState, refStep, pieceStep, heardAdd, refKey, parsePartial, validRef, suggestBooks, VERSIONS, BOOKS, bookName, parseRef, refLabel, load, loaded, chapter, verse, chapterCount, ensureIndex, search, quote, findBook };
   if (typeof module !== 'undefined' && module.exports) module.exports = Bible; else root.LFBible = Bible;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -103,6 +103,12 @@ for (const [k, u] of Object.entries(LAT)) {
 console.log('latency (partials after the last word):', JSON.stringify(lat));
 module.exports = { run };
 if (require.main === module) { console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
+// ---------- the must-not-match sentences, word by word: nothing reaches the screen ----------
+{ const NEG = require('./ref_negatives.js'); let sure = 0, ask = 0; const bad = [];
+  for (const line of NEG) { const r = run([line], {}); sure += r.screen.length; ask += r.asks.length; if (r.screen.length) bad.push(`${JSON.stringify(r.screen)} | ${line}`); }
+  check(`negatives word by word: 0 of ${NEG.length} on screen (asked ${ask})`, sure === 0, bad.join('\n     '));
+  console.log(`negatives (${NEG.length}): sure ${sure}, asked ${ask}`); }
+
 // ---------- ordinary sermon talk, word by word: never sure; how many are only offered (asked) ----------
 {
   const { talk } = require('./sermon_talk.js'), res = {};
