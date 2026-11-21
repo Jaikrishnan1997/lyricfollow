@@ -109,7 +109,7 @@
   const NOISE = new Set(['പുസ്തകം', 'പുസ്തകത്തിൽ', 'ലേഖനം', 'ലേഖനത്തിൽ', 'സുവിശേഷം', 'സുവിശേഷത്തിൽ', 'புஸ்தகம்', 'புத்தகம்', 'சுவிசேஷம்', 'சுவிசேஷத்தில்', 'நிருபம்', 'நிருபத்தில்',
     'எழுதிய', 'எழுதின', 'தீர்க்கதரிசி', 'gospel', 'book', 'letter', 'epistle', 'pustakam', 'pusthakam', 'lekhanam', 'suvisesham', 'suvishesham', 'nirupam'].map(kn));
   // The same words in any case form ("പുസ്തകത്തിന്റെ", "புஸ்தகத்தில்", "ലേഖനത്തിലെ", "pusthakam"...), on their phonetic key.
-  const DECOR = /^(pustak|putak|lekan|suvises|cuvices|nirup)(am|at(il|ile|in|inte|ilulla|ilum)?)$/;
+  const DECOR = /^(pustak|putak|lekan|suvises|cuvices|nirup)(am|at(il|ile|in|inte|ilulla|ilum|ula|ule|ulla)?)$/;   // (colloquial "புஸ்தகத்துல")
   const isNoise = t => NOISE.has(t) || DECOR.test(t);
   // "<book> written first letter" ("യോഹന്നാൻ എഴുതിയ ഒന്നാം ലേഖനം", "கொரிந்தியருக்கு எழுதின முதலாம் நிருபம்") names 1 John / 1 Corinthians.
   const WRITTEN = new Set(['എഴുതിയ', 'எழுதிய', 'எழுதின', 'written', 'wrote'].map(kn));
@@ -185,7 +185,7 @@
       const prevTok = toks[i - 1] || '';
       // A Malayalam/Tamil cue word belongs to the number before it, so it never labels the number that follows it.
       // (not when that word already labels the number before it: "5 chapter | 6th verse", Indian English)
-      const prevEn = cueKind(prevTok) && ENCUE.has(prevTok.replace(/[^a-z]/g, '')) && !(prev && prev.end === i - 1 && prev.enAfter);
+      const prevEn = cueKind(prevTok) && ENCUE.has(prevTok.replace(/[^a-z]/g, '')) && !(prev && prev.cueAt === i - 1);
       // (an English word after a plain number belongs to the number after it: "Psalm 23 verse 1"; after an ordinal it is the
       // number's own: "the fifth verse")
       // ... unless an ordinal with its own English word follows: "5 chapter 6th verse" = chapter 5, verse 6)
@@ -208,8 +208,8 @@
         const useNext = hn && (ord ? true : !hp && (after || !numAfter));
         if (useNext || hp) { kind = cueKind(useNext ? next : prevTok); claimed.set(useNext ? nx : i - 1, i); } else kind = '';   // (ordinal without a word after: the one before)
       }
-      if (join) { prev.val = prev.val < 10 && val === 100 ? prev.val * 100 : prev.val + val; prev.end = i + span; if (!prev.kind) prev.kind = kind; i += span - 1; continue; }
-      out.push({ val, start: i, end: i + span + (enAfter ? 1 : 0), word: !/^\d/.test(t), kind, enAfter });
+      if (join) { prev.val = prev.val < 10 && val === 100 ? prev.val * 100 : prev.val + val; prev.end = i + span; if (!prev.kind) { prev.kind = kind; if (enAfter) prev.cueAt = next === toks[i + span] ? i + span : i + span + 1; } i += span - 1; continue; }
+      out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind, cueAt: enAfter ? (next === toks[i + span] ? i + span : i + span + 1) : -1 });
       i += span - 1;
     }
     out.claimed = claimed;
@@ -228,8 +228,8 @@
   // chapter/verse word.
   function bookIsLast(toks, end) { const rest = toks.slice(end).filter(t => !LEADOUT.has(t)); return rest.length <= 2 && rest.every(t => !/\d/.test(t) && !Core.numbers(t).length && !cueKind(t)); }
   // Number words said as ordinals, on their sound key: "மூணாவது", "മൂന്നാം", "3-ஆம்" (3am), "third" (tirt), "16वाँ" (16t).
-  // ("eighth" is left out: its sound key is that of "eight")
-  const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth','fortieth','fiftieth','sixtieth','seventieth','eightieth','ninetieth','hundredth'].map(w => Core.keyWords(w)).join('|') + ')$');
+  // ("eighth" and "hundredth" are left out: their sound keys are those of "eight" and "hundred")
+  const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth','fortieth','fiftieth','sixtieth','seventieth','eightieth','ninetieth'].map(w => Core.keyWords(w)).join('|') + ')$');
   // Book names that are also everyday words in the other languages (Tamil "வெளி" = outside, "roma"): not enough alone.
   const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா', 'गिनती', 'उपदेशक', 'भजन', 'यहूदा'].map(w => kn(Core.hindiPre(w))));
   // What people count in sermon talk, on the sound key (prefix): days, people, times, years, money, hours...
@@ -476,6 +476,8 @@
       const la = labelledNumbers(toks.slice(f.end)), lb = labelledNumbers(toks.slice(from, f.start));
       // "verse 1 of Psalm 23": a bare number straight after the book is the chapter when the verse word came before it.
       if (la.length === 1 && !la[0].kind && la[0].start === 0 && lb.length === 1 && lb[0].kind === 'v') la[0] = Object.assign({}, la[0], { kind: 'ch' });
+      // ... and the verse when the chapter word came before it ("9 അദ്ധ്യായത്തിന്റെ എസ്ഥേർ 16", not Esther 1:6)
+      else if (la.length === 1 && !la[0].kind && la[0].start === 0 && lb.length === 1 && lb[0].kind === 'ch') la[0] = Object.assign({}, la[0], { kind: 'v' });
       // one labelled number on each side, the verse side perhaps with a range end ("verses 16 to 18 of 2 Timothy chapter 4")
       const one = L => L.length === 1 || (L.length === 2 && L[0].kind === 'v' && L[1].kind !== 'ch' && L[1].val > L[0].val && L[1].start - L[0].end <= 3);
       if (la.length && lb.length && one(la) && one(lb) && la[0].kind && lb[0].kind && lb[0].kind !== la[0].kind) {
@@ -587,10 +589,10 @@
     for (let i = 0; i < n; i++) if (wkey(words[i]) === spent[i]) same++;
     return same >= Math.ceil(n * .6) ? n : 0;
   }
-  // Parse words[s..k), at most the last 90 characters (whole words), as the tail of the old onBibleSpeech did.
+  // Parse words[s..k), at most the last 180 characters (whole words; the old onBibleSpeech read a 90-character tail).
   // (keep: a reference being followed keeps its own start in view, however long it grows - Tamil words are long)
   function windowText(words, s, k, keep) {
-    let i = k, len = 0; while (i > s && len + words[i - 1].length + 1 <= 91) { len += words[i - 1].length + 1; i--; }
+    let i = k, len = 0; while (i > s && len + words[i - 1].length + 1 <= 181) { len += words[i - 1].length + 1; i--; }   // (180 characters: a Malayalam or Tamil reference in words runs past 90)
     if (i === k) i = k - 1;
     if (keep != null && keep < i) i = Math.max(keep, s);
     return words.slice(i, k).join(' ');
@@ -612,7 +614,7 @@
       if (!cur) continue;
       // It no longer parses. A new book said, or the book gone out of the 90-character window, ends it; with its book still
       // in view, the words after it unsaid it ("John 3 16 years", "बारह लोग"): it was never a reference.
-      const nb = findBook(prepToks(words[k - 1]), true), inView = (findBook(prepToks(windowText(words, s, k, cur.from)), true) || {}).book === cur.r.book;
+      const nb = findBook(prepToks(words[k - 1]), true), inView = !!findBook(prepToks(windowText(words, s, k, cur.from)), true);   // (any book: "യോഹന്നാൻ എഴുതിയ ഒന്നാം ലേഖനം" turns John into 1 John)
       if (!nb && inView) { cur = null; continue; }
       cur.closed = true; out.push(cur); s = cur.to; k = s; cur = null;      // start again right after it
     }
@@ -621,9 +623,28 @@
   }
   // Last word of a reference that cannot become another one: its chapter/verse word ("... பதினாறாம் வசனம்"), or the
   // book said last ("chapter 3 verse 16 of John"). A number said last may still grow ("twenty" -> "twenty one").
+  // (a book said last that may still become a numbered one - John, Timothy... "യോഹന്നാൻ എഴുതിയ ഒന്നാം ലേഖനം" - is not closed)
   function closedEnd(words, sg) {
     const t = prepToks(words.slice(Math.max(sg.from, sg.to - 2), sg.to).join(' ')); const last = t[t.length - 1];
-    return !!last && (!!cueKind(last) || (!Core.numbers(last).length && !!findBook([last], true)));
+    if (!last) return false;
+    if (cueKind(last)) return true;
+    const b = !Core.numbers(last).length && findBook([last], true);
+    return !!b && b.book !== 42 && !/^\d/.test(BOOKS[b.book].en);
+  }
+  // The partial ends on a number still being said: a tens word ("twenty", "இருபத்தி", "बीस"? no - Hindi tens are whole),
+  // a hundred ("a hundred", "நூற்றி"), or "and" after a hundred: two partials agreeing on "Psalm 100" mean nothing yet.
+  function mayGrow(words) {
+    const t = prepToks(words.join(' ')), a = t[t.length - 1] || '', p = t[t.length - 2] || '';
+    const n = !/\d/.test(a) && Core.numbers(a).length === 1 ? Core.numbers(a)[0] : 0;
+    return (n >= 20 && n % 10 === 0) || (/^(and|ant)$/.test(a) && Core.numbers(p).length && Core.numbers(p)[0] % 100 === 0);
+  }
+  // The partial ends on "written" or "written <ordinal>": a numbered letter is being named ("... എഴുതിയ ഒന്നാം [ലേഖനം]").
+  // Hindi likewise after "की/के/का" ("यूहन्ना की पहली [पत्री]").
+  const LINKW = new Set(['की', 'के', 'का', 'ki', 'ke', 'ka', 'kee'].map(w => Core.keyWords(w)));
+  function pendingLetter(words) {
+    const r = words.slice(-2), k = r.map(wkey), a = k[k.length - 1], p = k[k.length - 2], last = r[r.length - 1] || '';
+    const ord = ordValue(a) > 0 || ORDTOK.test(a) || !!(Core.hiNumber(last, !/[\u0900-\u097F]/.test(last)) || {}).ord;
+    return WRITTEN.has(a) || LINKW.has(a) || (!!p && (WRITTEN.has(p) || LINKW.has(p)) && ord);
   }
   function sureOf(r, text, conf, ctx) {
     // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
@@ -673,7 +694,7 @@
       if (u.done.includes(k)) { usedTo = sg.to; continue; }   // a revised partial or the final repeating it
       const sure = sureOf(sg.r, all.slice(sg.from, sg.to).join(' '), conf, ctx);
       let go = !!finals;
-      if (!finals && sure) go = sg.closed || closedEnd(all, sg) || prevCand === k;
+      if (!finals && sure) go = !pendingLetter(all) && (sg.closed || closedEnd(all, sg) || (prevCand === k && !mayGrow(all.slice(sg.from))));
       if (!go) { if (!finals && sure) st.cand = k; waiting = true; break; }
       acts.push({ kind: 'ref', r: { book: sg.r.book, ch: sg.r.ch, v: sg.r.v, ve: sg.r.ve }, sure });
       u.done.push(k); usedTo = sg.to;

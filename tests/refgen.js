@@ -246,7 +246,8 @@ function spoken(lang, ord) {
     // (Hindi book names that are everyday words - गिनती counting, उपदेशक preacher, यहूदा Judah - are only offered without a
     // chapter/verse word, by design, so they are said with one here)
     const weakHi = lang === 'hi' && [3, 20, 64].includes(b);
-    if (k < .2 && !range && !runs && !weakHi) body = `${bk} ${lang === 'en' && rnd() < .3 ? ch + ':' + v : say(lang, ch, false) + ' ' + say(lang, v, false)}`;
+    // (bare "Job 8 8": the same number twice is how mishearings look, so it needs a confident recogniser - offered, by design)
+    if (k < .2 && !range && !runs && !weakHi && ch !== v) body = `${bk} ${lang === 'en' && rnd() < .3 ? ch + ':' + v : say(lang, ch, false) + ' ' + say(lang, v, false)}`;
     else if (k < .3 && !range) body = lang === 'en' || lang === 'hi' ? `${bk} ${say(lang, ch, false)} ${pick(CUEW[lang].v)} ${say(lang, v, false)}` : `${bk} ${say(lang, ch, true)} ${pick(CUEW[lang].ch)} ${say(lang, v, false)}`;
     else if (k < .45 && b === 18) body = lang === 'en' ? `the ${enWord(ch, true)} Psalm ${range ? V : 'verse ' + say('en', v, false)}` : lang === 'ta' ? `${say('ta', ch, true)} சங்கீதம் ${V}` : lang === 'ml' ? `${say('ml', ch, true)} സങ്കീർത്തനം ${V}` : `${bk} ${say('hi', ch, false)}${of} ${V}`;
     else body = `${bk} ${C} ${V}`;
