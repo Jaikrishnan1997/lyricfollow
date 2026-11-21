@@ -347,7 +347,7 @@
     // words may still sit between: the rest of a longer book name that is not one of its spellings here ("அப்போஸ்தலர்
     // நடபடிகள் 10 8", "Acts of the Apostles 2 38", "yeshayya pravachakan 53 5").
     if (opts.exactOnly && !split && !hasCue(numToks) && numToks[0] === toks[f.end]) {
-      const isNum = t => Core.numbers(t).length && !/^(are|on|for|por)$/.test(t);   // English words that sound like numbers
+      const isNum = t => Core.numbers(t).length && !/^(are|on|for)$/.test(t);   // English words that sound like numbers
       let a = 0; while (a < 2 && a < numToks.length && !isNum(numToks[a])) a++;
       let m = a; while (m < numToks.length && (isNum(numToks[m]) || (m > a && /^(colon|kolan|and|to|tu|ant)$/.test(numToks[m])))) m++;
       nums = Core.numbers(numToks.slice(a, m).join(' '));
