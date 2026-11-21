@@ -2,8 +2,8 @@
 // to Core.trackStep. Prints how often the tracker shows the line being sung (or the one just before).
 // node tests/tracker_bench.js [noise] [verbose: sc | rows | agg | pat]
 //   SPARSE=1  1-3 words a clip (cloud recognition over music)     SEED=n  another random service (1 = the reference)
-//   BENCH_LANG=ml  Malayalam songs with Malayalam mishearings (default Tamil)
-const Core = require('../js/core.js');
+//   BENCH_LANG=ml  Malayalam songs with Malayalam mishearings (default Tamil)      CORE=path  another js/core.js
+const Core = require(process.env.CORE ? require('path').resolve(process.env.CORE) : '../js/core.js');   // CORE=file: another version, to compare
 const ML = process.env.BENCH_LANG === 'ml';   // (not LANG: that is the system's own locale)
 const ta = require('../vendor/songs-ta-fgs.json').songs, ch = require('../vendor/songs-church.json').songs, mlS = require('../vendor/songs-ml-wikisource.json').songs;
 const pick = t => (ML ? mlS : ch.concat(ta)).find(s => s.title.startsWith(t));
@@ -74,7 +74,7 @@ songs.forEach((s, si) => {
     SC.push({ name: s.title.slice(0, 12) + ' anyjump', open: si, seq: rj.map(l => [si, l]) }); }
 });
 const L = +(process.argv[2] || .18), V = process.argv[3];
-const HM = { n: 0, good: 0, ok: 0, tot: 0 }; const AG = {}, PT = {}; let tot = 0, good = 0, b1 = 0, bad = 0, wrongSong = 0, rows = [];
+const HM = { n: 0, good: 0, ok: 0, tot: 0 }; const AG = {}, PT = {}, WHY = {}, MV = {}, KIND = {}; let tot = 0, good = 0, b1 = 0, bad = 0, wrongSong = 0, rows = [];
 for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
   seed = 7 + Math.round(spw * 100) + sc.name.length + (SEED - 1) * 7919;
   // timeline of words
@@ -86,7 +86,7 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
     const sp = sc.fastAt != null && k >= sc.fastAt ? spw * .6 : spw;
     ws.forEach(w => { words.push({ t, w, si, li, k }); t += sp * (.8 + rnd() * .4); }); t += sp * .6;
   });
-  const end = t + 1; const st = { song: sc.open >= 0 ? songs[sc.open].id : null, cur: -1 };
+  let lastWhy = 'start'; const end = t + 1; const st = { song: sc.open >= 0 ? songs[sc.open].id : null, cur: -1 };
   let g = 0, n = 0, bb = 0, ws = 0, b1s = 0;
   for (let tc = 4.5; tc < end; tc += 3.3) {
     const inWin = words.filter(x => x.t > tc - 4.5 && x.t <= tc);
@@ -95,19 +95,27 @@ for (const spw of [.35, .6, 1.0]) for (const sc of SC) {
     if (process.env.SPARSE && tx) { const w = tx.split(' '), k = rnd() < .4 ? 1 : rnd() < .67 ? 2 : 3; const pickW = w.map((x, i) => [x, i, x.length + rnd() * 6]).sort((a, b) => b[2] - a[2]).slice(0, k).sort((a, b) => a[1] - b[1]); tx = pickW.map(x => x[0]).join(' '); }
     // WIN=1: the words of the clip before are matched with this one (Core.trackWin)
     if (process.env.WIN) tx = Core.trackWin(st, tx, tc * 1000);
-    const r = Core.trackStep(T, st, tx, tc * 1000);
-    if (r) { st.song = r.song; st.cur = r.line; if (r.why === 'hmm') HM.n++; }
+    const curBefore = st.cur, r = Core.trackStep(T, st, tx, tc * 1000);
+    if (r) { st.song = r.song; st.cur = r.line; if (r.why === 'hmm') HM.n++; lastWhy = (r.src || r.why) + (r.d != null ? ' d' + Math.max(-3, Math.min(3, r.d)) : ''); }
     const sung = words.filter(x => x.t <= tc); if (!sung.length) continue;
     const now = sung[sung.length - 1], prevK = sc.seq[now.k - 1];
     if (st.hmm && st.song === songs[now.si].id) { const ixx = T.songs.find(x => x.id === st.song).ix; const mp = ixx.idx[st.hmm.map]; HM.tot++; if (mp != null && songs[now.si].lines[mp] && songs[now.si].lines[mp].text === songs[now.si].lines[now.li].text) HM.ok++; if (r && r.why === 'hmm' && songs[now.si].lines[r.line].text === songs[now.si].lines[now.li].text) HM.good++; }
     n++;
+    // each move judged when it is made: to the line being sung, the one before it, or a wrong line
+    if (r && r.song === songs[now.si].id) { const tt = i => songs[now.si].lines[i] ? songs[now.si].lines[i].text : ''; const k = (r.src || r.why) + ' d' + Math.max(-3, Math.min(3, r.d == null ? 9 : r.d)); MV[k] = MV[k] || [0, 0]; MV[k][0]++; if (tt(r.line) !== tt(now.li) && !(prevK && prevK[0] === now.si && tt(r.line) === tt(prevK[1]))) { MV[k][1]++; if (V === 'bad' && (!process.env.BADK || k.startsWith(process.env.BADK))) console.log(`${k.padEnd(9)} ${sc.name.split(' ').pop().padEnd(9)} spw${spw} from ${curBefore} to ${r.line} sung ${now.li} (prev ${prevK ? prevK[1] : '-'}) | ${tx} | ${tt(r.line)}`); } }
     const sid = songs[now.si].id, same = st.song === sid;
     if (!same) { ws++; bb++; continue; }
     const txt = i => i >= 0 ? songs[now.si].lines[i].text : '';
     if (txt(st.cur) === txt(now.li)) g++;
     else if (prevK && prevK[0] === now.si && txt(st.cur) === txt(prevK[1])) { b1++; b1s++; }
-    else bb++;
-    if (V && rows.length < 4000) rows.push(`${sc.name} spw${spw} t${tc.toFixed(1)} sung ${now.li} shown ${st.cur}${r ? ' ' + r.why : ''}`);
+    else {
+      bb++; WHY[lastWhy] = (WHY[lastWhy] || 0) + 1;
+      // what kind of wrong: still on a line sung 2-4 lines ago (late), on one coming next (early), or neither
+      const back = [2, 3, 4].some(j => sc.seq[now.k - j] && sc.seq[now.k - j][0] === now.si && txt(sc.seq[now.k - j][1]) === txt(st.cur));
+      const fwd = [1, 2].some(j => sc.seq[now.k + j] && sc.seq[now.k + j][0] === now.si && txt(sc.seq[now.k + j][1]) === txt(st.cur));
+      const kd = back ? 'late' : fwd ? 'early' : 'elsewhere'; KIND[kd] = (KIND[kd] || 0) + 1; KIND[kd + spw] = (KIND[kd + spw] || 0) + 1;
+    }
+    if (V && rows.length < 4000) rows.push(`${sc.name} spw${spw} t${tc.toFixed(1)} sung ${now.li} shown ${st.cur}${r ? ' ' + r.why : ''}${V === 'rows' ? ' | ' + tx : ''}`);
   }
   tot += n; good += g; bad += bb; wrongSong += ws;
   { const k = sc.name.split(' ').pop() + ' ' + spw; AG[k] = AG[k] || [0, 0, 0]; AG[k][0] += n; AG[k][1] += g; AG[k][2] += bb; }
@@ -118,5 +126,12 @@ if (V === 'rows') console.log(rows.join('\n'));
 if (V === 'agg') for (const [k, [n, g, b]] of Object.entries(AG)) console.log(k.padEnd(16), 'right', (g / n * 100).toFixed(0) + '%', 'wrong', (b / n * 100).toFixed(0) + '%');
 // pat: per singing pattern, all speeds together and at 0.6 s a word (right / one behind / wrong, %)
 if (V === 'pat') for (const k of Object.keys(PT).filter(k => !k.includes(' '))) { const f = x => { const [n, g, b, w] = PT[x] || [1, 0, 0, 0]; return `right ${(g / n * 100).toFixed(1)} behind ${(b / n * 100).toFixed(1)} wrong ${(w / n * 100).toFixed(1)}`; }; console.log(`pat ${k.padEnd(10)} ${f(k)} | at 0.6: ${f(k + ' 0.6')}`); }
+// why: which kind of move put a wrong line on screen
+if (V === 'why') console.log('moves (all / to a wrong line):', Object.entries(MV).sort((a, b) => b[1][1] - a[1][1]).map(([k, v]) => k + ' ' + v[0] + '/' + v[1]).join(', '));
+if (V === 'why') console.log('wrong clips:', Object.entries(KIND).map(([k, v]) => k + ' ' + (v / tot * 100).toFixed(1) + '%').join(', '));
+if (V === 'why') console.log('wrong clips by last move:', Object.entries(WHY).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', '));
 if (process.env.HMMSTAT) console.log('hmm moves', HM.n, 'right', HM.good, '| filter MAP right', (HM.ok / HM.tot * 100).toFixed(1) + '%');
+// what the wrong clips were: late (still on a line sung 2-4 lines ago), early (a line about to come), elsewhere
+// (a line not sung around now - the "random line" the church sees)
+console.log(`wrong split: late ${((KIND.late || 0) / tot * 100).toFixed(1)}%  early ${((KIND.early || 0) / tot * 100).toFixed(1)}%  elsewhere ${((KIND.elsewhere || 0) / tot * 100).toFixed(1)}%`);
 console.log(`noise ${L}: right line ${(good / tot * 100).toFixed(1)}%  one behind ${((tot - good - bad) / tot * 100).toFixed(1)}%  wrong ${(bad / tot * 100).toFixed(1)}% (wrong song ${(wrongSong / tot * 100).toFixed(1)}%)  clips ${tot}`);

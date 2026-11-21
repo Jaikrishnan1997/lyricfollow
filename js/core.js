@@ -437,10 +437,15 @@
     const df = new Map(); for (const ws of W) for (const w of new Set(ws)) df.set(w, (df.get(w) || 0) + 1);
     const N = W.length, idf = idfShared || (w => Math.log((N + 1) / ((df.get(w) || 0) + .5)));
     const rep = K.map(k => K.filter(x => x === k).length > 1);
-    return { idx, W, K, rep, first, idf, pos: new Map(idx.map((li, p) => [li, p])) };
+    // In how many different lines of this song each word is (a chorus written out again counts once): a word in
+    // three or more ("அல்லேலூயா", "துதியுங்கள்" end half the lines of a praise song) cannot say WHICH of them is sung,
+    // however rare it is across the service (seen in the bench: "அல்லேலூயா துதியுங்கள்" sent the screen to the top).
+    const dl = new Map(), seenK = new Set();
+    W.forEach((ws, p) => { if (seenK.has(K[p])) return; seenK.add(K[p]); for (const w of new Set(ws)) dl.set(w, (dl.get(w) || 0) + 1); });
+    return { idx, W, K, rep, first, idf, dl, pos: new Map(idx.map((li, p) => [li, p])) };
   }
   function seqScore(ix, hw, p) {
-    const lw = ix.W[p]; let m = 0, tot = 0, n = 0; const used = new Set();
+    const lw = ix.W[p]; let m = 0, tot = 0, n = 0, nd = 0; const used = new Set();
     for (const h of hw) {
       if (h.length < 3) continue;
       // each word of the line answers one heard word only ("அல்லேலூயா அல்லேலூயா" is not the line with one அல்லேலூயா)
@@ -453,9 +458,11 @@
       if (!bw || bs < .55) { tot += 1; continue; }
       const wt = Math.max(.3, Math.min(...bw.map(ix.idf)));
       tot += wt; if (bs >= .55) { m += wt * bs; if (wt >= 1) n++; }   // n: matched words that say something (not "துதியுங்கள்")
+      // nd: matched words found in one line of the song only (and its copies) - the ones that say which line
+      if (bs >= .7 && ix.dl && Math.max(...bw.map(w => ix.dl.get(w) || 0)) <= 1) nd++;
     }
     // A few common words ("தேவனைத் துதியுங்கள்" ends half the lines) are not enough evidence for a line on their own.
-    return { s: tot ? Math.min(1, m / Math.max(tot, 2.2)) : 0, n };
+    return { s: tot ? Math.min(1, m / Math.max(tot, 2.2)) : 0, n, nd };
   }
   /** One clip: returns {line, score} when the singer has moved on to a later line, else {line: null, score}.
    *  st keeps a pending far jump between clips ({pend}). */
@@ -762,19 +769,47 @@
     const vs = T.vset || (T.vset = new Set(T.voc.map(e => e[0])));
     return hw.filter(w => !SHOUT.has(w) || vs.has(w));
   }
+  // Heard words that are, each, in one line of the song only (with its copies): where they are. A copy of a chorus
+  // line counts at the copy nearest the screen. {ps: places, words: how many heard words, long: one of 6+ letters}
+  function anchors(ix, hw, c) {
+    const ps = new Set(), hs = []; let words = 0, long = false;
+    for (const h of new Set(hw)) {
+      if (h.length < 4) continue;
+      let at = -1;
+      for (let p = 0; p < ix.W.length; p++) for (const w of ix.W[p]) if ((ix.dl.get(w) || 0) === 1 && w.length >= 4 && wsimP(h, w) >= .8 && (at < 0 || Math.abs(p - c) < Math.abs(at - c))) at = p;
+      if (at >= 0) { ps.add(at); words++; if (h.length >= 6) long = true; hs.push(h); }
+    }
+    const out = { ps: [...ps], words, long, hs };
+    if (words >= 1) {
+      // words in two lines: each helps a window of neighbouring lines that a telling word points to
+      const sets = [];
+      for (const h of new Set(hw)) {
+        if (h.length < 4) continue; const q = new Set(); let one = false;
+        for (let p = 0; p < ix.W.length; p++) for (const w of ix.W[p]) { const k = ix.dl.get(w) || 0; if (k <= 2 && w.length >= 4 && wsimP(h, w) >= .8) { q.add(p); if (k === 1) one = true; } }
+        if (q.size && q.size <= 6) sets.push({ q, one });
+      }
+      let bestW = null;
+      for (const a of out.ps) for (let lo = a - 2; lo <= a; lo++) {
+        const cov = sets.filter(x => [...x.q].some(p => p >= lo && p <= lo + 2));
+        if (cov.length >= 2 && cov.some(x => x.one)) { const hi = Math.max(...cov.flatMap(x => [...x.q].filter(p => p >= lo && p <= lo + 2))); if (!bestW || cov.length > bestW.n || (cov.length === bestW.n && Math.abs(hi - c) < Math.abs(bestW.hi - c))) bestW = { n: cov.length, hi }; }
+      }
+      out.win = bestW;
+    }
+    return out;
+  }
   function trackStep0(T, st, text, now) {
     const hw = dropShouts(T, seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w))); if (!hw.filter(w => w.length >= 3).length) return null;
     now = now || Date.now();
     // A clip (4.5 s) often holds the end of one line and the start of the next (fast songs: two or three lines):
     // its newest words say where the singer is now, the whole clip gives the evidence.
     const big = hw.filter(w => w.length >= 3), tail = big.length >= 4 ? big.slice(-Math.ceil(big.length / 2)) : null;
-    const cands = T.voc ? candidates(T, hw) : null, ZERO = { s: 0, n: 0 };
+    const cands = T.voc ? candidates(T, hw) : null, ZERO = { s: 0, n: 0, nd: 0 };
     const res = T.songs.map((sg, si) => {
       let top = 0, topN = 0; const sc = [];
       for (let p = 0; p < sg.ix.W.length; p++) {
         if (cands && !cands[si].has(p)) { sc.push(ZERO); continue; }
         const r = seqScore(sg.ix, hw, p);
-        if (tail) { const q = seqScore(sg.ix, tail, p); if (q.s * .95 > r.s && q.n >= 2) { r.s = q.s * .95; r.n = Math.max(r.n, q.n); } }
+        if (tail) { const q = seqScore(sg.ix, tail, p); if (q.s * .95 > r.s && q.n >= 2) { r.s = q.s * .95; r.n = Math.max(r.n, q.n); r.nd = Math.max(r.nd, q.nd); } }
         sc.push(r); if (r.s > top) { top = r.s; topN = r.n; }
       }
       return { sg, sc, top, topN };
@@ -800,7 +835,7 @@
     }
     if (traj && traj.song === st.song && mine) {
       const ix0 = mine.sg.ix, c0 = st.cur < 0 ? -1 : ix0.pos.has(st.cur) ? ix0.pos.get(st.cur) : -1;
-      if (c0 < 0 || Math.abs(traj.p - c0) >= 2) { st.pend = null; st.last = { p: traj.p, t: now }; st.traj = []; if (st.hmm) st.hmm.c = traj.p; return { song: st.song, line: ix0.idx[traj.p], why: traj.p < c0 ? 'back' : 'fwd' }; }
+      if (c0 < 0 || Math.abs(traj.p - c0) >= 2) { st.pend = null; st.last = { p: traj.p, t: now }; st.traj = []; if (st.hmm) st.hmm.c = traj.p; return { song: st.song, line: ix0.idx[traj.p], why: traj.p < c0 ? 'back' : 'fwd', src: 'traj', d: c0 < 0 ? traj.p + 1 : traj.p - c0 }; }
     }
     const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
     if (lead && st.song && new Set(big).size >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
@@ -851,9 +886,27 @@
       const d = c < 0 ? hm.p + 1 : hm.p - c;
       if (Math.abs(d) > 6 && hm.post < .7) return null;
       if (d < -2 && mine.sc[hm.p].s < .5) return null;      // back over lines on a garbled clip ("திறக்கிறீயும்" -> verse 1)
+      if (c >= 0 && (d <= -2 || d >= 3) && !mine.sc[hm.p].nd) return null;   // far: only with a telling word (see seqIndex)
       st.pend = null; st.last = { p: hm.p, t: now }; if (st.hmm) st.hmm.c = hm.p;
-      return { song: st.song, line: ix.idx[hm.p], why: 'hmm' };
+      return { song: st.song, line: ix.idx[hm.p], why: 'hmm', src: 'hmm', d };
     };
+    const exp = st.rate && st.last ? Math.round(st.rate * (now - st.last.t) / 1000) : 1;
+    if (c >= 0) {
+      // Telling words (each in one line of the song only) that point to neighbouring lines: two of them in this
+      // clip, or one long one in this clip and the clip before - the singer is at the last of those lines, however
+      // far that is from the screen (seen in the bench: 8 lines behind for 20 s with "பகிர்ந்தவர் ... செபித்தவர்கள்").
+      const an = anchors(ix, big, c);
+      // (the clip before must have heard another word: the recogniser writes the same wrong word again and again -
+      // seen live, "அக்கினியே." twice took the screen from verse 1 to verse 3)
+      const prevA = st.anch && now - st.anch.at < 8000 && !an.hs.some(h => st.anch.hs.includes(h)) ? st.anch.ps : [];
+      let to = -1;
+      if (an.words >= 2 && an.ps.length && Math.max(...an.ps) - Math.min(...an.ps) <= 2) to = Math.max(...an.ps);
+      else if (an.win) to = an.win.hi;
+      else if (an.words === 1 && an.long && an.ps.length === 1 && prevA.some(q => an.ps[0] - q >= 0 && an.ps[0] - q <= 3)) to = an.ps[0];
+      else if (an.words === 1 && an.long && an.ps.length === 1 && an.ps[0] - c >= 2 && an.ps[0] - c <= Math.max(3, exp + 1)) to = an.ps[0];
+      st.anch = an.words ? { ps: an.ps, hs: an.hs, at: now } : st.anch;
+      if (to >= 0 && to !== c && Math.abs(to - c) >= 2) { st.pend = null; st.anch = null; st.last = { p: to, t: now }; if (st.hmm) st.hmm.c = to; return { song: st.song, line: ix.idx[to], why: to < c ? 'back' : 'fwd', src: 'anchor', d: to - c }; }
+    }
     let best = -1, bv = -1;
     for (let p = 0; p < mine.sc.length; p++) { const v = mine.sc[p].s + prior(ix, c, p); if (v > bv + 1e-9) { bv = v; best = p; } }
     if (best < 0 || best === c) { st.pend = null; return byHmm(); }
@@ -865,7 +918,6 @@
     const stuck = c >= 0 && now - ((st.last && st.last.t) || st.since || now) > 10000;
     // Singing speed (lines a second, from the last moves): in a fast song a clip spans two or three lines, so the
     // expected step is taken on the next-line bar.
-    const exp = st.rate && st.last ? Math.round(st.rate * (now - st.last.t) / 1000) : 1;
     let ok;
     if (c >= 0 && d > 1 && d <= Math.min(4, exp + 1) && s >= .45 && (d === 2 || n >= 2 || s >= .8)) ok = true;   // 3-4 lines on: not on one common word ("இந்த இயேசு" -> verse 4)
     else if (stuck && d > 1 && d <= 8 && s >= .5 && n >= 2) ok = true;            // the screen has not moved for 10 s
@@ -878,13 +930,24 @@
     else if (d >= -4) ok = (s >= .55 && n >= 2) || (conf && s >= .45 && n >= 2);
     else if (best === 0 || ix.first[best]) ok = (s >= .65 && n >= 2) || (conf && s >= .5 && n >= 2);   // back to the top / a verse
     else ok = (s >= .85 && n >= 3) || (conf2 && s >= .6 && n >= 2);
-    if (!ok) { st.pend = { p: best, at: now, s, n, w: big.join(' ') }; return byHmm(); }
+    // A far move (3+ lines on, or 2+ back) on words that are in several lines of the song (chorus words, the line
+    // ending every line shares) says nothing about which of those lines: it needs a word found in that line only,
+    // in this clip or in the clip before that pointed to the same place.
+    const far = c >= 0 && (d >= 3 || d <= -2);
+    if (ok && far && !r.nd && !(conf && st.pend.nd)) ok = false;
+    if (!ok && far && !r.nd) {
+      // the same words fit a line just ahead, where the singer is expected by now: that one
+      const e = Math.max(1, exp + 1); let q = -1;
+      for (let p = c + 1; p <= Math.min(ix.W.length - 1, c + e); p++) if (mine.sc[p].s >= .4 && mine.sc[p].s >= s - .1 && (q < 0 || mine.sc[p].s > mine.sc[q].s)) q = p;
+      if (q > c) { st.pend = null; st.last = { p: q, t: now }; if (st.hmm) st.hmm.c = q; return { song: st.song, line: ix.idx[q], why: 'fwd', src: 'near', d: q - c }; }
+    }
+    if (!ok) { st.pend = { p: best, at: now, s, n, nd: r.nd, w: big.join(' ') }; return byHmm(); }
     st.pend = null;
     if (c >= 0 && d > 0 && st.last && st.last.p >= 0 && best > st.last.p) {
       const r = (best - st.last.p) / Math.max(1, (now - st.last.t) / 1000); st.rate = st.rate ? st.rate * .6 + Math.min(1.2, r) * .4 : Math.min(1.2, r);
     }
     st.last = { p: best, t: now }; if (st.hmm) st.hmm.c = best;
-    return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd' };
+    return { song: st.song, line: ix.idx[best], why: d < 0 ? 'back' : 'fwd', src: 'step', d };
   }
 
   // A song switch, with a guard against going straight back: right after the singer moved on, words of the song just
