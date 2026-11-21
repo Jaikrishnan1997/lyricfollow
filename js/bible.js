@@ -160,6 +160,12 @@
     }
     return out;
   }
+  // The book is the last word that matters: at most two words after it, none a number or a chapter/verse word.
+  function bookIsLast(toks, end) { const rest = toks.slice(end); return rest.length <= 2 && rest.every(t => !/\d/.test(t) && !Core.numbers(t).length && !cueKind(t)); }
+  // Number words said as ordinals, on their sound key: "மூணாவது", "മൂന്നാം", "3-ஆம்" (3am), "third" (tirt), "16वाँ" (16t).
+  const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth'].map(w => Core.keyWords(w)).join('|') + ')$');
+  // Book names that are also everyday words in the other languages (Tamil "வெளி" = outside, "roma"): not enough alone.
+  const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா'].map(kn));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
   // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
@@ -325,10 +331,17 @@
     if (!f) return null;
     let nums = Core.numbers(toks.slice(f.end).join(' '));
     // Tamil/Malayalam sometimes put the book last: "ஒன்பதாவது அதிகாரம் இரண்டாவது வசனம் மத்தேயு" (Matthew 9:2).
-    let numToks = toks.slice(f.end);
-    if (!nums.length && f.start > 0 && f.end >= toks.length - 1) {
-      const before = toks.slice(Math.max(0, f.start - 6), f.start);
-      if (Core.numbers(before.join(' ')).length >= 1 && hasCue(before)) { numToks = before; nums = Core.numbers(before.join(' ')); }
+    // Only when the book is the last word that matters (a lead-out like "வாசிப்போம்" may follow), and only numbers
+    // that no earlier book in the same text has already taken: in "ஆதியாகமம் 3-ஆம் அதிகாரம் 4-ஆம் வசனம் உபாகமம்" the 3 and 4
+    // are Genesis's, and Deuteronomy waits for its own (the live flip: Genesis, Deuteronomy 3:4, Genesis...).
+    let numToks = toks.slice(f.end), bookLast = false;
+    if (!nums.length && f.start > 0 && bookIsLast(toks, f.end)) {
+      let from = Math.max(0, f.start - 6);
+      const prev = parseToks(toks.slice(0, f.start), { exactOnly: opts.exactOnly, needChapter: true, needVerse: true, prefer: opts.prefer });
+      if (prev) from = Math.max(from, prev.used);
+      const before = toks.slice(from, f.start);
+      if (Core.numbers(before.join(' ')).length >= 1 && hasCue(before)) { numToks = before; nums = Core.numbers(before.join(' ')); bookLast = true; }
+      else if (prev && prev.book === f.book) return prev;        // "John 3 16 ... John": the book said again
     }
     // The book in the middle: "verse 16 of John chapter 3", "in the third chapter of John verse 16". Only when the number
     // on each side carries its own chapter/verse word and the two words differ.
@@ -346,11 +359,12 @@
     // ("John 3 16", "യോഹന്നാൻ മൂന്ന് പതിനാറ്"), so "John was 3 years old when 16 people came" is not John 3:16. Up to two
     // words may still sit between: the rest of a longer book name that is not one of its spellings here ("அப்போஸ்தலர்
     // நடபடிகள் 10 8", "Acts of the Apostles 2 38", "yeshayya pravachakan 53 5").
+    let bare = null;
     if (opts.exactOnly && !split && !hasCue(numToks) && numToks[0] === toks[f.end]) {
       const isNum = t => Core.numbers(t).length && !/^(are|on|for)$/.test(t);   // English words that sound like numbers
       let a = 0; while (a < 2 && a < numToks.length && !isNum(numToks[a])) a++;
       let m = a; while (m < numToks.length && (isNum(numToks[m]) || (m > a && /^(colon|kolan|and|to|tu|ant)$/.test(numToks[m])))) m++;
-      nums = Core.numbers(numToks.slice(a, m).join(' '));
+      nums = Core.numbers(numToks.slice(a, m).join(' ')); bare = numToks.slice(a, m); bare.end = m;
     }
     if (opts.needChapter && !nums.length) return null;
     const book = BOOKS[f.book];
@@ -361,12 +375,20 @@
       if (best) nums = best;
     }
     if (opts.needVerse && nums.length < 2 && book.ch > 1) return null;
-    let ch = nums[0] || 1, v = nums[1] || 1, ve = nums[2] && nums[2] > v ? nums[2] : v;
+    const lab = split ? [] : labelledNumbers(numToks);
+    // An end verse only from a number said next to the verse ("16 to 18", "4-ஆம் வசனம் முதல் 6-ஆம் வசனம் வரை"): a number
+    // said later in running talk ("... and the serpent said 3 times") is not a range (seen live: Genesis 3:4-24).
+    const near = (x, y) => x && y && y.start - x.end <= 2;
+    let ch = nums[0] || 1, v = nums[1] || 1, ve = nums[2] && nums[2] > v && (bare || split || lab.length < 3 || near(lab[1], lab[2])) ? nums[2] : v;
     if (book.ch === 1 && nums.length === 1) { v = ch; ve = v; ch = 1; }
     // Spoken order may be verse-first: trust the chapter/verse words when both kinds are present.
-    const lab = split ? [] : labelledNumbers(numToks);
     const chs = lab.filter(x => x.kind === 'ch'), vs = lab.filter(x => x.kind === 'v');
-    if (chs.length && vs.length) { ch = chs[0].val; v = vs[0].val; ve = vs[1] && vs[1].val > v ? vs[1].val : (lab.find(x => x.start >= vs[0].end && !x.kind && x.val > v) || { val: v }).val; }
+    let usedIn = lab.length >= 2 ? Math.max(lab[0].end, lab[1].end) : numToks.length;   // tokens of numToks this reference used
+    if (chs.length && vs.length) {
+      ch = chs[0].val; v = vs[0].val;
+      const e = vs[1] && vs[1].start - vs[0].end <= 3 && vs[1].val > v ? vs[1] : lab.find(x => x.start >= vs[0].end && !x.kind && x.val > v && x.start - vs[0].end <= 2);
+      ve = e ? e.val : v; usedIn = Math.max(chs[0].end, vs[0].end, e ? e.end : 0);
+    }
     else if (vs.length === 1 && lab.length === 2 && !chs.length) { const other = lab.find(x => x !== vs[0]); ch = other.val; v = vs[0].val; ve = v; }
     else if (chs.length === 1 && lab.length === 2 && !vs.length) { const other = lab.find(x => x !== chs[0]); ch = chs[0].val; v = other.val; ve = v; }
     if (ch < 1 || ch > book.ch) return null;
@@ -378,7 +400,13 @@
     const cue = hasCue(after);
     // "tight": the numbers come straight after the book name with nothing else between (strong signal in speech).
     const tight = after.length > 0 && Core.numbers(after.slice(0, 2).join(' ')).length >= 1 && after.slice(0, 1).every(t => Core.numbers(t).length || CUE.has(t.replace(/[^a-z]/g, '')));
-    return { book: f.book, ch, v, ve, hasVerse: nums.length >= 2 || book.ch === 1, cue, tight, fuzzy: f.score === 0 };
+    // used: the token after the last one this reference took (a later book in the same text may use what follows).
+    const used = bookLast ? f.end : split ? toks.length : f.end + (bare ? bare.end : usedIn);
+    // Without a chapter/verse word, ordinals ("மூணாவது", "രണ്ടാം", "third") and book names that are also everyday words
+    // ("வெளி" = outside) are how casual talk sounds ("மூணாவது தடவை", "the third time"): such a match may be offered, never sure.
+    const ordinal = !cue && (bare || numToks).some(t => Core.numbers(t).length && ORDTOK.test(t));
+    const weak = WEAK.has(toks.slice(f.start, f.end).join(''));
+    return { book: f.book, ch, v, ve, hasVerse: nums.length >= 2 || book.ch === 1, cue, tight, fuzzy: f.score === 0, used, ordinal, weak };
   }
 
   /** Part of a reference, for references spoken in pieces or with one misheard number:
@@ -400,36 +428,116 @@
   /* ---------- What the two Preach modes do with each recognised update ----------
    * Pure (no DOM, no clock of its own): app.js and tests/ref_stream_test.js call the same code, so the stream test
    * sees exactly what the screen would get. st is kept by the caller between updates: { vbText, partRef }. */
-  function newRefState() { return { vbText: '', partRef: null }; }
+  function newRefState() { return { vbText: '', partRef: null, cand: '', utt: { spent: [], shown: null, done: [] } }; }
+  const bcv = r => `${r.book}.${r.ch}.${r.v}`;
+  const wkey = w => Core.keyWords(w).replace(/\s+/g, '');
+  // How many leading words of this update are words this utterance already used up (recognisers revise a word or two
+  // of a partial, so 60% the same is enough; a partial that took words back is spent as far as it goes).
+  function spentCount(words, spent) {
+    if (!spent.length) return 0;
+    const n = Math.min(words.length, spent.length); let same = 0;
+    for (let i = 0; i < n; i++) if (wkey(words[i]) === spent[i]) same++;
+    return same >= Math.ceil(n * .6) ? n : 0;
+  }
+  // Parse words[s..k), at most the last 90 characters (whole words), as the tail of the old onBibleSpeech did.
+  function parseWin(words, s, k, opts) {
+    let i = k, len = 0; while (i > s && len + words[i - 1].length + 1 <= 91) { len += words[i - 1].length + 1; i--; }
+    if (i === k) i = k - 1;
+    return parseRef(words.slice(i, k).join(' '), opts);
+  }
+  // One reference becoming another as its last number is still being said: "twenty" -> "twenty one", "100" -> "119",
+  // or only the end verse arriving ("16" -> "16 to 18").
+  const grow = (x, y) => x === y || ((x % 10 === 0 && x >= 20 && y > x && y < x + 10) || (x === 100 && y > 100 && y < 200));
+  const grows = (a, b) => a.book === b.book && ((a.ch === b.ch && grow(a.v, b.v)) || (a.v === b.v && grow(a.ch, b.ch)));
+  /** The references in a run of words, in order, each with the words it spans ([from, to)) and whether something
+   *  followed that ends it (closed: a new book or other talk that no longer parses with it). A reference ends where the
+   *  next one starts, so its numbers are never given to a later book. */
+  function refSegments(words, opts) {
+    const out = []; let s = 0, cur = null;
+    for (let k = 1; k <= words.length; k++) {
+      const r = parseWin(words, s, k, opts);
+      if (r && !cur) { cur = { r, from: s, to: k }; continue; }
+      if (r && (bcv(r) === bcv(cur.r) || grows(cur.r, r))) { if (bcv(r) !== bcv(cur.r) || r.ve !== cur.r.ve) { cur.r = r; cur.to = k; } continue; }
+      if (!cur) continue;
+      cur.closed = true; out.push(cur); s = cur.to; k = s; cur = null;      // start again right after it
+    }
+    if (cur) { cur.closed = false; out.push(cur); }
+    return out;
+  }
+  // Last word of a reference that cannot become another one: its chapter/verse word ("... பதினாறாம் வசனம்"), or the
+  // book said last ("chapter 3 verse 16 of John"). A number said last may still grow ("twenty" -> "twenty one").
+  function closedEnd(words, sg) {
+    const t = prepToks(words.slice(Math.max(sg.from, sg.to - 2), sg.to).join(' ')); const last = t[t.length - 1];
+    return !!last && (!!cueKind(last) || (!Core.numbers(last).length && !!findBook([last], true)));
+  }
+  function sureOf(r, text, conf, ctx) {
+    // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
+    if (ctx.singing && ctx.singing(text)) return false;
+    // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
+    // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
+    const indic = /[ऀ-ॿ஀-௿ഀ-ൿ]/.test(text);   // Indian script: the recogniser was sure of the words
+    const need = r.ch === r.v ? .85 : indic ? .4 : .72;
+    // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
+    const bookOk = !r.fuzzy || ctx.engine === 'local';
+    const loose = !r.cue && (r.ordinal || r.weak);
+    const planned = !!(ctx.inPlan && ctx.inPlan(r));
+    return r.cue || (!loose && ((r.tight && bookOk && conf >= need) || (r.tight && conf >= .9))) || (planned && (r.tight || conf >= .5));
+  }
   /** ev: { finals, interim (best alternative), conf }. ctx: { engine, prefer (Set of planned books), plan ([{book,ch,v}]),
    *  inPlan(r), singing(text) -> bool, screen (verse on screen while the Bible is shown, else null), screenAny
    *  (the last verse shown, even under a song), lastRefAt, now }.
-   *  Returns { acts: [{ kind: 'ref', r, sure } | { kind: 'piece', r }], stop } - stop: nothing else may use this update. */
+   *  Returns { acts: [{ kind: 'ref', r, sure } | { kind: 'piece', r }], stop } - stop: nothing else may use this update.
+   *
+   *  A partial holds the whole utterance so far. Rules (tests/ref_stream_test.js):
+   *  - once a reference is shown, the words up to its end are spent for the rest of the utterance: later partials and
+   *    the final parse only what follows (the old 90-character tail kept re-reading them, and a book said next took
+   *    their numbers: Genesis 3:4 -> "Deuteronomy 3:4");
+   *  - from a partial, a sure reference goes on screen when it can no longer change: something followed it, or it ends
+   *    on its chapter/verse word or its book, or two partials in a row gave the same book, chapter and verse;
+   *    otherwise it waits (at most one partial) - the final always decides;
+   *  - an unsure one is only offered (asked) on the final. */
   function refStep(st, ev, ctx) {
-    const finals = ev.finals || '', interim = ev.interim || '', conf = ev.conf == null ? .75 : ev.conf;
-    if (finals) st.vbText = (st.vbText + ' ' + finals).slice(-400);
-    const tail = (st.vbText + ' ' + interim).slice(-90);
+    const finals = ev.finals || '', conf = ev.conf == null ? .75 : ev.conf;
+    const u = st.utt || (st.utt = { spent: [], shown: null, done: [] });
+    const words = (finals || ev.interim || '').split(/\s+/).filter(Boolean);
+    const n = spentCount(words, u.spent), rest = words.slice(n);
+    // Before the new words: the reference already shown in this utterance (so a range said after it still extends it),
+    // or the unused end of earlier finals (a book said, a pause, then its numbers).
+    const base = u.shown ? u.shown.words : st.vbText.split(/\s+/).filter(Boolean);
+    const all = base.concat(rest);
     const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: ctx.prefer };
-    // A reference said at the start of a long sentence ("John 3 16, for God so loved...") would fall off the
-    // 90-character tail, so the whole finished phrase is tried first.
-    let r = finals && finals.length > 90 ? parseRef(finals, opts) : null;
-    if (!r) r = parseRef(tail, opts);
-    if (r) {
-      // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
-      const singing = !!(ctx.singing && ctx.singing(tail));
-      // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
-      // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
-      const indic = /[஀-௿ഀ-ൿ]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
-      const need = r.ch === r.v ? .85 : indic ? .4 : .72;
-      // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
-      const bookOk = !r.fuzzy || ctx.engine === 'local';
-      const planned = !!(ctx.inPlan && ctx.inPlan(r));
-      const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9) || (planned && (r.tight || conf >= .5)));
-      if (sure || finals) { st.vbText = ''; st.partRef = null; return { acts: [{ kind: 'ref', r: { book: r.book, ch: r.ch, v: r.v, ve: r.ve }, sure }], stop: true }; }
-      return { acts: [], stop: true };
+    const segs = all.length ? refSegments(all, opts) : [];
+    const prevCand = st.cand; st.cand = '';
+    const acts = []; let usedTo = -1, waiting = false;
+    for (const sg of segs) {
+      const k = bcv(sg.r);
+      if (u.shown && sg.from === 0) {           // the one already shown: only a longer range of it is news
+        if (k === bcv(u.shown.r) && sg.r.ve !== u.shown.r.ve && sg.r.ve > sg.r.v) { u.shown.r = sg.r; acts.push({ kind: 'ref', r: { book: sg.r.book, ch: sg.r.ch, v: sg.r.v, ve: sg.r.ve }, sure: u.shown.sure }); }
+        usedTo = sg.to; continue;
+      }
+      if (u.done.includes(k)) { usedTo = sg.to; continue; }   // a revised partial or the final repeating it
+      const sure = sureOf(sg.r, all.slice(sg.from, sg.to).join(' '), conf, ctx);
+      let go = !!finals;
+      if (!finals && sure) go = sg.closed || closedEnd(all, sg) || prevCand === k;
+      if (!go) { if (!finals && sure) st.cand = k; waiting = true; break; }
+      acts.push({ kind: 'ref', r: { book: sg.r.book, ch: sg.r.ch, v: sg.r.v, ve: sg.r.ve }, sure });
+      u.done.push(k); usedTo = sg.to;
+      u.shown = { words: all.slice(sg.from, sg.to), r: sg.r, sure };
     }
-    if (finals) { const p = pieceStep(st, finals, ctx); if (p) return { acts: [p], stop: true }; }
-    return { acts: [], stop: false };
+    if (usedTo >= 0) {
+      // Spend this update's words up to the end of the last reference used.
+      const inRest = Math.max(0, usedTo - base.length);
+      u.spent = words.slice(0, n + inRest).map(wkey);
+      st.vbText = ''; st.partRef = null;
+    }
+    if (finals) {
+      // The utterance is over: what it said after its last reference stays as context for the next one.
+      const left = usedTo >= 0 ? all.slice(usedTo) : rest;
+      st.vbText = ((usedTo >= 0 ? '' : st.vbText) + ' ' + left.join(' ')).trim().slice(-400);
+      st.utt = { spent: [], shown: null, done: [] }; st.cand = '';
+      if (!segs.length) { const p = pieceStep(st, rest.join(' '), ctx); if (p) return { acts: [p], stop: true }; }
+    }
+    return { acts, stop: segs.length > 0 || waiting };
   }
   // A reference said in pieces, or with one number misheard: "மத்தேயு 1-ஆம் வசனம் <misheard> அதிகாரம்" keeps
   // Matthew ?:1 waiting, and "அஞ்சாம் அதிகாரம்" said next completes it. "Verse 17" alone, said soon after a
@@ -461,12 +569,15 @@
   }
   const refKey = r => `${r.book}.${r.ch}.${r.v}.${r.ve}`;
   /** The heard-reference list (newest first, at most 10). o: { auto (show sure ones on screen), screenKey }.
-   *  Returns { h (the entry), dup (it was already there), show (put it on screen) }. */
+   *  Returns { h (the entry), dup (it was already there), show (put it on screen) }. The same book, chapter and verse
+   *  heard again within half a minute is the same entry: an end verse said after it ("... verses 16 to 18") updates it
+   *  rather than adding a near-duplicate (seen live: Genesis 3:4, Genesis 3:4-24 in the same second). */
   function heardAdd(list, r, src, sure, now, o) {
     o = o || {}; const k = refKey(r);
-    const prev = list.find(x => refKey(x.r) === k);
+    const prev = list.find(x => bcv(x.r) === bcv(r));
     if (prev && now - prev.at < 30000) {
-      // Same reference again within half a minute: no duplicate in the list; re-show it only if the screen moved away.
+      // No duplicate in the list; re-show only if the screen moved away (or the range on it changed).
+      if (refKey(prev.r) !== k) prev.r = Object.assign({}, r);
       prev.at = now; if (sure) prev.sure = true;
       return { h: prev, dup: true, show: !!o.auto && (sure || prev.sure) && o.screenKey !== k };
     }

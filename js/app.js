@@ -502,8 +502,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function pushHeardRef(r, src, sure, listOnly) {
     const res = Bible.heardAdd(heardRefs, r, src, sure, Date.now(), { auto: S.vbAuto, screenKey: screen.kind === 'bible' && screen.bible ? refKey(screen.bible) : '' });
     lastRefAt = Date.now(); if (sure) hunt.lockedAt = lastRefAt;
-    if (res.dup) { if (res.show) showBible(r); renderHeardRefs(); return; }
     try { sessionStorage.setItem('lf-heard-refs', JSON.stringify(heardRefs)); } catch (e) {}
+    if (res.dup) { if (res.show) showBible(r); renderHeardRefs(); return; }
     renderHeardRefs();
     if (res.show) { showBible(r); hideAsk(); }
     else if (!sure && Listen.mode === 'bible' && !listOnly) askRef(r);

@@ -28,6 +28,7 @@ function run(utts, o) {
     }
   };
   const marks = [];   // event number of each word's partial, per utterance
+  if (o.events) { for (const [k, t] of o.events) step(k === 'f' ? t : '', k === 'f' ? '' : t); return { screen, heard: heard.map(h => label(h.r)), sureN: heard.filter(h => h.sure).length, asks, shownAt, marks }; }
   for (const u of said) {
     const w = u.split(/\s+/).filter(Boolean), m = [];
     if (o.finalsOnly) { step(u, ''); m.push(ev); marks.push(m); continue; }
@@ -57,6 +58,23 @@ for (const [lang, [g, d]] of Object.entries(GD)) for (const pause of [false, tru
     same(r.screen, want) && r.heard.length === 2 && !r.screen.includes('Deuteronomy 3:4') && !r.screen.includes('Genesis 6:4'),
     `screen ${JSON.stringify(r.screen)} heard ${JSON.stringify(r.heard)}`);
 }
+
+// ---------- more shapes of the same thing ----------
+const S = (name, utts, o, want, heardN) => { const r = run(utts, o); check(name, same(r.screen, want) && (heardN == null || r.heard.length === heardN), `screen ${JSON.stringify(r.screen)} heard ${JSON.stringify(r.heard)} asks ${JSON.stringify(r.asks)}`); return r; };
+S('one final holding both (clip engines)', ['Genesis chapter 3 verse 4 Deuteronomy chapter 6 verse 4'], { finalsOnly: true }, [G, D], 2);
+S('one final holding both, Tamil', [GD.ta.join(' ')], { finalsOnly: true }, [G, D], 2);
+S('book said, a pause, then its numbers (ta)', ['ஆதியாகமம்', 'மூன்றாவது அதிகாரம் நான்காவது வசனம்'], {}, [G], 1);
+S('book at the end of one utterance, numbers in the next (ta)', ['ஆதியாகமம் மூன்றாவது அதிகாரம் நான்காவது வசனம் உபாகமம்', 'ஆறாவது அதிகாரம் நான்காவது வசனம்'], {}, [G, D], 2);
+S('pieces with words between (en)', ['turn to Genesis chapter three and verse four'], {}, [G], 1);
+S('open your Bibles, Genesis, third chapter, we will read from verse four', ['open your Bibles Genesis third chapter we will read from verse four'], {}, [G], 1);
+S('twenty one is never twenty (en)', ['John chapter 3 verse twenty one'], {}, ['John 3:21'], 1);
+S('இருபத்தி ஒன்றாம் is never 20 (ta)', ['யோவான் மூன்றாம் அதிகாரம் இருபத்தி ஒன்றாம் வசனம்'], {}, ['John 3:21'], 1);
+S('Malayalam ഇരുപത്തിയൊന്നാം', ['യോഹന്നാൻ മൂന്നാം അദ്ധ്യായം ഇരുപത്തിയൊന്നാം വാക്യം'], {}, ['John 3:21'], 1);
+{ const r = run(['John chapter 3 verses 16 to 18 and then we pray'], {});
+  check('a range said after the verse updates the same entry', r.heard.length === 1 && r.heard[0] === 'John 3:16–18' && r.screen[r.screen.length - 1] === 'John 3:16–18' && r.screen.every(x => x.startsWith('John 3:16')), `screen ${JSON.stringify(r.screen)} heard ${JSON.stringify(r.heard)}`); }
+S('a revised partial does not show it twice', [], { events: [['p', 'Genesis chapter 3 verse 4'], ['p', 'Genesis chapter 3 verse 4 and'], ['p', 'Genesis chapter 3 verse 4 and Deuteronomy'], ['p', 'Genesis chapter three verse 4 and Deuteronomy chapter'], ['p', 'Genesis chapter three verse 4 and Deuteronomy chapter 6 verse 4'], ['p', 'Genesis chapter three verse 4 and Deuteronomy chapter 6 verse 4 we'], ['f', 'Genesis chapter three verse four and Deuteronomy chapter six verse four']] }, [G, D], 2);
+S('the live Sarvam transcript (ta): ஆதி அகம மூன்றாவது தவத்து மூணாவது வசனம்', ['ஆதி அகம மூன்றாவது தவத்து மூணாவது வசனம்'], {}, ['Genesis 3:3'], 1);
+S('the same reference said again later in the utterance: shown once', ['John 3 16 that is John 3 16'], {}, ['John 3:16'], 1);
 
 // ---------- latency: partials after the last word of the reference until it is on screen (0 = on that word) ----------
 const LAT = {
