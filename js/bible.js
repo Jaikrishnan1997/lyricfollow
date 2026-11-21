@@ -313,7 +313,8 @@
   }
   function prepToks(text) {
     // Decoration words ("book", "gospel", "ലേഖനം"...) and fillers ("ആ", "ഈ", "அதாவது", "uh", "the") are dropped.
-    let raw = Core.keyWords(Core.hindiPre(text)).split(/\s+/).filter(Boolean);
+    // English "then" sounds like "ten" to the key ('Genesis 1 2 then Exodus' is not 1:2-10)
+    let raw = Core.keyWords(Core.hindiPre(String(text == null ? '' : text).replace(/(^|[^A-Za-z])then(?![A-Za-z])/gi, '$1thereafter'))).split(/\s+/).filter(Boolean);
     // Tamil "நாள்" (day) has the same sound key as Malayalam "നാല്" (four): in Tamil text it is a day, never a number.
     if (/[\u0B80-\u0BFF]/.test(text)) raw = raw.map(t => t === 'nal' ? 'day' : t);
     // "ഒന്ന്" (one) and Tamil-letter "ஃபோர்" (four) have the sound keys of English "on" / "for", which are not numbers in English text.

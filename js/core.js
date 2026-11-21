@@ -504,6 +504,8 @@
 
   /** All numbers in a phrase, digits or spoken words. Adjacent tens+units are combined ("twenty three" → 23). */
   function numbers(text) {
+    // English "then" has the sound key of "ten" ("Genesis 1 2 then Exodus" is not 1:2-10); kept as a word so token places stay put.
+    text = String(text == null ? '' : text).replace(/(^|[^A-Za-z])then(?![A-Za-z])/gi, '$1thereafter');
     const toks = keyWords(text).split(/\s+/).filter(Boolean);
     const out = [], at = [];   // at: the token where each number starts
     let prevWord = false;

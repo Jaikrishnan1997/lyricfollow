@@ -119,4 +119,9 @@ console.log('latency (partials after the last word):', JSON.stringify(lat));
   }
   console.log('sermon talk (300 lines each):', JSON.stringify(res));
 }
+// ---------- review v83: English "then" is not "ten" (its sound key is the same) ----------
+for (const [u, want] of [['Genesis 1 2 then Exodus 20 3', ['Genesis 1:2', 'Exodus 20:3']], ['read Genesis 1 2 then we go on', ['Genesis 1:2']],
+  ['Genesis 1 2 then 3', ['Genesis 1:2']], ['John chapter ten verse ten', ['John 10:10']]]) {
+  const r = run([u], {}); check(`then is not ten: ${u}`, same(r.screen, want), JSON.stringify(r.screen));
+}
 { console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
