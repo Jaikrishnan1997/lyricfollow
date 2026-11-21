@@ -357,7 +357,8 @@
     // Ordinals glued to the next word by speech recognisers ("padinaramvakyam") are accepted too.
     if (!parts || !(SUFFIX.test(rest) || (rest === 'a' && k.length >= 6) || (/^am/.test(rest) && k.length - rest.length >= 4))) {
       if (k.length >= 6) { const sk = skel(k); const hit = numSkel().find(([x]) => sk.startsWith(x)); if (hit) return hit[1]; }
-      if (k.length >= 5 && k.length <= 9) { for (const [stem, v] of numKeys()) for (const suf of ['', 'am', 'u']) { const full = stem + suf; if (full.length >= 5 && full.length === k.length && lev1(full, k)) return v; } }
+      // (stems of 4+ letters only: "வாரம்" (week, varam) is one letter from "van"+am, the English "one" in Tamil letters)
+      if (k.length >= 5 && k.length <= 9) { for (const [stem, v] of numKeys()) for (const suf of ['', 'am', 'u']) { const full = stem + suf; if (stem.length >= 4 && full.length >= 5 && full.length === k.length && lev1(full, k)) return v; } }
       return null;
     }
     return total;

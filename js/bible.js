@@ -166,6 +166,12 @@
   const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth'].map(w => Core.keyWords(w)).join('|') + ')$');
   // Book names that are also everyday words in the other languages (Tamil "வெளி" = outside, "roma"): not enough alone.
   const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா'].map(kn));
+  // What people count in sermon talk, on the sound key (prefix): days, people, times, years, money, hours...
+  const COUNT = ['day', 'days', 'people', 'person', 'persons', 'times', 'time', 'year', 'years', 'rupees', 'rupee', 'minute', 'hour', 'week', 'month', 'children', 'kilomet', 'men', 'women', 'oclock', 'lakh', 'thousand', 'brothers', 'sisters',
+    'நாட்கள்', 'பேர்', 'தடவை', 'முறை', 'வருஷம்', 'வருடம்', 'மணி', 'நிமிஷம்', 'ரூபாய்', 'மாசம்', 'மாதம்', 'வாரம்', 'பிள்ளைகள்', 'கிலோமீட்டர்', 'வயது', 'லட்சம்', 'ஆயிரம்',
+    'ദിവസം', 'ദിവസങ്ങൾ', 'പേർ', 'പ്രാവശ്യം', 'തവണ', 'വർഷം', 'മണി', 'മിനിറ്റ്', 'രൂപ', 'ആഴ്ച', 'മാസം', 'മക്കൾ', 'കിലോമീറ്റർ', 'വയസ്സ്', 'ലക്ഷം', 'ആയിരം',
+    'दिन', 'लोग', 'बार', 'साल', 'वर्ष', 'बजे', 'मिनट', 'रुपये', 'हफ्ते', 'महीने', 'बच्चे', 'घंटे', 'किलोमीटर', 'हज़ार'].map(kn);
+  const isCount = t => !!t && !/\d/.test(t) && COUNT.some(c => t === c || (c.length >= 4 && t.startsWith(c)));
   function hasCue(toks) { return toks.some(t => { const k = t.replace(/[^a-z]/g, ''); if (CUE.has(k)) return true; for (const c of CUE) if (c.length >= 5 && k.length >= 5 && k.startsWith(c.slice(0, 5))) return true; return false; }); }
   const ORD = { first: '1', '1st': '1', second: '2', '2nd': '2', third: '3', '3rd': '3', ii: '2', iii: '3', onnam: '1', rantam: '2', munam: '3' };
   // Spoken text is normalised by keyWords before lookup ("second" -> "secont"), so index the normalised forms too.
@@ -240,6 +246,7 @@
     let raw = Core.keyWords(text).split(/\s+/).filter(Boolean);
     // Tamil "நாள்" (day) has the same sound key as Malayalam "നാല്" (four): in Tamil text it is a day, never a number.
     if (/[\u0B80-\u0BFF]/.test(text)) raw = raw.map(t => t === 'nal' ? 'day' : t);
+    raw = joinBookParts(raw);
     // "<book> (written) first letter" -> "1 <book>", before the letter word is dropped as decoration.
     for (let i = 2; i < raw.length; i++) {
       if (!LETTER.test(raw[i])) continue;
@@ -297,6 +304,32 @@
       return !(j < toks.length && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
     });
     return toks;
+  }
+  // The five Tamil books ending in ...ஆகமம் differ only in the part before the ending, and the recogniser splits or
+  // shortens them ("ஆதி அகம", "உப ஆகமம்", "யாத்திர ஆகமம்", Malayalam letters "യാത്തിര ആഗമം"): the part before decides,
+  // and the ending alone ("ஆகமம்", "the scripture") names no book (live: a bare ஆகமம் was taken for Numbers).
+  // Malayalam book + പുസ്തകം (book), glued or not ("ആവർത്തനപുസ്തകം", "ലേവ്യ പുസ്തകം"), works the same way.
+  const AGAMA_PRE = new Map([['ati', 0], ['atiy', 0], ['yatir', 1], ['yatira', 1], ['yatr', 1], ['yatra', 1], ['leviyar', 2], ['leviyara', 2], ['leviya', 2], ['levi', 2], ['leviar', 2], ['en', 3], ['ena', 3], ['up', 4], ['upa', 4]]);
+  const AGAMA_KEY = ['ஆதியாகமம்', 'யாத்திராகமம்', 'லேவியராகமம்', 'எண்ணாகமம்', 'உபாகமம்'].map(kn);
+  const AGAMA_END = /^akam(a|am|at[a-z]*)?$/;
+  const PUST = /^([a-z]{3,}?)(pustak|putak)(am|at[a-z]*)?$/;
+  const pustStem = st => ALIAS.has(st + 'pustakam') ? st + 'pustakam' : stemBook(st) || (ALIAS.has(st + 'm') ? st + 'm' : null);
+  function joinBookParts(raw) {
+    const out = [];
+    for (const t of raw) {
+      const p = out[out.length - 1];
+      if (AGAMA_END.test(t)) { if (p != null && AGAMA_PRE.has(p)) out[out.length - 1] = AGAMA_KEY[AGAMA_PRE.get(p)]; continue; }
+      const g = !ALIAS.has(t) && !stemBook(t) && t.match(/^([a-z]+?)y?akam(a|am|at[a-z]*)?$/);
+      if (g && AGAMA_PRE.has(g[1])) { out.push(AGAMA_KEY[AGAMA_PRE.get(g[1])]); continue; }
+      const m = !ALIAS.has(t) && t.match(PUST);
+      if (m && !stemBook(t)) { const st = pustStem(m[1]); if (st) { out.push(st); continue; } }
+      if (/^(pustak|putak)(am|at[a-z]*)?$/.test(t)) {        // "ആവർത്തന (ആ) പുസ്തകം": the word before, past a filler
+        let j = out.length - 1; while (j > 0 && (FILLER.has(out[j]) || /^[aeiou]{1,2}$/.test(out[j]))) j--;
+        const q = out[j]; if (q && q.length >= 3 && !/\d/.test(q) && !stemBook(q)) { const st = pustStem(q); if (st) out[j] = st; }
+      }
+      out.push(t);
+    }
+    return out;
   }
   function ordValue(t) { if (ORD[t]) return +ORD[t]; if (BOOKORD.has(t)) return BOOKORD.get(t); const n = Core.numbers(t); return n.length === 1 && n[0] <= 3 && !/^\d/.test(t) ? n[0] : 0; }
   // A numbered book's key from a number and a book word with its case ending ("കൊരിന്ത്യർക്ക്", "கொரிந்தியருக்கு"), or null.
@@ -365,11 +398,14 @@
       let a = 0; while (a < 2 && a < numToks.length && !isNum(numToks[a])) a++;
       let m = a; while (m < numToks.length && (isNum(numToks[m]) || (m > a && /^(colon|kolan|and|to|tu|ant)$/.test(numToks[m])))) m++;
       nums = Core.numbers(numToks.slice(a, m).join(' ')); bare = numToks.slice(a, m); bare.end = m;
+      // Numbers that count something ("ரெண்டு மூணு நாள்", "12 people", "दो साल") are not a chapter and verse.
+      if (isCount(numToks[m])) return null;
     }
     if (opts.needChapter && !nums.length) return null;
     const book = BOOKS[f.book];
     // Speech models often glue chapter and verse into one number ("828" for 8:28): split it where both parts are valid.
-    if (nums.length === 1 && nums[0] > book.ch && book.ch > 1) {
+    // (only digits: "twelve" said as a word after Esther is never Esther 1:2)
+    if (nums.length === 1 && nums[0] > book.ch && book.ch > 1 && (bare || numToks).includes(String(nums[0]))) {
       const d = String(nums[0]); let best = null;
       for (let i = 1; i < d.length; i++) { const c = +d.slice(0, i), v = +d.slice(i); if (c >= 1 && c <= book.ch && v >= 1 && v <= 176 && !d.slice(i).startsWith('0')) best = best || [c, v]; }
       if (best) nums = best;

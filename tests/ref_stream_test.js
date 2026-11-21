@@ -91,3 +91,14 @@ for (const [k, u] of Object.entries(LAT)) {
 console.log('latency (partials after the last word):', JSON.stringify(lat));
 module.exports = { run };
 if (require.main === module) { console.log(fails ? `${fails} stream check(s) failed` : 'stream checks passed'); if (fails) process.exitCode = 1; }
+// ---------- ordinary sermon talk, word by word: never sure; how many are only offered (asked) ----------
+{
+  const { talk } = require('./sermon_talk.js'), res = {};
+  for (const lang of ['en', 'ta', 'ml', 'hi']) {
+    let sure = 0, ask = 0; const bad = [];
+    for (const line of talk(lang, 300)) { const r = run([line], {}); sure += r.screen.length; ask += r.asks.length; if (r.screen.length || (V && r.asks.length)) bad.push(`${r.screen.length ? 'SURE' : 'ask '} ${JSON.stringify(r.screen.concat(r.asks))} | ${line}`); }
+    res[lang] = { sure, ask };
+    check(`sermon talk ${lang}: 0 sure of 300 (asked ${ask})`, sure === 0, bad.slice(0, 12).join('\n     '));
+  }
+  console.log('sermon talk (300 lines each):', JSON.stringify(res));
+}
