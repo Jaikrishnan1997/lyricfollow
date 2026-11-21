@@ -335,7 +335,8 @@
     <div class="phead"><h3 data-i18n="ai_follow">AI lyrics follow</h3><span class="netbadge engine-badge"></span></div>
     <div class="seg" role="group">
       <button type="button" data-lm="songs">♪ <span data-i18n="lm_songs">Singing</span></button>
-      <button type="button" data-lm="bible">📖 <span data-i18n="lm_bible">Preacher (Bible)</span></button>
+      <button type="button" data-lm="preach">📖 <span data-i18n="lm_preach">Preach</span></button>
+      <button type="button" data-lm="bible">📖 <span data-i18n="lm_bible">Preach + Message</span></button>
       <button type="button" data-lm="psalm">📜 <span data-i18n="lm_psalm">Psalm reading</span></button>
     </div>
     <div id="lmPsalm" class="lmbible" hidden>
@@ -357,6 +358,7 @@
         <label class="field"><span data-i18n="quiz_delay">Answer after</span><select id="quizDelay"><option value="0">0 s</option><option value="4">4 s</option><option value="8">8 s</option><option value="15">15 s</option></select></label>
       </div>
       <label class="check"><input type="checkbox" id="quizFull"> <span data-i18n="quiz_full">Questions from every book, verse by verse</span></label>
+      <p class="hint" id="lmHint" data-i18n="message_hint">Also shows a verse when it is read or quoted without saying where it is from.</p>
     </div>
     <p class="msg" id="fileWarn" hidden></p>
     <button class="wide" id="btnListen"></button>

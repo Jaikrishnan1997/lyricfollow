@@ -366,10 +366,10 @@
   /** All numbers in a phrase, digits or spoken words. Adjacent tens+units are combined ("twenty three" → 23). */
   function numbers(text) {
     const toks = keyWords(text).split(/\s+/).filter(Boolean);
-    const out = [];
+    const out = [], at = [];   // at: the token where each number starts
     let prevWord = false;
     for (let ti = 0; ti < toks.length; ti++) {
-      const t = toks[ti];
+      const t = toks[ti]; at.length = out.length; at.push(ti);
       if (/^\d+$/.test(t)) { out.push(+t); prevWord = false; continue; }
       // Digits with an ordinal ending glued on ("3m" from Tamil 3ம், "16am", "5th").
       const dm = t.match(/^(\d+)[a-z]{1,6}$/); if (dm) { out.push(+dm[1]); prevWord = false; continue; }   // also "10avatu" (Tamil 10ஆவது)
@@ -378,7 +378,8 @@
       // A number word split in two by the speech model ("padina ramvakyam" = padinaram vakyam) is tried first.
       if (k.length >= 4 && toks[ti + 1] && !/^\d/.test(toks[ti + 1])) {
         const j = wordNumber(k + toks[ti + 1].replace(/[^a-z]/g, ''));
-        if (j != null && wordNumberExact(k) == null) { n = j; ti++; }
+        // (not when the first word already gives that number: "ഇരുപത്തിമൂന്നാം ഒന്നാം" is 23 and 1)
+        if (j != null && wordNumberExact(k) == null && j !== wordNumber(k)) { n = j; ti++; }
       }
       if (n == null && k) n = wordNumber(k);
       if (n == null) { prevWord = false; continue; }
@@ -388,7 +389,8 @@
       prevWord = true;
     }
     // "20 28" for twenty-eight (the model writes the tens and then the full number): keep the full number.
-    if (out.length >= 3) for (let i = 1; i + 1 < out.length; i++) if (out[i] % 10 === 0 && out[i] >= 20 && out[i + 1] > out[i] && out[i + 1] <= out[i] + 9) { out.splice(i, 1); i--; }
+    // Only when the two stand side by side: "verses 20 to 22" is a range, not twenty-two.
+    if (out.length >= 3) for (let i = 1; i + 1 < out.length; i++) if (out[i] % 10 === 0 && out[i] >= 20 && out[i + 1] > out[i] && out[i + 1] <= out[i] + 9 && at[i + 1] - at[i] <= 1) { out.splice(i, 1); at.splice(i, 1); i--; }
     return out;
   }
 

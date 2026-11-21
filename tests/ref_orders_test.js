@@ -40,8 +40,33 @@ const cases=[
 ['1 யோவான் 1 9','1 John 1:9'],['முதலாம் யோவான் முதலாம் அதிகாரம் ஒன்பதாம் வசனம்','1 John 1:9'],['யோவான் எழுதின முதலாம் நிருபம் முதலாம் அதிகாரம் ஒன்பதாம் வசனம்','1 John 1:9'],
 // colloquial
 ['யோவான் மூணாவது அதிகாரம் பதினாறாவது வசனம்','John 3:16'],['യോഹന്നാൻ മൂന്നിന്റെ പതിനാറ്','John 3:16'],['யோவான் மூன்று பதினாறு','John 3:16'],['യോഹന്നാൻ മൂന്ന് പതിനാറ്','John 3:16'],
+// more orders: book-chapter-verse, book-verse-chapter, chapter-verse-book, verse-chapter-book, with and without the book word
+['John verse 16 chapter 3','John 3:16'],['chapter 3 verse 16 John','John 3:16'],['verse 16 of chapter 3 of John','John 3:16'],['the book of Romans verse 28 chapter 8','Romans 8:28'],
+['chapter 8 verse 28 of the letter to the Romans','Romans 8:28'],['verse 1 of Psalm 23','Psalms 23:1'],['the 23rd Psalm verse 1','Psalms 23:1'],['Genesis one one and two','Genesis 1:1'],
+['Matthew chapter 5 verses 3 to 10','Matthew 5:3'],['Isaiah fifty three five','Isaiah 53:5'],['verse 4 of first Corinthians chapter 13','1 Corinthians 13:4'],['the gospel of John chapter 3 verse 16','John 3:16'],
+['യോഹന്നാൻ പതിനാറാം വാക്യം മൂന്നാം അദ്ധ്യായം','John 3:16'],['യോഹന്നാന്റെ സുവിശേഷം പതിനാറാം വാക്യം മൂന്നാം അദ്ധ്യായം','John 3:16'],['മൂന്നാം അദ്ധ്യായം പതിനാറാം വാക്യം യോഹന്നാൻ എഴുതിയ സുവിശേഷം','John 3:16'],
+['പതിനാറാം വാക്യം യോഹന്നാൻ മൂന്നാം അദ്ധ്യായം','John 3:16'],['റോമർ എട്ടിന്റെ ഇരുപത്തിയെട്ട്','Romans 8:28'],['ഉല്പത്തി പുസ്തകത്തിൽ ഒന്നാം അദ്ധ്യായം ഒന്നാം വാക്യം','Genesis 1:1'],
+['ഉല്പത്തി പുസ്തകത്തിലെ ഒന്നാം അദ്ധ്യായത്തിലെ ഒന്നാം വാക്യം','Genesis 1:1'],['യോഹന്നാന്റെ സുവിശേഷത്തിലെ മൂന്നാം അദ്ധ്യായത്തിന്റെ പതിനാറാം വാക്യം','John 3:16'],
+['റോമർക്ക് എഴുതിയ ലേഖനത്തിലെ എട്ടാം അധ്യായം ഇരുപത്തിയെട്ടാം വചനം','Romans 8:28'],['സങ്കീർത്തനം ഇരുപത്തിമൂന്നാം അദ്ധ്യായത്തിൽ ഒന്നാം വാക്യത്തിൽ','Psalms 23:1'],
+['മത്തായി അഞ്ചാം അദ്ധ്യായം മൂന്നു മുതൽ പത്തു വരെ വാക്യങ്ങൾ','Matthew 5:3'],['പൗലോസ് കൊരിന്ത്യർക്ക് എഴുതിയ രണ്ടാം ലേഖനം അഞ്ചാം അദ്ധ്യായം പതിനേഴാം വാക്യം','2 Corinthians 5:17'],
+['ulpathi pusthakam onnam adhyayam onnam vakyam','Genesis 1:1'],['റോമർക്ക് എഴുതിയ ലേഖനത്തിന്റെ എട്ടാം അദ്ധ്യായം ഇരുപത്തിയെട്ടാം വാക്യം','Romans 8:28'],['മത്തായി എഴുതിയ സുവിശേഷത്തിന്റെ അഞ്ചാം അദ്ധ്യായം മൂന്നാം വാക്യം','Matthew 5:3'],
+['യോഹന്നാൻ മൂന്നാം അദ്ധ്യായം പതിനാറു മുതൽ പതിനെട്ടു വരെയുള്ള വാക്യങ്ങൾ','John 3:16'],
+['யோவான் பதினாறாம் வசனம் மூன்றாம் அதிகாரம்','John 3:16'],['மூன்றாம் அதிகாரம் பதினாறாம் வசனம் யோவான் சுவிசேஷம்','John 3:16'],['பதினாறாம் வசனம் யோவான் மூன்றாம் அதிகாரம்','John 3:16'],
+['ஆதியாகமம் புத்தகத்தில் முதலாம் அதிகாரம் முதலாம் வசனம்','Genesis 1:1'],['ஆதியாகமம் புஸ்தகம் முதலாம் அதிகாரத்தில் முதல் வசனத்தில்','Genesis 1:1'],
+['ஆதியாகமம் புத்தகத்தின் முதலாம் அதிகாரத்தின் முதலாம் வசனம்','Genesis 1:1'],['ஆதியாகமம் புஸ்தகத்தின் முதலாம் அதிகாரம் முதலாம் வசனம்','Genesis 1:1'],
+['யோவான் சுவிசேஷத்தில் மூன்றாம் அதிகாரம் பதினாறாம் வசனம்','John 3:16'],['யோவான் சுவிசேஷத்தின் மூன்றாம் அதிகாரம் பதினாறாம் வசனம்','John 3:16'],
+['ரோமருக்கு எழுதின நிருபத்தில் எட்டாம் அதிகாரம் இருபத்தெட்டாம் வசனம்','Romans 8:28'],['ரோமருக்கு எழுதின நிருபத்தின் எட்டாம் அதிகாரம் இருபத்தெட்டாம் வசனம்','Romans 8:28'],
+['மத்தேயு ஐந்தாம் அதிகாரம் மூன்று முதல் பத்து வரையுள்ள வசனங்கள்','Matthew 5:3'],['இரண்டாம் கொரிந்தியர் ஐந்தாம் அதிகாரம் பதினேழாம் வசனம்','2 Corinthians 5:17'],
+['கொரிந்தியருக்கு எழுதின இரண்டாம் நிருபம் ஐந்தாம் அதிகாரம் பதினேழாம் வசனம்','2 Corinthians 5:17'],['aathiyagamam puthagam mudhalam adhikaram mudhalam vasanam','Genesis 1:1'],
+['aathiyagamam puththagam 1 adhikaram 1 vasanam','Genesis 1:1'],['ulpathi pustakam 1 adhyayam 1 vakyam','Genesis 1:1'],['ulpathi pusthagam 1 adhyayam 1 vakyam','Genesis 1:1'],
+// negatives: ordinary sermon talk with numbers and a name that is also a book (must be null)
+['John was 3 years old when 16 people came','null'],['Mark had 2 brothers and 5 sisters','null'],['James told me 3 times in 10 minutes','null'],['Ruth walked 2 miles in 30 minutes','null'],
+['Job lost 7 sons and 3 daughters','null'],['the acts of 12 men in 3 days','null'],['the numbers are 40 and 50','null'],['judges sat for 3 days and 7 nights','null'],
+['first John came and then 3 people followed after 16 days','null'],['in chapter 3 of my life I met John','null'],['யோவான் மூன்று நாள் பதினாறு பேருடன் இருந்தான்','null'],
+['മർക്കൊസ് രണ്ടു ദിവസം അഞ്ചു പേരോടൊപ്പം','null'],['യോഹന്നാൻ മൂന്നു പേരോടൊപ്പം പതിനാറു ദിവസം താമസിച്ചു','null'],['we sang 3 songs and read 2 psalms','null'],
 // negatives (must be null)
 ['John said to him three times','null'],['there were 3 men and 16 women','null'],['the book is on the table','null'],['അവൻ മൂന്നു ദിവസം അവിടെ പാർത്തു','null'],['அவர் மூன்று நாள் அங்கே இருந்தார்','null'],
 ];
 let bad=0;for(const [s,want] of cases){const r=Bible.parseRef(s,o);const got=r?Bible.refLabel({book:r.book,ch:r.ch,v:r.v,ve:r.v},'en'):'null';if(got!==want){bad++;console.log('FAIL',JSON.stringify(s),'->',got,'want',want);}}
 console.log(cases.length-bad,'ok of',cases.length);
+if(bad)process.exitCode=1;
