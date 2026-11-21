@@ -1032,7 +1032,9 @@
    *  were recognised heardAgo s ago. True when a breath now ends the line - only near its end, and only while
    *  words are being heard (not over an instrumental part or after the singing stopped). */
   function leadCue(o) {
-    if (!(o.heardAgo <= 6) || !(o.dueIn <= Math.max(1.2, (o.lineSec || 3) * .4))) return false;
+    // near the end: the last ~30% of the line by Lead's estimate, never more than 2 s before it (an estimate made
+    // before the song's speed is measured is long, and 30% of it would be most of a line)
+    if (!(o.heardAgo <= 6) || !(o.dueIn <= Math.min(2, Math.max(.8, (o.lineSec || 3) * .3)))) return false;
     return breathDip(o.chunks, o.rate);
   }
   /* ---------- Sarvam's live stream for singing ----------

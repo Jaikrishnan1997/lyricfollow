@@ -585,7 +585,10 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
       if (withDevice && S.micId) a.deviceId = { exact: S.micId };
       return { audio: a };
     },
-    async start() {
+    // One opening at a time: the warm start at load and Start listening could both ask for the microphone at once and
+    // open two (seen with the recording on: two recordings began together).
+    start() { if (this.stream) return Promise.resolve(true); if (!this.opening) this.opening = this.open().finally(() => { this.opening = null; }); return this.opening; },
+    async open() {
       if (this.stream) return true;
       try {
         try { this.stream = await navigator.mediaDevices.getUserMedia(this.constraints(true)); }
@@ -752,7 +755,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     render() {
       const e = $('recSize'); if (!e) return;
       const sec = this.tl ? (this.full ? this.MAX : Date.now() - this.t0) / 1000 : 0;
-      e.textContent = this.tl ? `${t('rec_size')}: ${Math.round(sec / 60)} min · ${(this.bytes / 1e6).toFixed(1)} MB${this.cur ? ' ●' : ''}${this.full ? ' · ' + t('rec_full') : ''}` : '';
+      e.textContent = this.tl ? `${t('rec_size')}: ${Math.round(sec / 60)} min · ${this.bytes < 1e6 ? Math.round(this.bytes / 1e3) + ' KB' : (this.bytes / 1e6).toFixed(1) + ' MB'}${this.cur ? ' ●' : ''}${this.full ? ' · ' + t('rec_full') : ''}` : '';
     },
     // the audio part(s) and the timeline as files on this computer
     async save() {

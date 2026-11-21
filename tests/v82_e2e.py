@@ -56,6 +56,9 @@ try:
     pg.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None); pg.on('pageerror', lambda e: errs.append('PAGEERROR ' + str(e)))
     pg.goto(URL); pg.wait_for_timeout(2500)
     ev = pg.evaluate
+    def listen(on):   # start or stop listening only when it is not so already
+        if ev("document.getElementById('btnListen').classList.contains('on')") != on: pg.click('#btnListen')
+        pg.wait_for_timeout(1500 if on else 300)
     # ---------- widths: no horizontal scroll on any tab ----------
     for w in (1280, 400):
         pg.set_viewport_size({'width': w, 'height': 800 if w > 500 else 860})
@@ -79,22 +82,21 @@ try:
     # ---------- microphone: the chosen device and channel are what getUserMedia is asked ----------
     dev = mics[1][0]
     pg.select_option('#stMic', dev); pg.select_option('#stMicCh', 'right'); pg.wait_for_timeout(300)
-    ev("window.__gum = []")
-    pg.click('.tabs button[data-tab=live]'); pg.click('.seg [data-lm=songs]'); pg.click('#btnListen'); pg.wait_for_timeout(1800)
+    pg.click('.tabs button[data-tab=live]'); pg.click('.seg [data-lm=songs]'); listen(True); pg.wait_for_timeout(300)
     g = ev('window.__gum'); m = ev('LF_DEBUG.mic()')
     ok(any(x.get('audio', {}).get('deviceId', {}).get('exact') == dev and x['audio'].get('channelCount') == 2 for x in g), f'getUserMedia asked for the chosen microphone, both channels for "Right" ({g[-1] if g else None})')
     ok(m['open'], f'microphone open (side taken: {m["side"] or "mono input - nothing to choose"})')
     hp = ev("[...document.querySelectorAll('#micHealth, #micHealth2')].map(e => !e.hidden && e.textContent)")
     pg.wait_for_timeout(4500); hp = ev("[...document.querySelectorAll('#micHealth, #micHealth2')].map(e => e.hidden ? '' : e.className + ':' + e.textContent)")
     ok(any(hp), f'microphone health pill still shows {hp}')
-    pg.click('#btnListen'); pg.wait_for_timeout(300)
+    listen(False)
     # a microphone that is gone: the default is used
     pg.click('.tabs button[data-tab=settings]'); ev("window.__gum = []")
     ev("(() => { const s = document.getElementById('stMic'); s.appendChild(new Option('gone', 'no-such-device')); s.value = 'no-such-device'; s.dispatchEvent(new Event('change')); })()")
-    pg.click('.tabs button[data-tab=live]'); pg.click('#btnListen'); pg.wait_for_timeout(1800)
+    pg.click('.tabs button[data-tab=live]'); listen(True); pg.wait_for_timeout(300)
     g = ev('window.__gum')
     ok(len(g) >= 2 and 'deviceId' not in g[-1]['audio'] and ev('LF_DEBUG.mic().open'), 'a microphone that is gone: the default one is opened instead')
-    pg.click('#btnListen'); pg.wait_for_timeout(300)
+    listen(False)
     pg.click('.tabs button[data-tab=settings]'); pg.select_option('#stMic', ''); pg.select_option('#stMicCh', 'both'); pg.wait_for_timeout(300)
     # ---------- the four listening modes ----------
     pg.click('.tabs button[data-tab=live]')
@@ -115,7 +117,7 @@ try:
         for title in ('V82 EN', 'V82 ML', 'V82 TA', 'V82 BI'):
             ev(f"LF_DEBUG.open({json.dumps(title)})"); ev("document.querySelectorAll('#slides .ln')[2].click()")
             for (W, H) in ((1280, 720), (1920, 1080)):
-                proj.set_viewport_size({'width': W, 'height': H}); proj.wait_for_timeout(250)
+                proj.set_viewport_size({'width': W, 'height': H}); proj.evaluate("dispatchEvent(new Event('resize'))"); proj.wait_for_timeout(300)
                 o = proj.evaluate("(() => { const t = document.querySelector('.lf-txt'); return { n: t.querySelectorAll('p').length, small: t.querySelectorAll('p.next').length, dim: t.querySelectorAll('p.dim').length, over: t.scrollHeight > t.clientHeight + 1 || t.scrollWidth > t.clientWidth + 1, fs: t.style.fontSize }; })()")
                 want = {'line': (1, 0), 'pair': (2, 1), 'slide': (8, 7)}[mode] if title != 'V82 BI' else {'line': (2, 0), 'pair': (4, 2), 'slide': (6, 4)}[mode]
                 ok(not o['over'] and o['n'] == want[0] and (o['small'] if mode == 'pair' else o['dim']) == want[1], f'{mode} {title} {W}x{H}: {o["n"]} lines, fits (font {o["fs"]})')
@@ -125,9 +127,13 @@ try:
     # ---------- the follower through LF_DEBUG.clip: jump pattern 1 2 3 1 2 3 1 2 4 1 on the English song ----------
     pg.click('.tabs button[data-tab=live]')
     ev("LF_DEBUG.open('V82 EN')"); ev("LF_DEBUG.mode('songs')")
+    # (the first two thirds of each line: a clip ends while the line is still being sung; a whole line would mean the
+    # singer has finished it, and the line timing then rightly shows the next one)
     L = EN8.split('\n'); pat = [0, 1, 2, 0, 1, 2, 0, 1, 3, 0]; path = []
     for k in pat:
-        r = ev(f"LF_DEBUG.clip({json.dumps(L[k])})"); pg.wait_for_timeout(2600); path.append(ev('LF_DEBUG.state().cur'))
+        # sung at about 0.55 s a word: the clip ends two thirds into the line, the screen is read just after it
+        w = L[k].split(' '); n2 = max(3, len(w) * 2 // 3); pg.wait_for_timeout(int(n2 * 550))
+        r = ev(f"LF_DEBUG.clip({json.dumps(' '.join(w[:n2]))})"); pg.wait_for_timeout(500); path.append(ev('LF_DEBUG.state().cur')); pg.wait_for_timeout(int((len(w) - n2) * 550))
     right = sum(1 for a, b in zip(pat, path) if a == b)
     ok(right >= 8, f'jump pattern {pat} followed: screen {path} ({right}/10 right)')
     pg.screenshot(path=f'{SHOTS}/follow_jump_operator.png')
@@ -143,7 +149,7 @@ try:
     ev("LF_DEBUG.mode(null)")
     # ---------- recording: timeline (and audio) saved as files, replayed ----------
     pg.click('.tabs button[data-tab=settings]'); pg.check('#stRecord')
-    pg.click('.tabs button[data-tab=live]'); pg.click('.seg [data-lm=songs]'); pg.click('#btnListen'); pg.wait_for_timeout(1500)
+    pg.click('.tabs button[data-tab=live]'); pg.click('.seg [data-lm=songs]'); listen(True)
     ev("LF_DEBUG.open('V82 TA')")
     T = TA8.split('\n')
     for k in [0, 1, 2, 0, 1, 2, 3]:
@@ -151,7 +157,7 @@ try:
     ev("document.querySelectorAll('#slides .ln')[6].click()"); pg.wait_for_timeout(500)
     ev(f"LF_DEBUG.clip({json.dumps(T[7])})"); pg.wait_for_timeout(5500)
     pg.click('.tabs button[data-tab=settings]'); size = ev("document.getElementById('recSize').textContent")
-    ok('MB' in size, f'recording size shown: {size}')
+    ok('KB' in size or 'MB' in size, f'recording size shown: {size}')
     pg.query_selector('#followPanel').screenshot(path=f'{SHOTS}/settings_recording.png')
     files = []
     pg.on('download', lambda d: files.append(d))
@@ -166,28 +172,30 @@ try:
         ok(len(tl['clips']) >= 8 and len(tl['manual']) >= 1 and len(tl['shown']) >= 3, f'timeline: {len(tl["clips"])} clips, {len(tl["shown"])} lines shown, {len(tl["manual"])} operator moves')
         out = subprocess.run(['node', ROOT + 'tests/timeline_replay.js', f'{SHOTS}/{js[0]}'], capture_output=True, text=True).stdout.strip()
         ok('operator corrections' in out, 'timeline_replay reads it: ' + out)
-        aud = [n for n in names if not n.endswith('.json')]
-        ok(aud and os.path.getsize(f'{SHOTS}/{aud[0]}') > 1000, f'audio part saved ({os.path.getsize(f"{SHOTS}/{aud[0]}") if aud else 0} bytes)')
+        aud = sorted([n for n in names if not n.endswith('.json')], key=lambda n: -os.path.getsize(f'{SHOTS}/{n}'))
+        ok(aud and os.path.getsize(f'{SHOTS}/{aud[0]}') > 10000, f'audio saved ({os.path.getsize(f"{SHOTS}/{aud[0]}") if aud else 0} bytes, compressed)')
+    print('     recording parts', tl['audio'] if js else None, [os.path.getsize(f'{SHOTS}/{n}') for n in names])
     pg.click('.tabs button[data-tab=settings]'); pg.uncheck('#stRecord')
-    pg.click('.tabs button[data-tab=live]'); pg.click('#btnListen'); pg.wait_for_timeout(300)
+    pg.click('.tabs button[data-tab=live]'); listen(False)
     # ---------- live stream for singing: off -> clips path; on -> the mocked stream feeds the tracker ----------
     pg.click('.tabs button[data-tab=settings]')
     pg.click('.netmode button[data-net=online]') if ev("!!document.querySelector('.netmode button[data-net=online]:not(.sel)')") else None
     pg.fill('#stSvKey', 'sk_test_0000000000000000'); pg.press('#stSvKey', 'Tab'); pg.wait_for_timeout(400)
     pg.route('https://api.sarvam.ai/**', lambda route: route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'}, body=json.dumps({'transcript': '', 'language_code': 'en-IN'})))
-    pg.click('.tabs button[data-tab=live]'); ev("LF_DEBUG.open('V82 EN')"); pg.click('#btnListen'); pg.wait_for_timeout(1500)
+    pg.click('.tabs button[data-tab=live]'); ev("LF_DEBUG.open('V82 EN')"); listen(True)
     w0 = ev('LF_DEBUG.whisper().engine'); o0 = ev('window.__ws.opened')
     ok(w0 == 'whisper' and o0 == 0, f'setting off: singing uses clips (engine {w0}, stream opened {o0} times)')
-    pg.click('#btnListen'); pg.wait_for_timeout(300)
+    listen(False)
     pg.click('.tabs button[data-tab=settings]'); pg.check('#stSvStream'); pg.click('.tabs button[data-tab=live]')
     ev("document.querySelectorAll('#slides .ln')[0].click()")
     ev(f"window.__ws.lines = {json.dumps([L[1], L[2], L[3], L[4]])}")
-    pg.click('#btnListen'); pg.wait_for_timeout(9000)
+    listen(True); pg.wait_for_timeout(7500)
     w1 = ev('LF_DEBUG.whisper().engine'); cur = ev('LF_DEBUG.state().cur'); wsd = ev('window.__ws')
     ok(w1 == 'sarvam' and wsd['opened'] >= 1 and wsd['sent'] > 0, f'setting on: the live stream is used (engine {w1}, opened {wsd["opened"]}, audio frames sent {wsd["sent"]})')
     ok(cur >= 3, f'the stream\'s partial and final text move the screen (line {cur} after lines 1-4 were sung)')
     st = ev("document.getElementById('statusText').textContent"); ok('experimental' in st or 'Sarvam' in st, f'status says it: {st}')
-    pg.click('#btnListen'); pg.wait_for_timeout(300)
+    pg.screenshot(path=f'{SHOTS}/stream_experimental.png')
+    listen(False)
     pg.click('.tabs button[data-tab=settings]'); pg.uncheck('#stSvStream'); pg.fill('#stSvKey', ''); pg.press('#stSvKey', 'Tab')
     bad = [e for e in errs if not any(k in e for k in KNOWN)]
     ok(not bad, f'no console errors beyond the known ones ({len(errs)} known: fonts / offline engine) {bad[:3]}')
