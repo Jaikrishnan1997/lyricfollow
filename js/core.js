@@ -1018,7 +1018,8 @@
   function breathDip(chunks, rate) {
     if (!chunks || chunks.length < 8) return false;
     const r = chunks.map(x => x.rms).sort((a, b) => a - b), floor = r[Math.floor(r.length * .2)] || 0, loud = r[Math.floor(r.length * .9)] || 0;
-    const thr = Math.max(.008, floor * 2.2, floor + (loud - floor) * .25);
+    // (a short window may hold little quiet, so the quiet bar is also never above a third of the loud level)
+    const thr = Math.max(.008, Math.min(loud * .35, Math.max(floor * 2.2, floor + (loud - floor) * .25)));
     if (loud < thr * 1.5) return false;                       // nothing sung in the last seconds
     let i = chunks.length - 1, quiet = 0;
     while (i >= 0 && chunks[i].rms < thr) { quiet += chunks[i].n; i--; }

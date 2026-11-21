@@ -3119,6 +3119,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     quiz: () => ({ n: window.LFQuiz ? LFQuiz.count() : 0, screen: screen.quiz ? { a: screen.quiz.q.a.en, shown: screen.quiz.shown } : null, asked: quizAsked ? quizAsked.a.en : null }),
     psalm: (n, v) => psalmStart(n, v),
         feed(text, isFinal, conf) { onText(isFinal ? text : '', isFinal ? [] : [text], conf); },
+    // a recognised clip of singing, as the clip engines deliver it (tracker + line timing)
+    clip(text) { songClip(text, Date.now()); return { cur: follow.cur, song: song && song.title }; },
+    rec: () => Rec.tl ? JSON.parse(JSON.stringify(Rec.tl)) : null,
+    mic: () => ({ asked: Mic.constraints(true), side: Mic.side || '', open: !!Mic.stream }),
+    learned: () => JSON.parse(JSON.stringify(Learn.data)),
     quiet(ms) { lastMatchAt = Date.now() - ms; },
     setLang(l) { Listen.lang = l; },
     close() { loadSong(null); },
