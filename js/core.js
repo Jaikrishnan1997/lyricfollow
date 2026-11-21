@@ -598,7 +598,7 @@
    * that fits a line (or does not) adds up. Each clip: the belief moves on by the time passed (stay on a line for
    * about its length, then the next; sometimes back to a slide's first line or the top), then is weighted by how
    * well the heard words fit each line. */
-  function hmmStep(st, ix, sc, c, now, informative) {
+  function hmmStep(st, ix, sc, c, now, informative, LS) {
     const P = ix.W.length; if (!P) return null;
     let H = st.hmm;
     if (!H || H.song !== st.song || H.P !== P) { H = st.hmm = { song: st.song, P, b: new Float64Array(P), t: now, map: -1, c: -2 }; H.b.fill(.02 / P); H.b[Math.max(0, c)] += .98; }
@@ -614,6 +614,13 @@
       nb[p] += v * stay * .96;
       if (p + 1 < P) nb[p + 1] += v * mv * .84; else nb[p] += v * mv * .84;
       if (p + 2 < P) nb[p + 2] += v * mv * .12; else nb[p] += v * mv * .12;
+      // a move this church usually makes from this line: part of the moving on goes there
+      // (taken from the share that would go to the next line, at most a quarter of it)
+      const lw = LS ? LS[ix.K[p]] : null;
+      if (lw) {
+        const us = []; let U = 0; for (let q = 0; q < P; q++) { if (q === p || q === p + 1) continue; const u = usualW(lw, ix.K[q]); if (u) { us.push([q, u]); U += u; } }
+        if (U) { const x = v * mv * .84 * .25 * Math.min(1, U); for (const [q, u] of us) nb[q] += x * u / U; nb[p + 1 < P ? p + 1 : p] -= x; }
+      }
       const j = v * (stay * .04 + mv * .04);                                                  // back to a slide start / anywhere
       for (const f of firsts) nb[f] += j * .7 / firsts.length;
       for (let q = 0; q < P; q++) nb[q] += j * .3 / P;
@@ -797,6 +804,30 @@
     }
     return out;
   }
+  /* ---------- How this church sings each song ----------
+   * L (one song): {fromKey: {toKey: {n, day}}} - line keys (Core.key of the line text), so an edit to other lines
+   * keeps what was learned. n counts SERVICES, not moves: a move counts once a day however often it is sung that
+   * day, so one odd service never makes a pattern on its own (a move needs two services to count, see usualW). */
+  function learnAdd(L, fromKey, toKey, day) {
+    if (!L || !fromKey || !toKey || fromKey === toKey) return false;
+    const f = L[fromKey] || (L[fromKey] = {}), e = f[toKey] || (f[toKey] = { n: 0, day: '' });
+    if (e.day === day) return false;
+    e.day = day; e.n = Math.min(9, e.n + 1); return true;
+  }
+  // 0 (never / once / rare from this line), .67 (two services), 1 (three or more) - and a good share of what is sung after it
+  function usualW(from, toKey) {
+    const e = from && from[toKey]; if (!e || e.n < 2) return 0;
+    let tot = 0; for (const k in from) tot += from[k].n;
+    return e.n / tot < .2 ? 0 : Math.min(1, e.n / 3);
+  }
+  /** The operator put line `line` (index in the song's lines) of song `id` on screen: the follower starts from there and holds it for `ms`. */
+  function trackManual(T, st, id, line, now, ms) {
+    st.song = id; st.cur = line; st.pend = null; st.traj = []; st.anch = null; st.top = -1;
+    const sg = T && T.songs.find(x => x.id === id); const p = sg && sg.ix.pos.has(line) ? sg.ix.pos.get(line) : -1;
+    if (st.hmm && p >= 0) st.hmm.c = -2;                       // the filter starts again from the new place
+    st.last = p >= 0 ? { p, t: now } : null; st.sinceSong = id; st.since = now;
+    st.hold = p >= 0 ? { song: id, p, until: now + (ms || 8000) } : null;
+  }
   function trackStep0(T, st, text, now) {
     const hw = dropShouts(T, seqWords(text).filter(w => w.length >= 2 && !FILLER.has(w))); if (!hw.filter(w => w.length >= 3).length) return null;
     now = now || Date.now();
@@ -826,19 +857,23 @@
     // song (lines 1, 3, 3, 4 ...). Random matches of common words do not line up like that. Seen live: Alleluya
     // sung from the top with the screen at its end (stuck 80 s), and with another song open (40 s to switch).
     const traj = trajectory(st, res, big, now);
+    // The operator just put a line on screen (a click, Previous/Next): that is the truth for a few seconds. Moves
+    // on weak evidence (a run of clips, the filter, the evidence of other songs) wait; the next line, a clear clip
+    // and a sure song change still go (see trackManual).
+    const hold = st.hold && now < st.hold.until && st.hold.song === st.song ? st.hold : null;
     // another song along a run of clips: only with words of its own in them (two at least) - words both songs share
     // ("அல்லேலூயா", "தேவனைத் துதி") in order looked like ஆத்துமாவே ஸ்தோத்தரி at the end of Alleluya (seen live)
     if (traj && traj.song !== st.song && mine && novelWords(mine.sg, res.find(r => r.sg.id === traj.song).sg, (st.traj || []).flatMap(e => e.w || [])) < 2) { /* not this one */ }
-    else if (traj && traj.song !== st.song && (!mine || mine.top < .9)) {
+    else if (traj && traj.song !== st.song && (!mine || mine.top < .9) && !hold) {
       st.sw = null; st.pend = null; st.last = null; st.rate = 0; st.ev = {}; st.traj = [];
       return { song: traj.song, line: res.find(r => r.sg.id === traj.song).sg.ix.idx[traj.p], why: 'song' };
     }
-    if (traj && traj.song === st.song && mine) {
+    if (traj && traj.song === st.song && mine && !hold) {
       const ix0 = mine.sg.ix, c0 = st.cur < 0 ? -1 : ix0.pos.has(st.cur) ? ix0.pos.get(st.cur) : -1;
       if (c0 < 0 || Math.abs(traj.p - c0) >= 2) { st.pend = null; st.last = { p: traj.p, t: now }; st.traj = []; if (st.hmm) st.hmm.c = traj.p; return { song: st.song, line: ix0.idx[traj.p], why: traj.p < c0 ? 'back' : 'fwd', src: 'traj', d: c0 < 0 ? traj.p + 1 : traj.p - c0 }; }
     }
     const lead = others.slice().sort((a, b) => ev(b.sg.id) - ev(a.sg.id))[0];
-    if (lead && st.song && new Set(big).size >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
+    if (lead && st.song && !hold && new Set(big).size >= 3 && lead.top >= .42 && ev(lead.sg.id) >= .36 && ev(lead.sg.id) >= ev(st.song) + .12 && (!mine || mine.top < .35) && others.every(x => x === lead || ev(x.sg.id) < ev(lead.sg.id) - .05)) {
       let p = 0; for (let q = 0; q < lead.sc.length; q++) if (lead.sc[q].s > lead.sc[p].s) p = q;
       // ... and a word of its own in this clip ("ராம் ராம் ராம்" over 100 people shouting moved Alleluya to Enthan)
       if (!mine || novelWords(mine.sg, lead.sg, big) >= 1) {
@@ -879,10 +914,10 @@
     let c = st.cur < 0 ? -1 : ix.pos.has(st.cur) ? ix.pos.get(st.cur) : -1;
     if (st.cur >= 0 && c < 0) { for (let p = ix.idx.length - 1; p >= 0; p--) if (ix.idx[p] <= st.cur) { c = p; break; } }
     const sCur = c >= 0 ? mine.sc[c].s : 0;
-    const hm = hmmStep(st, ix, mine.sc, c, now, big.some(w => ix.idf(w) >= 1));
+    const hm = hmmStep(st, ix, mine.sc, c, now, big.some(w => ix.idf(w) >= 1), st.learned && st.learned[st.song]);
     const byHmm = () => {
       // the filter is sure, the same two clips running, and the clip itself does not speak against it
-      if (!hm || hm.p === c || !hm.again || hm.post < .5 || mine.sc[hm.p].s < .2) return null;
+      if (hold || !hm || hm.p === c || !hm.again || hm.post < .5 || mine.sc[hm.p].s < .2) return null;
       const d = c < 0 ? hm.p + 1 : hm.p - c;
       if (Math.abs(d) > 6 && hm.post < .7) return null;
       if (d < -2 && mine.sc[hm.p].s < .5) return null;      // back over lines on a garbled clip ("திறக்கிறீயும்" -> verse 1)
@@ -905,10 +940,15 @@
       else if (an.words === 1 && an.long && an.ps.length === 1 && prevA.some(q => an.ps[0] - q >= 0 && an.ps[0] - q <= 3)) to = an.ps[0];
       else if (an.words === 1 && an.long && an.ps.length === 1 && an.ps[0] - c >= 2 && an.ps[0] - c <= Math.max(3, exp + 1)) to = an.ps[0];
       st.anch = an.words ? { ps: an.ps, hs: an.hs, at: now } : st.anch;
-      if (to >= 0 && to !== c && Math.abs(to - c) >= 2) { st.pend = null; st.anch = null; st.last = { p: to, t: now }; if (st.hmm) st.hmm.c = to; return { song: st.song, line: ix.idx[to], why: to < c ? 'back' : 'fwd', src: 'anchor', d: to - c }; }
+      if (hold && an.words < 2) to = -1;
+      if (to >= 0 && to !== c && Math.abs(to - c) >= 2) { st.pend = null; st.anch = null; st.hold = null; st.last = { p: to, t: now }; if (st.hmm) st.hmm.c = to; return { song: st.song, line: ix.idx[to], why: to < c ? 'back' : 'fwd', src: 'anchor', d: to - c }; }
     }
+    // How this church sings this song (learned from earlier services, see learnAdd): a move it usually makes from
+    // this line is nearly as expected as the next line.
+    const LR = c >= 0 && st.learned && st.learned[st.song] ? st.learned[st.song][ix.K[c]] : null;
+    const usual = p => LR && p !== c + 1 && p !== c ? usualW(LR, ix.K[p]) : 0;
     let best = -1, bv = -1;
-    for (let p = 0; p < mine.sc.length; p++) { const v = mine.sc[p].s + prior(ix, c, p); if (v > bv + 1e-9) { bv = v; best = p; } }
+    for (let p = 0; p < mine.sc.length; p++) { const v = mine.sc[p].s + prior(ix, c, p) + (LR ? .06 * usual(p) : 0); if (v > bv + 1e-9) { bv = v; best = p; } }
     if (best < 0 || best === c) { st.pend = null; return byHmm(); }
     // equal lines (a chorus) - the copy nearest the current place, ahead first
     const r = mine.sc[best], s = r.s, n = r.n, d = c < 0 ? best + 1 : best - c;
@@ -933,16 +973,20 @@
     // A far move (3+ lines on, or 2+ back) on words that are in several lines of the song (chorus words, the line
     // ending every line shares) says nothing about which of those lines: it needs a word found in that line only,
     // in this clip or in the clip before that pointed to the same place.
-    const far = c >= 0 && (d >= 3 || d <= -2);
-    if (ok && far && !r.nd && !(conf && st.pend.nd)) ok = false;
-    if (!ok && far && !r.nd) {
+    const far = c >= 0 && (d >= 3 || d <= -2), u = usual(best);
+    if (ok && far && !r.nd && !(conf && st.pend.nd) && u < .5) ok = false;
+    // a move this church usually makes from here (two services or more): the next line's bar, on a word that counts
+    if (!ok && u >= .5 && s >= .4 && (n >= 1 || r.nd >= 1)) ok = true;
+    // held by the operator: away from the held line only on clear words (the next line keeps its usual bar)
+    if (ok && hold && c === hold.p && d !== 1 && !(s >= .6 && n >= 2 && r.nd >= 1)) ok = false;
+    if (!ok && far && !r.nd && !hold) {
       // the same words fit a line just ahead, where the singer is expected by now: that one
       const e = Math.max(1, exp + 1); let q = -1;
       for (let p = c + 1; p <= Math.min(ix.W.length - 1, c + e); p++) if (mine.sc[p].s >= .4 && mine.sc[p].s >= s - .1 && (q < 0 || mine.sc[p].s > mine.sc[q].s)) q = p;
       if (q > c) { st.pend = null; st.last = { p: q, t: now }; if (st.hmm) st.hmm.c = q; return { song: st.song, line: ix.idx[q], why: 'fwd', src: 'near', d: q - c }; }
     }
     if (!ok) { st.pend = { p: best, at: now, s, n, nd: r.nd, w: big.join(' ') }; return byHmm(); }
-    st.pend = null;
+    st.pend = null; if (hold && d !== 1) st.hold = null;
     if (c >= 0 && d > 0 && st.last && st.last.p >= 0 && best > st.last.p) {
       const r = (best - st.last.p) / Math.max(1, (now - st.last.t) / 1000); st.rate = st.rate ? st.rate * .6 + Math.min(1.2, r) * .4 : Math.min(1.2, r);
     }
@@ -967,6 +1011,6 @@
     return r;
   }
 
-  const Core = { seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { learnAdd, usualW, trackManual, seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
