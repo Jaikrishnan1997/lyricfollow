@@ -342,11 +342,15 @@
         nums = [split.ch, split.v]; numToks = [];
       }
     }
-    // Live speech with no chapter or verse word at all: only numbers that follow the book straight away count ("John 3 16",
-    // "യോഹന്നാൻ മൂന്ന് പതിനാറ്"), so "John was 3 years old when 16 people came" is not John 3:16.
+    // Live speech with no chapter or verse word at all: only numbers said one after the other right after the book count
+    // ("John 3 16", "യോഹന്നാൻ മൂന്ന് പതിനാറ്"), so "John was 3 years old when 16 people came" is not John 3:16. Up to two
+    // words may still sit between: the rest of a longer book name that is not one of its spellings here ("அப்போஸ்தலர்
+    // நடபடிகள் 10 8", "Acts of the Apostles 2 38", "yeshayya pravachakan 53 5").
     if (opts.exactOnly && !split && !hasCue(numToks) && numToks[0] === toks[f.end]) {
-      let m = 0; while (m < numToks.length && ((Core.numbers(numToks[m]).length && !/^(are|on)$/.test(numToks[m])) || /^(colon|kolan|and|to|tu|ant)$/.test(numToks[m]))) m++;
-      nums = Core.numbers(numToks.slice(0, m).join(' '));
+      const isNum = t => Core.numbers(t).length && !/^(are|on)$/.test(t);
+      let a = 0; while (a < 2 && a < numToks.length && !isNum(numToks[a])) a++;
+      let m = a; while (m < numToks.length && (isNum(numToks[m]) || (m > a && /^(colon|kolan|and|to|tu|ant)$/.test(numToks[m])))) m++;
+      nums = Core.numbers(numToks.slice(a, m).join(' '));
     }
     if (opts.needChapter && !nums.length) return null;
     const book = BOOKS[f.book];

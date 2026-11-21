@@ -59,6 +59,10 @@ const cases=[
 ['மத்தேயு ஐந்தாம் அதிகாரம் மூன்று முதல் பத்து வரையுள்ள வசனங்கள்','Matthew 5:3'],['இரண்டாம் கொரிந்தியர் ஐந்தாம் அதிகாரம் பதினேழாம் வசனம்','2 Corinthians 5:17'],
 ['கொரிந்தியருக்கு எழுதின இரண்டாம் நிருபம் ஐந்தாம் அதிகாரம் பதினேழாம் வசனம்','2 Corinthians 5:17'],['aathiyagamam puthagam mudhalam adhikaram mudhalam vasanam','Genesis 1:1'],
 ['aathiyagamam puththagam 1 adhikaram 1 vasanam','Genesis 1:1'],['ulpathi pustakam 1 adhyayam 1 vakyam','Genesis 1:1'],['ulpathi pusthagam 1 adhyayam 1 vakyam','Genesis 1:1'],
+// two-word book names followed by bare numbers (no chapter/verse word)
+['அப்போஸ்தலர் நடபடிகள் 10 8 கவனியுங்கள்','Acts 10:8'],['eepotu nam apostalar nathapatikal 28 27 vacipom','Acts 28:27'],['இப்போது நாம் நாம் அப்போஸ்தலர் நடபடிகள் 17 27 வாசிப்போம்','Acts 17:27'],
+['Acts of the Apostles 2 38','Acts 2:38'],['let us read Song of Solomon 2 1','Song of Solomon 2:1'],['second Chronicles 7 14','2 Chronicles 7:14'],
+['അപ്പൊസ്തല പ്രവൃത്തികൾ 2 38 വായിക്കാം','Acts 2:38'],['വെളിപ്പാട് പുസ്തകം 3 20','Revelation 3:20'],['வெளிப்படுத்தின விசேஷம் 3 20','Revelation 3:20'],['yeshayya pravachakan 53 5','Isaiah 53:5'],
 // negatives: ordinary sermon talk with numbers and a name that is also a book (must be null)
 ['John was 3 years old when 16 people came','null'],['Mark had 2 brothers and 5 sisters','null'],['James told me 3 times in 10 minutes','null'],['Ruth walked 2 miles in 30 minutes','null'],
 ['Job lost 7 sons and 3 daughters','null'],['the acts of 12 men in 3 days','null'],['the numbers are 40 and 50','null'],['judges sat for 3 days and 7 nights','null'],
