@@ -28,6 +28,7 @@
   .lf-txt.bottom{justify-content:flex-end;inset:auto 5% 5% 5%;height:42%}
   .lf-txt p{margin:0;transition:opacity .08s ease;text-wrap:balance}
   .lf-txt p.dim{opacity:.45}
+  .lf-txt p.next{font-size:.72em;margin-top:.35em}
   .lf-txt.shadow{text-shadow:0 .04em .12em rgba(0,0,0,.75),0 0 .5em rgba(0,0,0,.35)}
   .lf-txt .vblock{display:flex;flex-direction:column;gap:.15em;width:100%}
   .lf-txt .vtext{font-weight:600;line-height:1.32;text-align:center}
@@ -60,7 +61,7 @@
   }
 
   /**
-   * payload: {black, bg, kind:'lyrics'|'bible'|'blank'|'idle', lines:[{t,on}], items:[{text,label}], ref, idle}
+   * payload: {black, bg, kind:'lyrics'|'bible'|'blank'|'idle', lines:[{t,on,small}], items:[{text,label}], ref, idle}
    * opts: {media: Map, theme: {textScale,pos,shadow,color}, low}
    */
   function render(stage, payload, opts) {
@@ -87,8 +88,10 @@
     const scale = theme.textScale || 1;
     let size;
     if (payload.kind === 'lyrics' && payload.lines && payload.lines.length) {
-      for (const l of payload.lines) { const p = doc.createElement('p'); p.textContent = l.t; if (!l.on) p.className = 'dim'; txt.appendChild(p); }
-      size = Math.min(W / 13, H / (payload.lines.length * 1.45 + .6)) * scale;
+      // l.small: the next line, under the current one (smaller, dimmed)
+      for (const l of payload.lines) { const p = doc.createElement('p'); p.textContent = l.t; p.className = (l.on ? '' : 'dim') + (l.small ? ' next' : ''); txt.appendChild(p); }
+      const rows = payload.lines.reduce((n, l) => n + (l.small ? .78 : 1), 0);
+      size = Math.min(W / 13, H / (rows * 1.45 + .6)) * scale;
     } else if (payload.kind === 'bible' && payload.items && payload.items.length) {
       payload.items.forEach((it, i) => {
         if (i) { const sp = doc.createElement('div'); sp.className = 'sep'; txt.appendChild(sp); }

@@ -23,6 +23,16 @@ for (const [env, floor, wrongMax] of [[{}, 70, 5], [{ SPARSE: '1' }, 56, 14.5]])
   const m = out.match(/right line ([\d.]+)%.*wrong ([\d.]+)% \(wrong song ([\d.]+)%/);
   ok(m && +m[1] >= floor && +m[2] <= wrongMax && +m[3] <= 1, `bench${env.SPARSE ? ' sparse' : ''}: right ${m ? m[1] : '?'}% (floor ${floor}), wrong ${m ? m[2] : '?'}% (max ${wrongMax}), wrong song ${m ? m[3] : '?'}% (max 1)`);
 }
+// v82: operator corrections and the learned order, Lead's breath cue, the live stream for singing (mocked), a
+// recorded service timeline replayed, and the same odd order sung in 3 services (the 3rd followed better)
+for (const f of ['operator_test.js', 'lead_pause_test.js', 'stream_test.js']) {
+  let out = '', code = 0; try { out = run(f); } catch (e) { out = String(e.stdout || ''); code = e.status || 1; }
+  ok(code === 0, `${f}: ${out.trim().split('\n').pop()}`);
+}
+{ let out = ''; try { out = run('timeline_replay.js', {}, [path.join(__dirname, 'fixtures', 'timeline_sample.json')]); } catch (e) { out = String(e.stdout || ''); }
+  ok(/operator corrections: \d+/.test(out), `timeline_replay.js: ${out.trim().split('\n').pop()}`); }
+{ const out = run('tracker_bench.js', { SPARSE: '1' }, ['.18', 'learn']); const r = i => +((out.match(new RegExp('learn service ' + i + ': right ([\\d.]+)%')) || [])[1] || 0);
+  ok(r(3) > r(1), `learned order: the 3rd service of the same odd order followed better than the 1st (${r(1)}% -> ${r(3)}% right)`); }
 // Bible references (spoken and typed, ta/ml/en; every spoken order), verses read without their reference (with floors
 // and sermon talk that must put nothing on screen), and the quiz questions (every question finds its answer in all
 // three languages; sermon talk finds none)
