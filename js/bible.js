@@ -47,7 +47,10 @@
     ['3 John','3jn 3jhn 3jo','3 യോഹന്നാൻ','3 யோவான்',1],['Jude','jud jd','യൂദാ','யூதா',1],
     ['Revelation','rev re rv revelations','വെളിപ്പാട്','வெளிப்படுத்தின விசேஷம்',22,'വെളിപാട്|வெளி']
   ];
-  const BOOKS = B.map((r, i) => ({ i, en: r[0], ml: r[2], ta: r[3], ch: r[4] }));
+  // Hindi names (book n on line n), as in the Hindi Bible (gotquestions.org/Hindi list); used to hear and to label a
+  // Hindi reference. No Hindi Bible text is bundled: the verse shows in the versions the church has chosen.
+  const HI = 'उत्पत्ति|निर्गमन|लैव्यव्यवस्था|गिनती|व्यवस्थाविवरण|यहोशू|न्यायियों|रूत|1 शमूएल|2 शमूएल|1 राजा|2 राजा|1 इतिहास|2 इतिहास|एज्रा|नहेम्याह|एस्तेर|अय्यूब|भजन|नीतिवचन|उपदेशक|श्रेष्ठगीत|यशायाह|यिर्मयाह|विलापगीत|यहेजकेल|दानिय्येल|होशे|योएल|आमोस|ओबद्याह|योना|मीका|नहूम|हबक्कूक|सपन्याह|हाग्गै|जकर्याह|मलाकी|मत्ती|मरकुस|लूका|यूहन्ना|प्रेरितों के काम|रोमियों|1 कुरिन्थियों|2 कुरिन्थियों|गलातियों|इफिसियों|फिलिप्पियों|कुलुस्सियों|1 थिस्सलुनीकियों|2 थिस्सलुनीकियों|1 तीमुथियुस|2 तीमुथियुस|तीतुस|फिलेमोन|इब्रानियों|याकूब|1 पतरस|2 पतरस|1 यूहन्ना|2 यूहन्ना|3 यूहन्ना|यहूदा|प्रकाशितवाक्य'.split('|');
+  const BOOKS = B.map((r, i) => ({ i, en: r[0], ml: r[2], ta: r[3], hi: HI[i], ch: r[4] }));
 
   const kn = s => Core.keyWords(s).replace(/\s+/g, '');
   const ALIAS = new Map();   // phonetic key -> book index
@@ -80,7 +83,18 @@
     57: SPOKEN[57] + ' എബ്രായ എബ്രായലേഖനം எபிரேயர் ebraya',
     65: SPOKEN[65] + ' வெளிப்படுத்தல் வெளிப்படுத்துதல் வெளிப்படுத்தின வெளிப்படுத்தின்விசேஷங்கள் വെളിപ്പാടു velippad'
   });
-  const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n))));
+  // Hindi: the names as written (Devanagari), as said ("भजन संहिता", "प्रेरितों के काम"), and in English letters
+  // ("yuhanna", "utpatti"); each through the same Hindi preparation as speech (Core.hindiPre drops "के", "की पुस्तक"...).
+  const HI_SPOKEN = { 2: 'लैव्य व्यवस्था|लैव्यवस्था|laivyavyavastha', 3: 'ginti', 4: 'व्यवस्था विवरण|vyavasthavivaran|vyavastha vivaran', 6: 'न्यायी|nyayiyon',
+    18: 'भजन संहिता|भजनसंहिता|भजनसहिंता|bhajan sanhita|bhajan samhita|bhajansanhita', 19: 'nitivachan', 20: 'सभोपदेशक', 21: 'श्रेष्ठ गीत|श्रेष्ठगीतों|shreshthgeet',
+    24: 'विलाप गीत|vilapgeet', 39: 'matti|mattee', 40: 'markus', 41: 'luka|looka', 42: 'yuhanna|yoohanna|yuhana', 43: 'प्रेरितों के काम|प्रेरितों|प्रेरितो|preriton ke kaam|preriton|prerito',
+    44: 'रोमियो|रोमी|romiyon|romiyo', 45: '1 कुरिन्थियो|1 कुरिंथियों|1 korinthiyon|1 kurinthiyon', 46: '2 कुरिन्थियो|2 कुरिंथियों|2 korinthiyon|2 kurinthiyon', 47: 'गलातियो|galatiyon', 48: 'इफिसियो|iphisiyon|ephisiyon',
+    49: 'फिलिप्पियो|philippiyon', 50: 'कुलुस्सियो|kulussiyon', 57: 'इब्रानियो|ibraniyon', 58: 'yakub|yaakoob', 59: '1 patras', 60: '2 patras',
+    61: '1 yuhanna', 62: '2 yuhanna', 63: '3 yuhanna', 65: 'प्रकाशित वाक्य|prakashitvakya|prakashit vakya|prakashitvaky' };
+  const hiKey = s => kn(Core.hindiPre(s));
+  const HIKEYS = new Set();
+  HI.forEach((n, i) => { for (const w of [n, Core.romanHi(n)].concat((HI_SPOKEN[i] || '').split('|').filter(Boolean))) { const k = hiKey(w); if (k && !ALIAS.has(k)) ALIAS.set(k, i); HIKEYS.add(k); } });
+  const FULLNAMES = new Set(); B.forEach(r => [r[0], r[2], r[3]].forEach(n => FULLNAMES.add(kn(n)))); HIKEYS.forEach(k => FULLNAMES.add(k));
   const SPOKENKEYS = new Set();
   for (const [i, names] of Object.entries(SPOKEN)) names.split(' ').filter(Boolean).forEach(a => { addAlias(a, +i, true); SPOKENKEYS.add(kn(a)); });
   // Numbered books said with a number word ("ഒന്നാം കൊരിന്ത്യർ", "முதலாம் யோவான்", "first Peter") also answer to
@@ -122,9 +136,9 @@
 
   // Words that mark a chapter or verse number in speech (English, Malayalam, Tamil, Hindi, and their English-letter forms).
   const CUE = new Set(['chapter','chapters','verse','verses','versus','ch','v','vs','അദ്ധ്യായം','അധ്യായം','വാക്യം','വചനം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','വാക്യത്തിൽ','വാക്യങ്ങൾ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','வசனம்','வசனங்கள்','வசனத்தில்','अध्याय','पद','आयत',
-    'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','adhayam','athayam','adhyam','athikaram','adhikaram','vasanam','vasanam','adhyay','adhayam','athayam','adhyam','vakkam','vakam','vakem','vaakkam'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
+    'adhyayam','athyayam','adyayam','adhyaayam','vakyam','vaakyam','vachanam','vakyem','adhayam','athayam','adhyam','athikaram','adhikaram','vasanam','vasanam','adhyay','adhayam','athayam','adhyam','vakkam','vakam','vakem','vaakkam','aayat'].map(w => Core.keyWords(w).replace(/\s+/g, '')).filter(Boolean));
   const CH_CUE = new Set(['chapter','chapters','ch','അദ്ധ്യായം','അധ്യായം','അദ്ധ്യായത്തിൽ','അദ്ധ്യായത്തിലെ','അദ്ധ്യായത്തിന്റെ','அதிகாரம்','அதிகாரத்தில்','அதிகாரத்தின்','अध्याय','adhyayam','athyayam','adyayam','adhyaayam','athikaram','adhikaram','adhyay'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
-  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','വാക്യങ്ങൾ','வசனம்','வசனங்கள்','வசனத்தில்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam','vakkam','vakam','vakem','vaakkam'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
+  const V_CUE = new Set(['verse','verses','versus','v','vs','വാക്യം','വചനം','വാക്യത്തിൽ','വാക്യങ്ങൾ','வசனம்','வசனங்கள்','வசனத்தில்','पद','आयत','vakyam','vaakyam','vachanam','vakyem','vasanam','vakkam','vakam','vakem','vaakkam','aayat'].map(w => Core.keyWords(w).replace(/\s+/g, '')));
   function cueKind(tok) {
     if (!tok) return '';
     const k = tok.replace(/[^a-z]/g, ''); if (!k) return '';
@@ -134,8 +148,9 @@
   }
   /** Numbers in speech order, each with the chapter/verse word next to it, if any:
    *  Tamil and Malayalam often say the verse first ("2-ாம் வசனம் 3-ாம் அதிகாரம்" = chapter 3 verse 2). */
+  const HICUE = /^(atyay|ayat)$/;      // Hindi chapter/verse words after Core.hindiPre
   function labelledNumbers(toks) {
-    const out = [];
+    const out = [], claimed = new Set();
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i]; if (cueKind(t)) continue;
       let n = Core.numbers(t); let span = 1;
@@ -154,7 +169,12 @@
       const prevTok = toks[i - 1] || '';
       // A Malayalam/Tamil cue word belongs to the number before it, so it never labels the number that follows it.
       const prevEn = cueKind(prevTok) && EN.test(prevTok.replace(/[^a-z]/g, ''));
-      const kind = prevEn ? cueKind(prevTok) : (cueKind(next) || '');
+      let kind = prevEn ? cueKind(prevTok) : (cueKind(next) || '');
+      // Hindi says the chapter/verse word before a plain number ("अध्याय तीन पद सोलह") and after an ordinal ("तीसरा
+      // अध्याय सोलहवाँ पद"); each word labels one number.
+      const nx = next === toks[i + span] ? i + span : i + span + 1, hp = HICUE.test(prevTok) && !claimed.has(i - 1), hn = HICUE.test(next || '') && !claimed.has(nx);
+      if (hn && !hp && /^(to|tu)$/.test(prevTok) && prev && prev.kind === 'v') kind = '';     // "आयत 4 से 6 अध्याय 3": 6 ends the range
+      else if (hp || hn) { const ord = /^\d+[a-z]+$/.test(t); const useNext = hn && (ord || !hp); kind = cueKind(useNext ? next : prevTok); claimed.add(useNext ? nx : i - 1); }
       out.push({ val, start: i, end: i + span, word: !/^\d/.test(t), kind });
       i += span - 1;
     }
@@ -165,7 +185,7 @@
   // Number words said as ordinals, on their sound key: "மூணாவது", "മൂന്നാം", "3-ஆம்" (3am), "third" (tirt), "16वाँ" (16t).
   const ORDTOK = new RegExp('^(\\d+[a-z]+|[a-z]*(am|avatu|vatu)|' + ['first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth','thirteenth','fourteenth','fifteenth','sixteenth','seventeenth','eighteenth','nineteenth','twentieth','thirtieth'].map(w => Core.keyWords(w)).join('|') + ')$');
   // Book names that are also everyday words in the other languages (Tamil "வெளி" = outside, "roma"): not enough alone.
-  const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா'].map(kn));
+  const WEAK = new Set(['வெளி', 'roma', 'யோப்', 'ரோமா', 'गिनती', 'उपदेशक', 'भजन', 'यहूदा'].map(w => kn(Core.hindiPre(w))));
   // What people count in sermon talk, on the sound key (prefix): days, people, times, years, money, hours...
   const COUNT = ['day', 'days', 'people', 'person', 'persons', 'times', 'time', 'year', 'years', 'rupees', 'rupee', 'minute', 'hour', 'week', 'month', 'children', 'kilomet', 'men', 'women', 'oclock', 'lakh', 'thousand', 'brothers', 'sisters',
     'நாட்கள்', 'பேர்', 'தடவை', 'முறை', 'வருஷம்', 'வருடம்', 'மணி', 'நிமிஷம்', 'ரூபாய்', 'மாசம்', 'மாதம்', 'வாரம்', 'பிள்ளைகள்', 'கிலோமீட்டர்', 'வயது', 'லட்சம்', 'ஆயிரம்',
@@ -197,7 +217,7 @@
         let k = toks.slice(i, i + len).join('');
         if (k.length < 2 || /^\d+$/.test(k)) continue;
         // "verse 16 chapter 3 John": a number straight after an English chapter/verse word is not "3 John".
-        if (/^\d/.test(toks[i]) && i > 0 && /^(capter|capters|c|verse|verses|versus|v|vs)$/.test(toks[i - 1])) continue;
+        if (/^\d/.test(toks[i]) && i > 0 && /^(capter|capters|c|verse|verses|versus|v|vs|atyay|ayat)$/.test(toks[i - 1])) continue;
         // A book name split in two by the recogniser loses its "y" glide: "ஆதி ஆகமம்" = ஆதியாகமம் (ati + akamam).
         if (len === 2 && !ALIAS.has(k) && /[aeiou]$/.test(toks[i]) && /^[aeiou]/.test(toks[i + 1]) && ALIAS.has(toks[i] + 'y' + toks[i + 1])) k = toks[i] + 'y' + toks[i + 1];
         if (exactOnly && k.length < 4 && !FULLNAMES.has(k) && !SPOKENKEYS.has(k)) continue;
@@ -243,7 +263,7 @@
   }
   function prepToks(text) {
     // Decoration words ("book", "gospel", "ലേഖനം"...) and fillers ("ആ", "ഈ", "அதாவது", "uh", "the") are dropped.
-    let raw = Core.keyWords(text).split(/\s+/).filter(Boolean);
+    let raw = Core.keyWords(Core.hindiPre(text)).split(/\s+/).filter(Boolean);
     // Tamil "நாள்" (day) has the same sound key as Malayalam "നാല്" (four): in Tamil text it is a day, never a number.
     if (/[\u0B80-\u0BFF]/.test(text)) raw = raw.map(t => t === 'nal' ? 'day' : t);
     raw = joinBookParts(raw);
@@ -303,6 +323,7 @@
       let j = i + 1; while (j < toks.length && cueKind(toks[j])) j++;
       return !(j < toks.length && (/^\d+$/.test(toks[j]) || Core.numbers(toks[j]).length));
     });
+    toks.digits = new Set(String(text).match(/\d+/g) || []);    // digits as said (not Hindi number words made digits)
     return toks;
   }
   // The five Tamil books ending in ...ஆகமம் differ only in the part before the ending, and the recogniser splits or
@@ -405,7 +426,7 @@
     const book = BOOKS[f.book];
     // Speech models often glue chapter and verse into one number ("828" for 8:28): split it where both parts are valid.
     // (only digits: "twelve" said as a word after Esther is never Esther 1:2)
-    if (nums.length === 1 && nums[0] > book.ch && book.ch > 1 && (bare || numToks).includes(String(nums[0]))) {
+    if (nums.length === 1 && nums[0] > book.ch && book.ch > 1 && (bare || numToks).includes(String(nums[0])) && (!toks.digits || toks.digits.has(String(nums[0])))) {
       const d = String(nums[0]); let best = null;
       for (let i = 1; i < d.length; i++) { const c = +d.slice(0, i), v = +d.slice(i); if (c >= 1 && c <= book.ch && v >= 1 && v <= 176 && !d.slice(i).startsWith('0')) best = best || [c, v]; }
       if (best) nums = best;
@@ -476,11 +497,12 @@
     return same >= Math.ceil(n * .6) ? n : 0;
   }
   // Parse words[s..k), at most the last 90 characters (whole words), as the tail of the old onBibleSpeech did.
-  function parseWin(words, s, k, opts) {
+  function windowText(words, s, k) {
     let i = k, len = 0; while (i > s && len + words[i - 1].length + 1 <= 91) { len += words[i - 1].length + 1; i--; }
     if (i === k) i = k - 1;
-    return parseRef(words.slice(i, k).join(' '), opts);
+    return words.slice(i, k).join(' ');
   }
+  const parseWin = (words, s, k, opts) => parseRef(windowText(words, s, k), opts);
   // One reference becoming another as its last number is still being said: "twenty" -> "twenty one", "100" -> "119",
   // or only the end verse arriving ("16" -> "16 to 18").
   const grow = (x, y) => x === y || ((x % 10 === 0 && x >= 20 && y > x && y < x + 10) || (x === 100 && y > 100 && y < 200));
@@ -495,6 +517,10 @@
       if (r && !cur) { cur = { r, from: s, to: k }; continue; }
       if (r && (bcv(r) === bcv(cur.r) || grows(cur.r, r))) { if (bcv(r) !== bcv(cur.r) || r.ve !== cur.r.ve) { cur.r = r; cur.to = k; } continue; }
       if (!cur) continue;
+      // It no longer parses. A new book said, or the book gone out of the 90-character window, ends it; with its book still
+      // in view, the words after it unsaid it ("John 3 16 years", "बारह लोग"): it was never a reference.
+      const nb = findBook(prepToks(words[k - 1]), true), inView = (findBook(prepToks(windowText(words, s, k)), true) || {}).book === cur.r.book;
+      if (!nb && inView) { cur = null; continue; }
       cur.closed = true; out.push(cur); s = cur.to; k = s; cur = null;      // start again right after it
     }
     if (cur) { cur.closed = false; out.push(cur); }

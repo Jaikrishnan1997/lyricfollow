@@ -433,10 +433,12 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     document.querySelectorAll('#bsResults button,#heardRefs button,#heardRefs2 button').forEach(b => b.classList.toggle('cur', b.dataset.ref === refKey(r)));
   }
   const refKey = r => `${r.book}.${r.ch}.${r.v}.${r.ve}`;
-  function refButton(r, text) {
+  function refButton(r, text, heardLang) {
     const li = el('li'), b = el('button'); b.dataset.ref = refKey(r);
     const lang = (Bible.VERSIONS.find(v => v.id === S.versions[0]) || {}).lang;
-    const w = el('span', 'rwrap'); w.append(el('span', 'rref', Bible.refLabel(r, lang)), el('span', 'rt', text || Bible.verse(S.versions[0], r.book, r.ch, r.v)));
+    // a reference heard in Hindi also carries its Hindi name (the verse itself is in the church's versions)
+    const label = Bible.refLabel(r, lang) + (heardLang === 'hi' ? ' · ' + Bible.refLabel(r, 'hi') : '');
+    const w = el('span', 'rwrap'); w.append(el('span', 'rref', label), el('span', 'rt', text || Bible.verse(S.versions[0], r.book, r.ch, r.v)));
     b.appendChild(w); b.onclick = () => showBible(r);
     li.appendChild(b); return li;
   }
@@ -501,6 +503,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   try { for (const h of JSON.parse(sessionStorage.getItem('lf-heard-refs') || '[]')) if (h && h.r) heardRefs.push(h); } catch (e) {}
   function pushHeardRef(r, src, sure, listOnly) {
     const res = Bible.heardAdd(heardRefs, r, src, sure, Date.now(), { auto: S.vbAuto, screenKey: screen.kind === 'bible' && screen.bible ? refKey(screen.bible) : '' });
+    if (Listen.mode === 'bible' && String(Listen.lang || '').startsWith('hi')) res.h.lang = 'hi';
     lastRefAt = Date.now(); if (sure) hunt.lockedAt = lastRefAt;
     try { sessionStorage.setItem('lf-heard-refs', JSON.stringify(heardRefs)); } catch (e) {}
     if (res.dup) { if (res.show) showBible(r); renderHeardRefs(); return; }
@@ -544,7 +547,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function renderHeardRefs() {
     for (const id of ['heardRefs', 'heardRefs2']) {
       const ol = $(id); ol.innerHTML = '';
-      heardRefs.forEach(h => { const li = refButton(h.r); const b = li.querySelector('button'); if (!h.sure) b.classList.add('unsure'); if (h.src === 'ai') { b.classList.add('ai'); b.title = t('ai_found'); } ol.appendChild(li); });
+      heardRefs.forEach(h => { const li = refButton(h.r, null, h.lang); const b = li.querySelector('button'); if (!h.sure) b.classList.add('unsure'); if (h.src === 'ai') { b.classList.add('ai'); b.title = t('ai_found'); } ol.appendChild(li); });
       if (heardRefs.length) { const li = el('li'); const b = el('button', 'clearbtn', t('clear_history')); b.onclick = () => { heardRefs.length = 0; renderHeardRefs(); }; li.appendChild(b); ol.appendChild(li); }
     }
     $('heardRefsBox').hidden = !heardRefs.length;
@@ -2090,7 +2093,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('lmBible').hidden = !vb || !!S.psalmMode; $('lmPsalm').hidden = !(vb && S.psalmMode);
     // Preach: references only, so following the reading has no place there; the hint says what each mode shows.
     $('vfOn').closest('label').hidden = !!S.preachOnly;
-    const hint = $('lmHint'); hint.dataset.i18n = S.preachOnly ? 'preach_hint' : 'message_hint'; hint.textContent = t(hint.dataset.i18n);
+    const hint = $('lmHint'); hint.dataset.i18n = S.preachOnly ? 'preach_hint' : 'message_hint'; hint.textContent = t(hint.dataset.i18n) + (S.vbLang === 'hi-IN' ? ' ' + t('hindi_hint') : '');
     $('autoFollow').closest('label').hidden = vb;
     const gem = cloud && S.gemini && S.geminiKey, wh = cloud && Listen.engine === 'whisper';
     document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = wh ? '🎵 Whisper AI' : gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
@@ -2139,6 +2142,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // overlap - "ഇടയനാകുന്നു" was taken for Tamil and the Malayalam verse was then followed in the Tamil Bible)
     const ml = (String(text).match(/[\u0D00-\u0D7F]/g) || []).length, ta = (String(text).match(/[\u0B80-\u0BFF]/g) || []).length;
     if (ml + ta >= 4) return ml > ta ? 'ml-IN' : 'ta-IN';
+    if ((String(text).match(/[\u0900-\u097F]/g) || []).length >= 4) return 'hi-IN';
     const k = ' ' + Core.keyWords(text) + ' ', score = {};
     for (const [l, ws] of Object.entries(LANG_KEYS)) score[l] = ws.reduce((n, w) => n + (w.length >= 3 && (l === 'ta-IN' && w === 'avatu' ? /avatu /.test(k) : k.includes(' ' + w)) ? 1 : 0), 0);
     if (/[a-z]+avatu /.test(k)) score['ta-IN'] += 1;          // Tamil ordinals ("மூன்றாவது")
@@ -2501,7 +2505,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (out.stop) return;
     if (finals && quizListen(finals)) return;
     // Preach: a verse read aloud or quoted without its reference never moves the screen (no follow, no quote lookup).
-    if (preachOnly()) return;
+    if (preachOnly() || hindiSpeech()) return;
     if (verseFollow(finals, interim)) return;
     const vbText = RS.vbText, words = vbText.trim().split(/\s+/).length;
     if (finals && !quoteBusy && words - vbWordsAtQuote >= 5 && Date.now() - VF.at > 8000) {
@@ -2575,7 +2579,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (v < r.v || v > r.ve) { const nr = { book: r.book, ch: r.ch, v, ve: v }; VF.shown = refKey(nr); showBible(nr); }   // inside a shown range: stay
     return true;
   }
-  function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : 'en'; }
+  function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : /[\u0900-\u097F]/.test(txt) ? 'hi' : 'en'; }
+  // Hindi speech: references only. No Hindi Bible is bundled, so a verse read aloud cannot be found or followed.
+  const hindiSpeech = () => String(S.vbLang === 'auto' ? Listen.lang || '' : S.vbLang).startsWith('hi');
 
   // Blank screen when singing continues but nothing matches.
   setInterval(() => {
@@ -2822,7 +2828,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('btnBgOnly').onclick = () => { screen.bgOnly = !screen.bgOnly; output(); };
     const toggleListen = () => Listen.mode ? Listen.stop() : (S.listenMode === 'bible' && (RS.vbText = ''), Listen.start());
     document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setListenMode(b.dataset.lm));
-    $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
+    $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); else updateListenUI(); };
     $('vbAuto2').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto').checked = S.vbAuto; saveSettings(); };
     $('vfOn').checked = S.verseFollow !== false; $('vfOn').onchange = e => { S.verseFollow = e.target.checked; saveSettings(); };
     $('planInput').value = S.plan || '';
@@ -2937,7 +2943,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('thShadow').onchange = e => { S.theme.shadow = e.target.checked; saveSettings(); output(); };
 
     // online
-    $('vbLang').onchange = e => { S.vbLang = e.target.value; $('vbLang2').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
+    $('vbLang').onchange = e => { S.vbLang = e.target.value; $('vbLang2').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); else updateListenUI(); };
     $('vbAuto').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto2').checked = S.vbAuto; saveSettings(); };
     $('btnVB').onclick = () => { if (Listen.mode === 'bible') Listen.stop(); else { RS.vbText = ''; S.listenMode = 'bible'; saveSettings(); Listen.start('bible'); } };
     $('ocrFile').onchange = e => { if (e.target.files[0]) setOcrImage(e.target.files[0]); e.target.value = ''; };

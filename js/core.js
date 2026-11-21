@@ -9,7 +9,10 @@
     0x1F:'t',0x20:'t',0x21:'t',0x22:'t',0x23:'n',0x24:'t',0x25:'t',0x26:'t',0x27:'t',0x28:'n',0x29:'n',
     0x2A:'p',0x2B:'f',0x2C:'p',0x2D:'p',0x2E:'m',0x2F:'y',0x30:'r',0x31:'r',0x32:'l',0x33:'l',0x34:'l',
     0x35:'v',0x36:'s',0x37:'s',0x38:'s',0x39:'h'};
-  const SIGN = {0x3E:'a',0x3F:'i',0x40:'i',0x41:'u',0x42:'u',0x43:'ru',0x46:'e',0x47:'e',0x48:'ai',0x4A:'o',0x4B:'o',0x4C:'au',0x57:'au'};
+  // (0x45 / 0x49: Devanagari candra e / o in English loans, "डॉक्टर"; unused in Malayalam and Tamil)
+  const SIGN = {0x3E:'a',0x3F:'i',0x40:'i',0x41:'u',0x42:'u',0x43:'ru',0x45:'e',0x46:'e',0x47:'e',0x48:'ai',0x49:'o',0x4A:'o',0x4B:'o',0x4C:'au',0x57:'au'};
+  // Devanagari nukta (U+093C) changes the consonant before it: ज़ z, फ़ f, ड़/ढ़ r (NFC keeps them as two code points).
+  const NUKTA = {0x15:'k',0x16:'k',0x17:'k',0x1C:'z',0x21:'r',0x22:'r',0x2B:'f'};
   const CHILLU = {0x0D7A:'n',0x0D7B:'n',0x0D7C:'r',0x0D7D:'l',0x0D7E:'l',0x0D7F:'k',0x0D54:'m',0x0D55:'y',0x0D56:'l'};
 
   function off(cp) { for (const b of BLOCKS) if (cp >= b && cp < b + 0x80) return cp - b; return -1; }
@@ -30,13 +33,16 @@
       const o = off(cp);
       if (o < 0) { out += String.fromCodePoint(cp); continue; }
       if (CONS[o]) {
-        out += CONS[o];
+        let c = CONS[o];
+        if (i + 1 < cps.length && off(cps[i + 1]) === 0x3C) { c = NUKTA[o] || c; i++; }     // a nukta never splits a word
+        out += c;
         const no = i + 1 < cps.length ? off(cps[i + 1]) : -1;
         if (no === 0x4D) i++;
         else if (SIGN[no]) { out += SIGN[no]; i++; }
         else out += 'a';
       } else if (IND[o]) out += IND[o];
-      else if (o === 0x02) out += 'm';
+      else if (o === 0x02 || o === 0x01) out += 'm';          // anusvara, and candrabindu ("पाँच" = "पांच")
+      else if (o === 0x3C) continue;
       else if (o === 0x03) out += 'h';
       else if (o >= 0x66 && o <= 0x6F) out += String(o - 0x66);
       else out += SIGN[o] || o === 0x4D ? '' : ' ';
@@ -362,6 +368,119 @@
       return null;
     }
     return total;
+  }
+
+  /* ---------- Hindi numbers, ordinals and the words around a spoken reference ----------
+   * Hindi 21-99 are separate words, not tens + units ("तेईस" 23, "उनचास" 49), so the whole table is written out; 101-176
+   * are "[एक] सौ" + that table. Kept apart from NUMWORDS: as sound keys, short Hindi numbers are common words elsewhere
+   * ("दो" = "to", "आठ" = "at"). hindiPre() turns them into digits before a reference is parsed. */
+  const HI_NUM = ['', 'एक', 'दो', 'तीन', 'चार', 'पाँच|पांच|पाच', 'छह|छः|छे|छै|छ', 'सात', 'आठ', 'नौ|नव', 'दस',
+    'ग्यारह|ग्यारा', 'बारह|बारा', 'तेरह|तेरा', 'चौदह|चौदा', 'पंद्रह|पन्द्रह|पंद्रा', 'सोलह|सोला', 'सत्रह|सतरह|सत्रा', 'अठारह|अट्ठारह|अठारा', 'उन्नीस|उन्निस', 'बीस',
+    'इक्कीस|इकीस', 'बाईस|बाइस', 'तेईस|तेइस', 'चौबीस', 'पच्चीस|पचीस', 'छब्बीस|छबीस', 'सत्ताईस|सत्ताइस', 'अट्ठाईस|अठ्ठाईस|अठाईस|अट्ठाइस', 'उनतीस|उन्तीस', 'तीस',
+    'इकतीस|इकत्तीस', 'बत्तीस', 'तैंतीस|तेंतीस|तैतीस', 'चौंतीस|चौतीस', 'पैंतीस|पैतीस', 'छत्तीस', 'सैंतीस|सैतीस', 'अड़तीस|अड़तिस', 'उनतालीस|उनचालीस', 'चालीस',
+    'इकतालीस', 'बयालीस|बियालीस', 'तैंतालीस|तेंतालीस', 'चवालीस|चौवालीस|चौंतालीस', 'पैंतालीस|पैतालीस', 'छियालीस', 'सैंतालीस|सैतालीस', 'अड़तालीस', 'उनचास|उनपचास', 'पचास',
+    'इक्यावन|इक्कावन', 'बावन', 'तिरपन|तिरेपन', 'चौवन|चव्वन|चौव्वन', 'पचपन', 'छप्पन', 'सत्तावन', 'अट्ठावन|अठावन', 'उनसठ', 'साठ',
+    'इकसठ', 'बासठ', 'तिरसठ|तिरेसठ', 'चौंसठ|चौसठ', 'पैंसठ|पैसठ', 'छियासठ', 'सड़सठ|सरसठ', 'अड़सठ', 'उनहत्तर', 'सत्तर',
+    'इकहत्तर', 'बहत्तर', 'तिहत्तर', 'चौहत्तर', 'पचहत्तर', 'छिहत्तर|छियत्तर', 'सतहत्तर', 'अठहत्तर', 'उन्यासी|उनासी|उनयासी|उन्नासी', 'अस्सी',
+    'इक्यासी|इकयासी', 'बयासी|बियासी', 'तिरासी|तिरयासी', 'चौरासी', 'पचासी', 'छियासी', 'सत्तासी', 'अट्ठासी|अठासी', 'नवासी|नव्वासी', 'नब्बे',
+    'इक्यानवे|इक्यानबे', 'बानवे|बानबे', 'तिरानवे|तिरानबे', 'चौरानवे|चौरानबे', 'पचानवे|पंचानबे|पचानबे', 'छियानवे|छियानबे', 'सत्तानवे|सत्तानबे', 'अट्ठानवे|अट्ठानबे|अठानवे', 'निन्यानवे|निन्यानबे', 'सौ'];
+  // Ordinals with their own word; the rest are the number + वाँ/वें/वीं ("सोलहवाँ", "16वें").
+  const HI_ORD = { 'पहला|पहली|पहले|पहिला|पहिली|पहिले|प्रथम': 1, 'दूसरा|दूसरी|दूसरे|दुसरा|दुसरी|दुसरे|द्वितीय': 2, 'तीसरा|तीसरी|तीसरे|तृतीय': 3, 'चौथा|चौथी|चौथे': 4, 'छठा|छठी|छठे|छटा|छटी|छटे': 6 };
+  // Romanised Hindi (what an English recogniser writes for Hindi speech), made from the same table.
+  const HI_ROM_ORD = { 'pehla pahla pehli pahli pehle pahle pahila pahile': 1, 'doosra dusra doosri dusri doosre dusre': 2, 'teesra tisra teesri tisri teesre tisre': 3, 'chautha chauthi chauthe': 4, 'chhatha chhata chhathi chhathe chatha': 6 };
+  /** Devanagari -> English letters with the silent "a" dropped, as people type Hindi ("उत्पत्ति" -> "utpatti", "तीन" -> "teen"). */
+  function romanHi(s) {
+    const C = {0x15:'k',0x16:'kh',0x17:'g',0x18:'gh',0x19:'n',0x1A:'ch',0x1B:'chh',0x1C:'j',0x1D:'jh',0x1E:'n',0x1F:'t',0x20:'th',0x21:'d',0x22:'dh',0x23:'n',0x24:'t',0x25:'th',0x26:'d',0x27:'dh',0x28:'n',0x2A:'p',0x2B:'ph',0x2C:'b',0x2D:'bh',0x2E:'m',0x2F:'y',0x30:'r',0x32:'l',0x35:'v',0x36:'sh',0x37:'sh',0x38:'s',0x39:'h'};
+    const V = {0x05:'a',0x06:'aa',0x07:'i',0x08:'ee',0x09:'u',0x0A:'oo',0x0B:'ri',0x0F:'e',0x10:'ai',0x11:'o',0x13:'o',0x14:'au'};
+    const M = {0x3E:'aa',0x3F:'i',0x40:'ee',0x41:'u',0x42:'oo',0x43:'ri',0x45:'e',0x47:'e',0x48:'ai',0x49:'o',0x4B:'o',0x4C:'au'};
+    return String(s).normalize('NFC').split(/\s+/).map(w => {
+      const cps = Array.from(w, c => c.codePointAt(0) - 0x900), syl = [];   // [consonant, vowel, schwa?]
+      for (let i = 0; i < cps.length; i++) {
+        const o = cps[i];
+        if (C[o] != null) { let c = C[o]; if (cps[i + 1] === 0x3C) { c = NUKTA[o] ? NUKTA[o] : c; i++; }
+          if (cps[i + 1] === 0x4D) { syl.push([c, '', false]); i++; } else if (M[cps[i + 1]]) { syl.push([c, M[cps[i + 1]], false]); i++; } else syl.push([c, 'a', true]); }
+        else if (V[o]) syl.push(['', V[o], false]);
+        else if (o === 0x01 || o === 0x02) { if (syl.length) syl[syl.length - 1][1] += 'n'; }
+        else if (o === 0x03) { if (syl.length) syl[syl.length - 1][1] += 'h'; }
+        else if (o >= 0x66 && o <= 0x6F) syl.push([String(o - 0x66), '', false]);
+        else if (o < 0 || o > 0x7F) syl.push([String.fromCodePoint(o + 0x900), '', false]);
+      }
+      // the inherent "a" is silent at the end of a word and between a vowel-consonant and a consonant-vowel ("इकतीस" iktees)
+      for (let i = syl.length - 1; i >= 0; i--) {
+        if (!syl[i][2]) continue;
+        if (i === syl.length - 1 && i > 0) { syl[i][1] = ''; continue; }
+        if (i > 0 && i < syl.length - 1 && syl[i - 1][1] && syl[i + 1][0] && syl[i + 1][1] && !syl[i + 1][2]) syl[i][1] = '';
+      }
+      return syl.map(x => x[0] + x[1]).join('');
+    }).join(' ');
+  }
+  // Devanagari words are compared as written (only candrabindu = anusvara and the nukta dropped), not on their sound
+  // key: "दिन" (day) and "तीन" (three) have the same key.
+  const hn = w => String(w).normalize('NFC').replace(/ँ/g, 'ं').replace(/़/g, '');
+  let HIMAP = null;   // Devanagari word / romanised sound key -> value
+  function hiMaps() {
+    if (HIMAP) return HIMAP;
+    const card = new Map(), ord = new Map(), rcard = new Map(), rord = new Map();
+    HI_NUM.forEach((ws, n) => { if (n) for (const w of ws.split('|')) { card.set(hn(w), n); const r = key(romanHi(w)); if (!rcard.has(r)) rcard.set(r, n); } });
+    for (const [ws, n] of Object.entries(HI_ORD)) for (const w of ws.split('|')) ord.set(hn(w), n);
+    for (const [ws, n] of Object.entries(HI_ROM_ORD)) for (const w of ws.split(' ')) rord.set(key(w), n);
+    for (const [w, n] of [['ek', 1], ['do', 2], ['teen', 3], ['char', 4], ['chaar', 4], ['panch', 5], ['paanch', 5], ['chhah', 6], ['chhe', 6], ['che', 6], ['saat', 7], ['sat', 7], ['aath', 8], ['nau', 9], ['das', 10], ['dus', 10], ['gyarah', 11], ['barah', 12], ['terah', 13], ['chaudah', 14], ['pandrah', 15], ['solah', 16], ['satrah', 17], ['atharah', 18], ['unnis', 19], ['unees', 19], ['bees', 20], ['tees', 30], ['chalis', 40], ['chaalees', 40], ['pachas', 50], ['pachaas', 50], ['sau', 100]]) rcard.set(key(w), n);
+    return (HIMAP = { card, ord, rcard, rord });
+  }
+  // A number word in Hindi (Devanagari or romanised): { n, ord } or null. "सोलहवाँ"/"solahvan" -> { n: 16, ord: true }.
+  function hiNumber(w, roman) {
+    const m = hiMaps(), k = roman ? key(w) : hn(w), C = roman ? m.rcard : m.card, O = roman ? m.rord : m.ord;
+    if (C.has(k)) return { n: C.get(k), ord: false };
+    if (O.has(k)) return { n: O.get(k), ord: true };
+    const s = k.match(roman ? /^(.+?)(vam|van|vaan|ven|vein|vin|veen|va|ve|vi)$/ : /^(.+?)(वां|वें|वीं|वी|वा|वे)$/);
+    if (s && C.has(s[1])) return { n: C.get(s[1]), ord: true };
+    return null;
+  }
+  const HI_CH = 'अध्याय|अध्यायों|अध्यायो|बाब', HI_V = 'पद|पदों|पदो|आयत|आयतें|आयतों|आयते|वचन|वचनों';
+  const HI_DROP = 'का|की|के|में|मे|को|तक|ने|पर|हम|आइए|आइये|अब|यहाँ|यहां|है|हैं|था|पढ़ेंगे|पढ़ें|पढ़िए|पढ़िये|पढ़ते|पढ़ना|देखिए|देखिये|देखें|देखेंगे|खोलिए|खोलिये|खोलें|लिखा|रचित|लिखित|सुसमाचार|पुस्तक|किताब|ग्रंथ|नबी|भविष्यद्वक्ता';
+  const HI_R_CH = 'adhyay adhyaay adhyaya adhyayon adhyaayon baab bab', HI_R_V = 'pad padon aayat ayat aayaten aayatein ayaten aayaton vachan vachanon';
+  const HI_R_DROP = 'ka ki ke mein me men ko tak ne par hum aaiye ab hai hain padhenge padhen padhiye dekhiye dekhen kholiye kholen likha rachit likhit susamachar pustak kitab';
+  let HISETS = null;
+  function hiSets() {
+    if (HISETS) return HISETS;
+    const ds = str => new Set(str.split('|').map(hn)), rs = str => new Set(str.split(' ').map(key));
+    return (HISETS = { ch: ds(HI_CH), v: ds(HI_V), drop: ds(HI_DROP), rch: rs(HI_R_CH), rv: rs(HI_R_V), rdrop: rs(HI_R_DROP) });
+  }
+  /** Hindi speech made ready for the reference parser: numbers and ordinals as digits ("16th"), "अध्याय/बाब" as
+   *  "adhyay" and "पद/आयत/वचन" as "aayat" (chapter/verse words that may stand on either side of the number), "से" as
+   *  "to", "पत्री" as "letter", and the little words around a reference dropped. Devanagari words always; English-letter
+   *  Hindi only when it has a Hindi chapter/verse word ("yuhanna adhyay teen pad solah"). Other text is returned as it is. */
+  function hindiPre(text) {
+    text = String(text || '');
+    const dev = /[ऀ-ॿ]/.test(text);
+    let roman = false;
+    if (!dev) { if (/[஀-௿ഀ-ൿ]/.test(text)) return text; const S0 = hiSets(); roman = text.split(/\s+/).some(w => S0.rch.has(key(w)) || (S0.rv.has(key(w)) && key(w) !== 'pat')) || /\b(adhyay|aayat)/i.test(text); if (!roman) return text; }
+    const S = hiSets(), out = [];
+    const words = text.replace(/[०-९]/g, d => String(d.codePointAt(0) - 0x966)).replace(/[।॥,.;:!?]/g, ' ').split(/\s+/).filter(Boolean);
+    const num = (n, ord) => (ord ? n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th') : String(n));
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i], isDev = /[ऀ-ॿ]/.test(w), k = isDev ? hn(w) : key(w);
+      if (!isDev && !roman) { out.push(w); continue; }
+      const dm = w.match(/^(\d+)\s*(वाँ|वां|वें|वीं|वी|वा|वे|th|va|van|vaan|ven|vin)?$/);
+      if (dm) { out.push(num(+dm[1], !!dm[2])); continue; }
+      if (/^(वाँ|वां|वें|वीं|वा|वे|van|vaan|ven|vin|va|ve)$/.test(w) && /^\d+$/.test(out[out.length - 1] || '')) { out[out.length - 1] += 'th'; continue; }
+      if (isDev ? S.ch.has(k) : S.rch.has(k)) { out.push('adhyay'); continue; }
+      if (isDev ? S.v.has(k) : S.rv.has(k)) { out.push('aayat'); continue; }
+      if (isDev ? k === 'से' : k === 'se') { out.push('to'); continue; }
+      if (isDev ? k === 'और' : k === 'aur') { out.push('and'); continue; }
+      if (isDev ? /^(पत्री|पत्र|चिट्ठी)$/.test(k) : /^(patri|patra)$/.test(k)) { out.push('letter'); continue; }
+      if (isDev ? S.drop.has(k) : S.rdrop.has(k)) continue;
+      const h = hiNumber(w, !isDev);
+      // (romanised "do" is also English "do": a number only beside a chapter/verse word)
+      if (h && !(!isDev && k === 'to' && !/^(adhyay|aayat)$/.test(out[out.length - 1] || '') && !(S.rch.has(key(words[i + 1] || '')) || S.rv.has(key(words[i + 1] || ''))))) {
+        // "[एक] सौ उन्नीस" = 119
+        if (h.n === 100 && !h.ord) { let base = 100; const p = out[out.length - 1]; if (/^[1-9]$/.test(p || '')) { base = +p * 100; out.pop(); }
+          const nx = words[i + 1] && hiNumber(words[i + 1], !isDev); if (nx && nx.n < 100) { out.push(num(base + nx.n, nx.ord)); i++; } else out.push(String(base)); continue; }
+        out.push(num(h.n, h.ord)); continue;
+      }
+      out.push(w);
+    }
+    return out.join(' ');
   }
 
   /** All numbers in a phrase, digits or spoken words. Adjacent tens+units are combined ("twenty three" → 23). */
@@ -1053,6 +1172,6 @@
     sf.fed = ws; sf.at = now; return ws.join(' ');
   }
 
-  const Core = { breathDip, leadCue, streamText, learnAdd, usualW, trackManual, seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  const Core = { hindiPre, romanHi, hiNumber, breathDip, leadCue, streamText, learnAdd, usualW, trackManual, seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
