@@ -76,7 +76,7 @@ function mixed(lang) {
 }
 // Disfluent speech: a filler word in the middle, a repeated word, a dropped cue word.
 function disfluent(u, lang) {
-  const w = u.text.split(' '); const fill = { ml: ['അതായത്', 'ആ', 'ഈ'], ta: ['அதாவது', 'அந்த', 'இந்த'], en: ['that is', 'uh', 'the'] }[lang];
+  const w = u.text.split(' '); const fill = { ml: ['അതായത്', 'ആ', 'ഈ'], ta: ['அதாவது', 'அந்த', 'இந்த'], en: ['that is', 'uh', 'the'], hi: ['यानी', 'वो', 'उम'] }[lang];
   const k = rnd();
   if (k < .35 && w.length > 3) w.splice(1 + Math.floor(rnd() * (w.length - 2)), 0, pick(fill));
   else if (k < .65 && w.length > 2) { const i = 1 + Math.floor(rnd() * (w.length - 1)); w.splice(i, 0, w[i]); }
@@ -109,8 +109,163 @@ function latin(text) {
     return w.replace(/i/, 'ee');
   }).join(' ');
 }
-if (require.main !== module) { module.exports = { utter, latin, mixed, disfluent }; return; }
+
+/* ---------- v83: every order, four languages ----------
+ * Book (all 66, every spoken form), chapter and verse in the six orders of the R&D note (B C V, B V C, C V B, V C B,
+ * C B V, V B C), with cue-word forms and case endings, ordinal and plain numbers (formal and colloquial, words and
+ * digits), decoration words, numbered books in every spoken form, Psalm forms, ranges, lead-in and tail words, glued
+ * and split book names, romanised spellings (ta/ml/hi), and the same fed word by word through the stream harness. */
+const ORDERS = ['BCV', 'BVC', 'CVB', 'VCB', 'CBV', 'VBC'];
+const rint = n => Math.floor(rnd() * n);
+// --- numbers as words ---
+const TA_U = ['', 'ஒன்று', 'இரண்டு', 'மூன்று', 'நான்கு', 'ஐந்து', 'ஆறு', 'ஏழு', 'எட்டு', 'ஒன்பது'], TA_UC = ['', 'ஒண்ணு', 'ரெண்டு', 'மூணு', 'நாலு', 'அஞ்சு', 'ஆறு', 'ஏழு', 'எட்டு', 'ஒம்பது'];
+const TA_TEEN = ['பத்து', 'பதினொன்று', 'பன்னிரண்டு', 'பதிமூன்று', 'பதினான்கு', 'பதினைந்து', 'பதினாறு', 'பதினேழு', 'பதினெட்டு', 'பத்தொன்பது'], TA_TEENC = ['பத்து', 'பதினொண்ணு', 'பன்னெண்டு', 'பதிமூணு', 'பதினாலு', 'பதினஞ்சு', 'பதினாறு', 'பதினேழு', 'பதினெட்டு', 'பத்தொம்பது'];
+const TA_TENS = { 2: ['இருபது', 'இருபத்தி', 'இருபத்து'], 3: ['முப்பது', 'முப்பத்தி', 'முப்பத்து'], 4: ['நாற்பது', 'நாற்பத்தி', 'நாற்பத்து'], 5: ['ஐம்பது', 'ஐம்பத்தி', 'ஐம்பத்து'], 6: ['அறுபது', 'அறுபத்தி', 'அறுபத்து'], 7: ['எழுபது', 'எழுபத்தி', 'எழுபத்து'], 8: ['எண்பது', 'எண்பத்தி', 'எண்பத்து'], 9: ['தொண்ணூறு', 'தொண்ணூற்றி', 'தொண்ணூற்று'] };
+const TA_TENSC = { 4: ['நாப்பது', 'நாப்பத்தி'], 5: ['அம்பது', 'அம்பத்தி'], 8: ['எம்பது', 'எம்பத்தி'] };
+const taOrd = (w, avatu) => w.replace(/ு$/, '') + (avatu ? 'ாவது' : 'ாம்');
+function taWord(n, ord, coll) {
+  if (n >= 100) { const h = pick(['நூற்றி', 'நூத்தி']); return n === 100 ? (ord ? 'நூறாம்' : 'நூறு') : h + ' ' + taWord(n - 100, ord, coll); }
+  if (ord && n === 1 && rnd() < .5) return pick(['முதலாம்', 'முதல்', 'முதலாவது', 'ஒண்ணாவது', 'ஒன்றாம்']);
+  const av = coll && rnd() < .6;
+  if (n < 10) { const w = (coll ? TA_UC : TA_U)[n]; return ord ? taOrd(w, av) : w; }
+  if (n < 20) { const w = (coll ? TA_TEENC : TA_TEEN)[n - 10]; return ord ? taOrd(w, av) : w; }
+  const t = Math.floor(n / 10), u = n % 10, T = (coll && TA_TENSC[t]) || TA_TENS[t];
+  if (!u) return ord ? taOrd(T[0], av) : T[0];
+  return pick(T.slice(1)) + ' ' + (u === 1 && ord ? taOrd(coll ? 'ஒண்ணு' : 'ஒன்று', av) : taWord(u, ord, coll));   // 21st is "இருபத்தி ஒன்றாம்", never "... முதலாம்"
+}
+const ML_U = ['', 'ഒന്ന്', 'രണ്ട്', 'മൂന്ന്', 'നാല്', 'അഞ്ച്', 'ആറ്', 'ഏഴ്', 'എട്ട്', 'ഒമ്പത്'], ML_UC = ['', 'ഒന്നു', 'രണ്ടു', 'മൂന്നു', 'നാലു', 'അഞ്ചു', 'ആറു', 'ഏഴു', 'എട്ടു', 'ഒമ്പതു'];
+const ML_TEEN = ['പത്ത്', 'പതിനൊന്ന്', 'പന്ത്രണ്ട്', 'പതിമൂന്ന്', 'പതിനാല്', 'പതിനഞ്ച്', 'പതിനാറ്', 'പതിനേഴ്', 'പതിനെട്ട്', 'പത്തൊമ്പത്'];
+const ML_TENS = { 2: 'ഇരുപത്', 3: 'മുപ്പത്', 4: 'നാല്പത്', 5: 'അമ്പത്', 6: 'അറുപത്', 7: 'എഴുപത്', 8: 'എൺപത്', 9: 'തൊണ്ണൂറ്' };
+const mlOrd = w => w.replace(/[്ു]$/, '') + 'ാം';
+const ML_GLIDE = { 'അ': 'യ', 'ആ': 'യാ', 'ഏ': 'യേ', 'എ': 'യെ', 'ഒ': 'യൊ' };
+function mlWord(n, ord, coll) {
+  if (n >= 100) { if (n === 100) return ord ? 'നൂറാം' : 'നൂറ്'; const r = mlWord(n - 100, ord, false), g = ML_GLIDE[r[0]] || (r[0] === 'ഇ' ? 'യി' : ''); return rnd() < .5 ? 'നൂറ്റി ' + r : 'നൂറ്റി' + (g ? g + r.slice(1) : r); }
+  if (n < 10) { const w = (coll && !ord ? ML_UC : ML_U)[n]; return ord ? mlOrd(ML_U[n]) : w; }
+  if (n < 20) return ord ? mlOrd(ML_TEEN[n - 10]) : ML_TEEN[n - 10];
+  const t = Math.floor(n / 10), u = n % 10;
+  if (!u) return ord ? mlOrd(ML_TENS[t]) : ML_TENS[t];
+  let uw = ord ? mlOrd(ML_U[u]) : ML_U[u]; const g = ML_GLIDE[uw[0]]; if (g) uw = g + uw.slice(1);
+  return ML_TENS[t].replace(/ത്$/, 'ത്തി').replace(/റ്$/, 'റ്റി') + uw;     // ഇരുപത്തി-, തൊണ്ണൂറ്റി-
+}
+const EN_U = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'], EN_UO = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth'];
+const EN_TEEN = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'], EN_TENS = { 2: 'twenty', 3: 'thirty', 4: 'forty', 5: 'fifty', 6: 'sixty', 7: 'seventy', 8: 'eighty', 9: 'ninety' };
+const enOrdW = w => w === 'twelve' ? 'twelfth' : w.endsWith('y') ? w.slice(0, -1) + 'ieth' : w + 'th';
+function enWord(n, ord) {
+  if (n >= 100) return n === 100 ? (ord ? 'hundredth' : 'one hundred') : pick(['one hundred ', 'a hundred and ', 'hundred ']) + enWord(n - 100, ord);
+  if (n < 10) return ord ? EN_UO[n] : EN_U[n];
+  if (n < 20) return ord ? enOrdW(EN_TEEN[n - 10]) : EN_TEEN[n - 10];
+  const t = Math.floor(n / 10), u = n % 10;
+  return u ? EN_TENS[t] + pick([' ', '-']) + (ord ? EN_UO[u] : EN_U[u]) : (ord ? enOrdW(EN_TENS[t]) : EN_TENS[t]);
+}
+const HI_TBL = ['', 'एक', 'दो', 'तीन', 'चार', 'पाँच', 'छह', 'सात', 'आठ', 'नौ', 'दस', 'ग्यारह', 'बारह', 'तेरह', 'चौदह', 'पंद्रह', 'सोलह', 'सत्रह', 'अठारह', 'उन्नीस', 'बीस',
+  'इक्कीस', 'बाईस', 'तेईस', 'चौबीस', 'पच्चीस', 'छब्बीस', 'सत्ताईस', 'अट्ठाईस', 'उनतीस', 'तीस', 'इकतीस', 'बत्तीस', 'तैंतीस', 'चौंतीस', 'पैंतीस', 'छत्तीस', 'सैंतीस', 'अड़तीस', 'उनतालीस', 'चालीस',
+  'इकतालीस', 'बयालीस', 'तैंतालीस', 'चवालीस', 'पैंतालीस', 'छियालीस', 'सैंतालीस', 'अड़तालीस', 'उनचास', 'पचास', 'इक्यावन', 'बावन', 'तिरपन', 'चौवन', 'पचपन', 'छप्पन', 'सत्तावन', 'अट्ठावन', 'उनसठ', 'साठ',
+  'इकसठ', 'बासठ', 'तिरसठ', 'चौंसठ', 'पैंसठ', 'छियासठ', 'सड़सठ', 'अड़सठ', 'उनहत्तर', 'सत्तर', 'इकहत्तर', 'बहत्तर', 'तिहत्तर', 'चौहत्तर', 'पचहत्तर', 'छिहत्तर', 'सतहत्तर', 'अठहत्तर', 'उन्यासी', 'अस्सी',
+  'इक्यासी', 'बयासी', 'तिरासी', 'चौरासी', 'पचासी', 'छियासी', 'सत्तासी', 'अट्ठासी', 'नवासी', 'नब्बे', 'इक्यानवे', 'बानवे', 'तिरानवे', 'चौरानवे', 'पचानवे', 'छियानवे', 'सत्तानवे', 'अट्ठानवे', 'निन्यानवे', 'सौ'];
+const HI_O = { 1: ['पहला', 'पहली', 'पहले'], 2: ['दूसरा', 'दूसरी', 'दूसरे'], 3: ['तीसरा', 'तीसरी', 'तीसरे'], 4: ['चौथा', 'चौथी', 'चौथे'], 6: ['छठा', 'छठी', 'छठे'] };
+function hiWord(n, ord) {
+  if (n > 100) return pick(['एक सौ ', 'सौ ']) + hiWord(n - 100, ord);
+  if (ord) return HI_O[n] ? pick(HI_O[n]) : HI_TBL[n] + pick(['वाँ', 'वें', 'वीं', 'वां']);     // 4th is चौथा, never "चारवाँ"
+  return HI_TBL[n];
+}
+// A number as said in `lang`: { s, ord } - digits, digits with an ordinal ending, or words (formal / colloquial).
+function say(lang, n, ord) {
+  const r = rnd();
+  if (r < .25) return String(n);
+  if (r < .4 && ord) return n + (lang === 'ta' ? pick(['-ஆம்', 'ஆம்', 'ம்', 'வது', ' ஆம்']) : lang === 'ml' ? pick(['-ാം', 'ാം']) : lang === 'hi' ? pick(['वाँ', 'वें', ' वाँ']) : (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'));
+  return lang === 'ta' ? taWord(n, ord, rnd() < .5) : lang === 'ml' ? mlWord(n, ord, rnd() < .4) : lang === 'hi' ? hiWord(n, ord) : enWord(n, ord);
+}
+// --- book names ---
+const HI_ORDBOOK = { 1: ['पहला', 'पहली', '1'], 2: ['दूसरा', 'दूसरी', '2'], 3: ['तीसरा', 'तीसरी', '3'] };
+function bookSaid(lang, b) {
+  const info = B.BOOKS[b], m = /^(\d) (.+)$/.exec(info[lang] || info.en), n = m ? +m[1] : 0, base = m ? m[2] : (info[lang] || info.en);
+  const enBase = (/^\d (.+)$/.exec(info.en) || [, info.en])[1];
+  if (lang === 'en') {
+    let nm = b === 18 ? pick(['Psalm', 'Psalms']) : b === 21 ? pick(['Song of Solomon', 'Song of Songs']) : b === 65 ? pick(['Revelation', 'Revelations']) : b === 43 ? pick(['Acts', 'Acts of the Apostles']) : enBase;
+    if (n) nm = pick([String(n), ['first', 'second', 'third'][n - 1], ['1st', '2nd', '3rd'][n - 1]]) + ' ' + nm;
+    const d = rnd(); if (d < .15) nm = 'the book of ' + nm; else if (d < .22 && b >= 39 && b <= 42) nm = pick(['the gospel of ', 'the gospel according to ']) + nm; else if (d < .28 && b >= 44 && b <= 64 && !n) nm = 'the letter to the ' + nm;
+    return nm;
+  }
+  if (lang === 'hi') {
+    let nm = b === 18 ? pick(['भजन संहिता', 'भजनसंहिता']) : b === 43 ? pick(['प्रेरितों के काम', 'प्रेरितों']) : b === 65 ? pick(['प्रकाशितवाक्य', 'प्रकाशित वाक्य']) : base;
+    if (n) { if (rnd() < .2 && b >= 44) return nm + ' की ' + pick(['पहली', 'दूसरी', 'तीसरी'].slice(n - 1, n)) + ' पत्री'; nm = pick(HI_ORDBOOK[n]) + ' ' + nm; }
+    const d = rnd(); if (d < .12) nm += pick([' की पुस्तक', ' की किताब']); else if (d < .2 && b >= 39 && b <= 42) nm += pick([' रचित सुसमाचार', ' का सुसमाचार']); else if (d < .25 && b >= 44 && !n) nm += ' की पत्री';
+    return nm;
+  }
+  const extra = { ta: { 0: ['ஆதியாகமத்தில்', 'ஆதி ஆகமம்'], 1: ['யாத்திர ஆகமம்'], 3: ['எண் ஆகமம்'], 4: ['உப ஆகமம்'], 42: ['யோவானில்', 'யோவான் எழுதின சுவிசேஷம்'], 18: ['சங்கீதங்கள்'], 43: ['அப்போஸ்தலர் நடபடிகள்', 'அப்போஸ்தலருடைய நடபடிகள்'], 44: ['ரோமருக்கு எழுதின நிருபம்'] },
+    ml: { 0: ['ഉല്പത്തിപുസ്തകം', 'ഉൽപത്തി'], 1: ['പുറപ്പാടുപുസ്തകം'], 2: ['ലേവ്യ പുസ്തകം'], 3: ['സംഖ്യാ പുസ്തകം'], 4: ['ആവർത്തനപുസ്തകം', 'ആവർത്തന പുസ്തകം'], 18: ['സങ്കീർത്തനം'], 42: ['യോഹന്നാന്റെ സുവിശേഷം', 'യോഹന്നാൻ എഴുതിയ സുവിശേഷം'], 44: ['റോമർക്കുള്ള ലേഖനം', 'റോമർക്ക് എഴുതിയ ലേഖനം'], 43: ['അപ്പൊസ്തലപ്രവൃത്തികൾ'] } }[lang];
+  let nm = extra[b] && rnd() < .4 ? pick(extra[b]) : base;
+  if (n && nm === base) {
+    const o = lang === 'ta' ? [['முதலாம்', 'ஒன்றாம்', '1', 'ஒண்ணாம்'], ['இரண்டாம்', 'ரெண்டாம்', '2'], ['மூன்றாம்', 'மூணாம்', '3']][n - 1] : [['ഒന്നാം', 'ഒന്ന്', '1'], ['രണ്ടാം', 'രണ്ട്', '2'], ['മൂന്നാം', 'മൂന്ന്', '3']][n - 1];
+    if (rnd() < .15 && b >= 44) return lang === 'ta' ? nm.replace(/ர்$/, 'ருக்கு').replace(/யு$/, 'யுவுக்கு') + ' எழுதின ' + ['முதலாம்', 'இரண்டாம்', 'மூன்றாம்'][n - 1] + ' நிருபம்' : nm + (/ർ$/.test(nm) ? 'ക്ക്' : '') + ' എഴുതിയ ' + ['ഒന്നാം', 'രണ്ടാം', 'മൂന്നാം'][n - 1] + ' ലേഖനം';
+    nm = pick(o) + ' ' + nm;
+  }
+  const d = rnd();
+  if (lang === 'ta' && d < .15) nm += ' ' + pick(['புத்தகம்', 'புஸ்தகம்', 'புத்தகத்தில்', 'புஸ்தகத்துல']);
+  if (lang === 'ml' && d < .15 && !/പുസ്തകം$/.test(nm)) nm += ' ' + pick(['പുസ്തകം', 'പുസ്തകത്തിൽ', 'പുസ്തകത്തിലെ', 'പുസ്തകത്തിന്റെ']);
+  return nm;
+}
+const CUEW = {
+  en: { ch: ['chapter'], v: ['verse'] },
+  ta: { ch: ['அதிகாரம்', 'அதிகாரத்தில்', 'அதிகாரத்தின்', 'அதிகாரத்துல', 'அதிகாரத்திலே'], v: ['வசனம்', 'வசனத்தில்', 'வசனத்துல'] },
+  ml: { ch: ['അദ്ധ്യായം', 'അധ്യായം', 'അദ്ധ്യായത്തിൽ', 'അദ്ധ്യായത്തിലെ', 'അദ്ധ്യായത്തിന്റെ'], v: ['വാക്യം', 'വാക്യത്തിൽ', 'വചനം'] },
+  hi: { ch: ['अध्याय', 'बाब'], v: ['पद', 'आयत', 'वचन'] }
+};
+const LEAD = { en: [['let us turn to', ''], ['open your Bibles to', ''], ['', 'and we read'], ['we read from', ''], ['', '']], ta: [['இப்போது நாம்', 'வாசிப்போம்'], ['', 'பார்ப்போம்'], ['திருப்புங்க', ''], ['', 'சொல்லுது'], ['', '']],
+  ml: [['നമുക്ക്', 'വായിക്കാം'], ['', 'നോക്കാം'], ['ഇപ്പോൾ', 'തുറക്കാം'], ['', 'പറയുന്നു'], ['', '']], hi: [['आइए हम', 'पढ़ेंगे'], ['', 'देखिए'], ['', 'खोलिए'], ['अब', ''], ['', '']] };
+// One part ("chapter 3", "மூன்றாம் அதிகாரம்", "अध्याय तीन" / "तीसरा अध्याय") as said in `lang`.
+function part(lang, kind, n) {
+  const w = pick(CUEW[lang][kind]);
+  if (lang === 'en') return rnd() < .7 ? `${w} ${say('en', n, false)}` : `${enWord(n, true)} ${w}`;
+  if (lang === 'hi') return rnd() < .55 ? `${w} ${say('hi', n, false)}` : `${say('hi', n, true)} ${w}`;
+  return `${say(lang, n, rnd() < .75)} ${w}`;
+}
+/** One spoken reference in `lang`, order `ord` (index into ORDERS); returns { text, want: [book, ch, v, ve] }. */
+function spoken(lang, ord) {
+  let b = rint(66); const info = B.BOOKS[b];
+  if (info.ch === 1) b = 42;          // one-chapter books are said without a chapter; kept out of the order columns
+  const chN = B.BOOKS[b].ch, ch = 1 + rint(chN), vm = vmax(b, ch), v = 1 + rint(vm);
+  const range = rnd() < .12 && v < vm, ve = range ? v + 1 + rint(Math.min(4, vm - v)) : v;
+  const bk = bookSaid(lang, b), O = ORDERS[ord];
+  let C = part(lang, 'ch', ch), V = part(lang, 'v', v);
+  if (range) {
+    const e = say(lang, ve, false);
+    V = lang === 'en' ? `verses ${say('en', v, false)} ${pick(['to', 'through'])} ${e}` : lang === 'ta' ? `${say('ta', v, true)} வசனம் முதல் ${say('ta', ve, true)} வசனம் வரை` : lang === 'ml' ? `${say('ml', v, true)} വാക്യം മുതൽ ${say('ml', ve, true)} വാക്യം വരെ` : `पद ${say('hi', v, false)} से ${e} तक`;
+  }
+  // two number words side by side run together for any listener ("chapter twenty | fifth verse" = 25th?): keep a cue between
+  const runTogether = (a, b) => (a % 10 === 0 && a >= 20 && b < 10) || (a % 10 === 0 && a >= 20 && b > a && b < a + 10) || (a >= 100 && a % 100 === 0 && b < 100);
+  if (lang === 'en' && /^chapter /.test(C) && !/^verse/.test(V) && runTogether(ch, v)) V = 'verse ' + say('en', v, false);
+  if (lang === 'en' && /^verse /.test(V) && !/^chapter/.test(C) && runTogether(v, ch)) C = 'chapter ' + say('en', ch, false);
+  const of = lang === 'en' ? ' of' : lang === 'hi' ? ' का' : '';
+  let body;
+  if (O === 'BCV') {
+    const k = rnd();
+    // bare numbers are only ever this order; one cue word missing too
+    // (not words that would run together: "twenty eight" said for 20:8 is 28 to anyone)
+    const runs = (ch % 10 === 0 && ch >= 20 && v < 10) || (ch >= 100 && v < 100) || (ch < 10 && v === 100);
+    // (Hindi book names that are everyday words - गिनती counting, उपदेशक preacher, यहूदा Judah - are only offered without a
+    // chapter/verse word, by design, so they are said with one here)
+    const weakHi = lang === 'hi' && [3, 20, 64].includes(b);
+    // (bare "Job 8 8": the same number twice is how mishearings look, so it needs a confident recogniser - offered, by design)
+    if (k < .2 && !range && !runs && !weakHi && ch !== v) body = `${bk} ${lang === 'en' && rnd() < .3 ? ch + ':' + v : say(lang, ch, false) + ' ' + say(lang, v, false)}`;
+    else if (k < .3 && !range) body = lang === 'en' || lang === 'hi' ? `${bk} ${say(lang, ch, false)} ${pick(CUEW[lang].v)} ${say(lang, v, false)}` : `${bk} ${say(lang, ch, true)} ${pick(CUEW[lang].ch)} ${say(lang, v, false)}`;
+    else if (k < .45 && b === 18) body = lang === 'en' ? `the ${enWord(ch, true)} Psalm ${range ? V : 'verse ' + say('en', v, false)}` : lang === 'ta' ? `${say('ta', ch, true)} சங்கீதம் ${V}` : lang === 'ml' ? `${say('ml', ch, true)} സങ്കീർത്തനം ${V}` : `${bk} ${say('hi', ch, false)}${of} ${V}`;
+    else body = `${bk} ${C} ${V}`;
+  }
+  else if (O === 'BVC') body = `${bk} ${V}${of} ${C}`;
+  else if (O === 'CVB') body = `${C} ${V}${of} ${bk}`;
+  else if (O === 'VCB') body = `${V}${of} ${C}${of} ${bk}`;
+  else if (O === 'CBV') body = `${C}${of} ${bk} ${V}`;
+  else body = `${V}${of} ${bk} ${C}`;
+  const [pre, post] = pick(LEAD[lang]);
+  return { text: `${pre} ${body} ${post}`.replace(/\s+/g, ' ').trim(), want: [b, ch, v, ve] };
+}
+// Romanised: ta/ml through the app's own phonetic spelling (latin() above); Hindi as people type it ("yuhanna adhyay teen pad solah").
+function romanised(lang, u) { return lang === 'hi' ? C.romanHi(u.text) : latin(u.text); }
+if (require.main !== module) { module.exports = { utter, latin, mixed, disfluent, spoken, romanised, ORDERS }; return; }
 const N = +process.argv[2] || 300, fails = [];
+// (one decimal, never rounded up to 100.0% while one reference in N still fails)
+const pct = (ok, n) => (ok < n ? Math.min(99.9, Math.floor(1000 * ok / n) / 10).toFixed(1) : '100.0') + '%';
 const res = {};
 for (const lang of ['ml', 'ta', 'en']) for (const chan of lang === 'en' ? ['native', 'disfluent'] : ['native', 'latin', 'mixed', 'disfluent']) {
   let ok = 0;
@@ -121,7 +276,34 @@ for (const lang of ['ml', 'ta', 'en']) for (const chan of lang === 'en' ? ['nati
     if (p && p.book === u.want[0] && p.ch === u.want[1] && p.v === u.want[2]) ok++;
     else fails.push(`${lang}/${chan}  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[2] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${text}`);
   }
-  res[lang + '/' + chan] = (100 * ok / N).toFixed(1) + '%';
+  res[lang + '/' + chan] = pct(ok, N);
+}
+// v83 columns: per language and order, Hindi, romanised, and word by word through the stream harness
+const ok3 = (p, w) => p && p.book === w[0] && p.ch === w[1] && p.v === w[2] && (w[3] === w[2] || p.ve === w[3]);
+for (const lang of ['en', 'ta', 'ml', 'hi']) {
+  for (let o = 0; o < 6; o++) {
+    let ok = 0;
+    for (let i = 0; i < N; i++) { const u = spoken(lang, o), p = B.parseRef(u.text, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`${lang}/${ORDERS[o]}  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${u.text}`); }
+    res[lang + '/' + ORDERS[o]] = pct(ok, N);
+  }
+  if (lang !== 'en') {
+    let ok = 0;
+    for (let i = 0; i < N; i++) { const u = spoken(lang, i % 6), t = romanised(lang, u), p = B.parseRef(t, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`${lang}/roman  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${t}`); }
+    res[lang + '/roman'] = pct(ok, N);
+  }
+  if (lang === 'hi') {
+    let ok = 0;
+    for (let i = 0; i < N; i++) { const u = disfluent(spoken('hi', i % 6), 'hi'), p = B.parseRef(u.text, { exactOnly: true, needChapter: true, needVerse: true }); if (ok3(p, u.want)) ok++; else fails.push(`hi/disfluent  want ${B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en')}  got ${p ? B.refLabel(p, 'en') : 'none'}  | ${u.text}`); }
+    res['hi/disfluent'] = pct(ok, N);
+  }
+  if (!process.env.NOSTREAM) {   // word by word through the stream harness: exactly this one reference reaches the screen
+    const { run } = require('./ref_stream_test.js'); let ok = 0; const SN = +process.env.STREAM_N || N;
+    for (let i = 0; i < SN; i++) {
+      const u = spoken(lang, i % 6), want = B.refLabel({ book: u.want[0], ch: u.want[1], v: u.want[2], ve: u.want[3] }, 'en'), r = run([u.text], {});
+      if (r.screen.length && r.screen[r.screen.length - 1] === want && r.heard.length === 1 && r.screen.every(x => x.split(/[–]/)[0] === want.split(/[–]/)[0])) ok++; else fails.push(`${lang}/stream  want ${want}  got ${JSON.stringify(r.screen)} asks ${JSON.stringify(r.asks)}  | ${u.text}`);
+    }
+    res[lang + '/stream'] = pct(ok, SN);
+  }
 }
 console.log(JSON.stringify(res));
 if (process.env.FAILS) console.log(fails.slice(0, +process.env.FAILS).join('\n'));

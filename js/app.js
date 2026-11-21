@@ -433,10 +433,12 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     document.querySelectorAll('#bsResults button,#heardRefs button,#heardRefs2 button').forEach(b => b.classList.toggle('cur', b.dataset.ref === refKey(r)));
   }
   const refKey = r => `${r.book}.${r.ch}.${r.v}.${r.ve}`;
-  function refButton(r, text) {
+  function refButton(r, text, heardLang) {
     const li = el('li'), b = el('button'); b.dataset.ref = refKey(r);
     const lang = (Bible.VERSIONS.find(v => v.id === S.versions[0]) || {}).lang;
-    const w = el('span', 'rwrap'); w.append(el('span', 'rref', Bible.refLabel(r, lang)), el('span', 'rt', text || Bible.verse(S.versions[0], r.book, r.ch, r.v)));
+    // a reference heard in Hindi also carries its Hindi name (the verse itself is in the church's versions)
+    const label = Bible.refLabel(r, lang) + (heardLang === 'hi' ? ' · ' + Bible.refLabel(r, 'hi') : '');
+    const w = el('span', 'rwrap'); w.append(el('span', 'rref', label), el('span', 'rt', text || Bible.verse(S.versions[0], r.book, r.ch, r.v)));
     b.appendChild(w); b.onclick = () => showBible(r);
     li.appendChild(b); return li;
   }
@@ -500,19 +502,13 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   const heardRefs = []; let lastRefAt = 0;
   try { for (const h of JSON.parse(sessionStorage.getItem('lf-heard-refs') || '[]')) if (h && h.r) heardRefs.push(h); } catch (e) {}
   function pushHeardRef(r, src, sure, listOnly) {
-    const k = refKey(r);
-    const prev = heardRefs.find(x => refKey(x.r) === k);
+    const res = Bible.heardAdd(heardRefs, r, src, sure, Date.now(), { auto: S.vbAuto, screenKey: screen.kind === 'bible' && screen.bible ? refKey(screen.bible) : '' });
+    if (Listen.mode === 'bible' && String(Listen.lang || '').startsWith('hi')) res.h.lang = 'hi';
     lastRefAt = Date.now(); if (sure) hunt.lockedAt = lastRefAt;
-    if (prev && Date.now() - prev.at < 30000) {
-      // Same reference again within half a minute: no duplicate in the list; re-show it only if the screen moved away.
-      prev.at = Date.now(); if (sure) prev.sure = true;
-      if (S.vbAuto && (sure || prev.sure) && !(screen.kind === 'bible' && screen.bible && refKey(screen.bible) === k)) showBible(r);
-      renderHeardRefs(); return;
-    }
-    heardRefs.unshift({ r, src, at: Date.now(), sure: !!sure }); heardRefs.length = Math.min(heardRefs.length, 10);
     try { sessionStorage.setItem('lf-heard-refs', JSON.stringify(heardRefs)); } catch (e) {}
+    if (res.dup) { if (res.show) showBible(r); renderHeardRefs(); return; }
     renderHeardRefs();
-    if (S.vbAuto && sure) { showBible(r); hideAsk(); }
+    if (res.show) { showBible(r); hideAsk(); }
     else if (!sure && Listen.mode === 'bible' && !listOnly) askRef(r);
     else if (listOnly) return;
     else toast(Bible.refLabel(r, 'en'));
@@ -551,7 +547,7 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
   function renderHeardRefs() {
     for (const id of ['heardRefs', 'heardRefs2']) {
       const ol = $(id); ol.innerHTML = '';
-      heardRefs.forEach(h => { const li = refButton(h.r); const b = li.querySelector('button'); if (!h.sure) b.classList.add('unsure'); if (h.src === 'ai') { b.classList.add('ai'); b.title = t('ai_found'); } ol.appendChild(li); });
+      heardRefs.forEach(h => { const li = refButton(h.r, null, h.lang); const b = li.querySelector('button'); if (!h.sure) b.classList.add('unsure'); if (h.src === 'ai') { b.classList.add('ai'); b.title = t('ai_found'); } ol.appendChild(li); });
       if (heardRefs.length) { const li = el('li'); const b = el('button', 'clearbtn', t('clear_history')); b.onclick = () => { heardRefs.length = 0; renderHeardRefs(); }; li.appendChild(b); ol.appendChild(li); }
     }
     $('heardRefsBox').hidden = !heardRefs.length;
@@ -572,7 +568,8 @@ body.full #fs,body.full #tip{display:none} body.full{cursor:none}</style></head>
     add(e) { this.log.push(e); if (this.log.length > 400) this.log.shift(); },
     handoff(e) { this.hand.push(Object.assign({ at: Date.now() }, e)); if (this.hand.length > 60) this.hand.shift(); }
   };
-  let heardKey = '', lastMatchAt = Date.now(), lastSpeechAt = 0, lastEventAt = 0, vbText = '', vbWordsAtQuote = 0;
+  let heardKey = '', lastMatchAt = Date.now(), lastSpeechAt = 0, lastEventAt = 0, vbWordsAtQuote = 0;
+  const RS = Bible.newRefState();   // what the Preach modes have heard so far (js/bible.js refStep)
   let detect = { id: null, n: 0 }, lastDetectAt = 0, suggestId = null, songIx = null, quoteBusy = false;
 
   // One microphone capture shared by the level meter and the offline engine.
@@ -2096,7 +2093,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('lmBible').hidden = !vb || !!S.psalmMode; $('lmPsalm').hidden = !(vb && S.psalmMode);
     // Preach: references only, so following the reading has no place there; the hint says what each mode shows.
     $('vfOn').closest('label').hidden = !!S.preachOnly;
-    const hint = $('lmHint'); hint.dataset.i18n = S.preachOnly ? 'preach_hint' : 'message_hint'; hint.textContent = t(hint.dataset.i18n);
+    const hint = $('lmHint'); hint.dataset.i18n = S.preachOnly ? 'preach_hint' : 'message_hint'; hint.textContent = t(hint.dataset.i18n) + (S.vbLang === 'hi-IN' ? ' ' + t('hindi_hint') : '');
     $('autoFollow').closest('label').hidden = vb;
     const gem = cloud && S.gemini && S.geminiKey, wh = cloud && Listen.engine === 'whisper';
     document.querySelectorAll('.engine-badge').forEach(e => { e.textContent = wh ? '🎵 Whisper AI' : gem ? '✨ Gemini AI' : cloud ? '🌐 ' + t('engine_online') : '💻 ' + t('engine_offline'); e.classList.toggle('online', cloud); });
@@ -2128,7 +2125,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
       if (screen.kind === 'song' || screen.kind === 'idle') { if (lastBible) { screen.kind = 'bible'; screen.bible = lastBible; screen.bgOnly = false; } else screen.bgOnly = true; output(); renderSlides(); }
     }
     if (m === 'songs' && song && screen.kind === 'bible') { screen.kind = 'song'; screen.bgOnly = false; renderSlides(); output(); }
-    if (Listen.mode && Listen.mode !== m) { if (m === 'bible') vbText = ''; Listen.start(m); } else updateListenUI();
+    if (Listen.mode && Listen.mode !== m) { if (m === 'bible') RS.vbText = ''; Listen.start(m); } else updateListenUI();
   }
   // Which language the preacher is speaking, from the words themselves: chapter/verse words and book names differ
   // between Malayalam, Tamil and English, and they are recognisable even when the recogniser is set to the wrong one
@@ -2145,6 +2142,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // overlap - "ഇടയനാകുന്നു" was taken for Tamil and the Malayalam verse was then followed in the Tamil Bible)
     const ml = (String(text).match(/[\u0D00-\u0D7F]/g) || []).length, ta = (String(text).match(/[\u0B80-\u0BFF]/g) || []).length;
     if (ml + ta >= 4) return ml > ta ? 'ml-IN' : 'ta-IN';
+    if ((String(text).match(/[\u0900-\u097F]/g) || []).length >= 4) return 'hi-IN';
     const k = ' ' + Core.keyWords(text) + ' ', score = {};
     for (const [l, ws] of Object.entries(LANG_KEYS)) score[l] = ws.reduce((n, w) => n + (w.length >= 3 && (l === 'ta-IN' && w === 'avatu' ? /avatu /.test(k) : k.includes(' ' + w)) ? 1 : 0), 0);
     if (/[a-z]+avatu /.test(k)) score['ta-IN'] += 1;          // Tamil ordinals ("மூன்றாவது")
@@ -2170,7 +2168,7 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (Listen.mode === 'songs') {
       onSongSpeech(finals, interim);
       // Only with automatic switching on: a clearly spoken reference during singing ("John chapter 3 verse 16") moves to the preacher.
-      if (finals && S.autoMode) { const r = Bible.parseRef(finals.slice(-120), { exactOnly: true, needChapter: true, needVerse: true }); if (r && r.cue && r.tight && !r.fuzzy) { setListenMode(preacherMode()); vbText = ''; pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
+      if (finals && S.autoMode) { const r = Bible.parseRef(finals.slice(-120), { exactOnly: true, needChapter: true, needVerse: true }); if (r && r.cue && r.tight && !r.fuzzy) { setListenMode(preacherMode()); RS.vbText = ''; pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', true); } }
     } else if (Listen.mode === 'bible') {
       onBibleSpeech(finals, interim, conf == null ? 0.75 : conf);
       // Only with automatic switching on: singing that clearly matches a song while in preacher mode moves back to the songs.
@@ -2499,32 +2497,17 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     // a quiz question just matched is not a passage being retold
     // (Preach: only spoken references, so no AI call and no cost)
     if (finals && !preachOnly()) setTimeout(() => { if (Date.now() - quizLast.at > 3000) VerseAI.heard(finals); }, 500);
-    if (finals) vbText = (vbText + ' ' + finals).slice(-400);
-    const tail = (vbText + ' ' + (interim[0] || '')).slice(-90);
-    const opts = { exactOnly: true, needChapter: true, needVerse: true, prefer: planBooks() };
-    // A reference said at the start of a long sentence ("John 3 16, for God so loved...") would fall off the
-    // 90-character tail, so the whole finished phrase is tried first.
-    let r = finals && finals.length > 90 ? Bible.parseRef(finals, opts) : null;
-    if (!r) r = Bible.parseRef(tail, opts);
-    if (r) {
-      // If what was heard matches a song line, it is singing (e.g. Tamil "நான்" heard as "John"), not a reference.
-      const singing = S.autoMode && songIx && Core.songLookup(songIx, Core.key(tail), 1).some(x => x.score >= .6);
-      // Sure: chapter/verse words were said, or the numbers follow the book name directly with a confident transcript.
-      // Repeated numbers ("18 18", "1 1") are the usual shape of mishearings, so they need more confidence.
-      const indic = /[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(tail);   // Tamil/Malayalam script: the recogniser was sure of the words
-      const need = r.ch === r.v ? .85 : indic ? .4 : .72;
-      // The offline engine spells Malayalam/Tamil book names phonetically ("Vohmar" = Romans), so a near-match book is normal there.
-      const bookOk = !r.fuzzy || Listen.engine === 'local';
-      const sure = !singing && (r.cue || (r.tight && bookOk && conf >= need) || (r.tight && conf >= .9) || (inPlan(r) && (r.tight || conf >= .5)));
-      if (sure || finals) { pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.ve }, 'ref', sure); vbText = ''; vbWordsAtQuote = 0; partRef = null; }
-      return;
+    const out = Bible.refStep(RS, { finals, interim: interim[0] || '', conf }, refCtx());
+    for (const a of out.acts) {
+      if (a.kind === 'ref') { pushHeardRef(a.r, 'ref', a.sure); vbWordsAtQuote = 0; }
+      else if (a.kind === 'piece') toast(Bible.bookName(a.r.book, S.lang) + ' ' + (a.r.ch != null ? a.r.ch : '?') + ':' + (a.r.v != null ? a.r.v : '?') + ' …');
     }
-    if (finals && pieceRef(finals)) return;
+    if (out.stop) return;
     if (finals && quizListen(finals)) return;
     // Preach: a verse read aloud or quoted without its reference never moves the screen (no follow, no quote lookup).
-    if (preachOnly()) return;
+    if (preachOnly() || hindiSpeech()) return;
     if (verseFollow(finals, interim)) return;
-    const words = vbText.trim().split(/\s+/).length;
+    const vbText = RS.vbText, words = vbText.trim().split(/\s+/).length;
     if (finals && !quoteBusy && words - vbWordsAtQuote >= 5 && Date.now() - VF.at > 8000) {
       vbWordsAtQuote = words; quoteBusy = true;
       const lang = (Listen.engine === 'local' || S.vbLang === 'auto' ? detectScript(vbText) : S.vbLang.slice(0, 2));
@@ -2544,35 +2527,11 @@ Previous clip's words: ${this.lastText || '(none)'}`;
         .catch(() => {}).finally(() => { quoteBusy = false; });
     }
   }
-  // A reference said in pieces, or with one number misheard: "மத்தேயு 1-ஆம் வசனம் <misheard> அதிகாரம்" keeps
-  // Matthew ?:1 waiting, and "அஞ்சாம் அதிகாரம்" said next completes it. "Verse 17" alone, said soon after a
-  // verse was shown, moves within that chapter. The screen never sits on an old verse without saying what it heard.
-  let partRef = null;
-  function pieceRef(text) {
-    const p = Bible.parsePartial(text); if (!p) return false;
-    const now = Date.now();
-    if (p.book != null) partRef = { book: p.book, ch: p.ch, v: p.v, at: now };
-    else if (partRef && now - partRef.at < 30000) { if (p.ch != null) partRef.ch = p.ch; if (p.v != null) partRef.v = p.v; partRef.at = now; }
-    else if (p.ch != null && planList().filter(x => x.ch === p.ch).length === 1 && !(screen.bible && screen.bible.ch === p.ch)) {
-      const m = planList().find(x => x.ch === p.ch); partRef = { book: m.book, ch: p.ch, v: p.v, at: now };   // another planned chapter
-    }
-    else if (p.v != null && screen.kind === 'bible' && screen.bible && now - lastRefAt < 300000) partRef = { book: screen.bible.book, ch: p.ch != null ? p.ch : screen.bible.ch, v: p.v, at: now };
-    else if (p.ch != null) {                  // "<misheard book> 5-ാം അധ്യായം 3-ാം വാക്യം": the one planned chapter 5
-      const m = planList().filter(x => x.ch === p.ch); if (m.length !== 1) return false;
-      partRef = { book: m[0].book, ch: p.ch, v: p.v, at: now };
-    }
-    else return false;
-    if (partRef.ch == null) { const m = planList().filter(x => x.book === partRef.book); if (m.length && m.every(x => x.ch === m[0].ch)) partRef.ch = m[0].ch; }
-    const r = partRef;
-    if (r.ch == null && r.v == null) return false;           // only a book name so far: wait quietly
-    if (r.ch != null && r.v != null) {
-      partRef = null;
-      if (!Bible.validRef(r.book, r.ch, r.v)) return false;
-      pushHeardRef({ book: r.book, ch: r.ch, v: r.v, ve: r.v }, 'ref', true); vbText = ''; vbWordsAtQuote = 0;
-      return true;
-    }
-    toast(Bible.bookName(r.book, S.lang) + ' ' + (r.ch != null ? r.ch : '?') + ':' + (r.v != null ? r.v : '?') + ' …');
-    return true;
+  // What refStep needs from the app: the sermon plan, the screen, the song index (singing is not a reference).
+  function refCtx() {
+    const onBible = screen.kind === 'bible' && screen.bible ? screen.bible : null;
+    return { engine: Listen.engine, prefer: planBooks(), plan: planList(), inPlan, now: Date.now(), lastRefAt, screen: onBible, screenAny: screen.bible || null,
+      singing: tail => !!(S.autoMode && songIx && Core.songLookup(songIx, Core.key(tail), 1).some(x => x.score >= .6)) };
   }
   /* ---------- Verse follow: the verses move as the preacher reads them ----------
    * The chapter on screen is cut into short pieces (about 8 words) and followed exactly like song lines: the next
@@ -2620,7 +2579,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     if (v < r.v || v > r.ve) { const nr = { book: r.book, ch: r.ch, v, ve: v }; VF.shown = refKey(nr); showBible(nr); }   // inside a shown range: stay
     return true;
   }
-  function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : 'en'; }
+  function detectScript(txt) { return /[ഀ-ൿ]/.test(txt) ? 'ml' : /[஀-௿]/.test(txt) ? 'ta' : /[\u0900-\u097F]/.test(txt) ? 'hi' : 'en'; }
+  // Hindi speech: references only. No Hindi Bible is bundled, so a verse read aloud cannot be found or followed.
+  const hindiSpeech = () => String(S.vbLang === 'auto' ? Listen.lang || '' : S.vbLang).startsWith('hi');
 
   // Blank screen when singing continues but nothing matches.
   setInterval(() => {
@@ -2865,9 +2826,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('btnNext').onclick = () => step(1);
     $('btnBlack').onclick = () => { screen.black = !screen.black; output(); };
     $('btnBgOnly').onclick = () => { screen.bgOnly = !screen.bgOnly; output(); };
-    const toggleListen = () => Listen.mode ? Listen.stop() : (S.listenMode === 'bible' && (vbText = ''), Listen.start());
+    const toggleListen = () => Listen.mode ? Listen.stop() : (S.listenMode === 'bible' && (RS.vbText = ''), Listen.start());
     document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setListenMode(b.dataset.lm));
-    $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
+    $('vbLang2').onchange = e => { S.vbLang = e.target.value; $('vbLang').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); else updateListenUI(); };
     $('vbAuto2').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto').checked = S.vbAuto; saveSettings(); };
     $('vfOn').checked = S.verseFollow !== false; $('vfOn').onchange = e => { S.verseFollow = e.target.checked; saveSettings(); };
     $('planInput').value = S.plan || '';
@@ -2982,9 +2943,9 @@ Previous clip's words: ${this.lastText || '(none)'}`;
     $('thShadow').onchange = e => { S.theme.shadow = e.target.checked; saveSettings(); output(); };
 
     // online
-    $('vbLang').onchange = e => { S.vbLang = e.target.value; $('vbLang2').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); };
+    $('vbLang').onchange = e => { S.vbLang = e.target.value; $('vbLang2').value = S.vbLang; saveSettings(); if (Listen.mode === 'bible') Listen.start('bible'); else updateListenUI(); };
     $('vbAuto').onchange = e => { S.vbAuto = e.target.checked; $('vbAuto2').checked = S.vbAuto; saveSettings(); };
-    $('btnVB').onclick = () => { if (Listen.mode === 'bible') Listen.stop(); else { vbText = ''; S.listenMode = 'bible'; saveSettings(); Listen.start('bible'); } };
+    $('btnVB').onclick = () => { if (Listen.mode === 'bible') Listen.stop(); else { RS.vbText = ''; S.listenMode = 'bible'; saveSettings(); Listen.start('bible'); } };
     $('ocrFile').onchange = e => { if (e.target.files[0]) setOcrImage(e.target.files[0]); e.target.value = ''; };
     $('ocrLang').onchange = () => runOcr();
     document.addEventListener('paste', e => {
