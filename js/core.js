@@ -1011,6 +1011,44 @@
     return r;
   }
 
-  const Core = { learnAdd, usualW, trackManual, seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
+  /* ---------- Timing from the sound itself (Lead) ----------
+   * chunks: [{n, rms}] - the microphone's loudness per audio chunk, oldest first (Mic.chunks). A breath or a short
+   * pause right after sung sound: the end of the last ~0.2-0.9 s is quiet, and before it there was at least 0.8 s
+   * of sound in the 2.5 s before. A long silence, or sound all the way (an instrumental part held loud), is not one. */
+  function breathDip(chunks, rate) {
+    if (!chunks || chunks.length < 8) return false;
+    const r = chunks.map(x => x.rms).sort((a, b) => a - b), floor = r[Math.floor(r.length * .2)] || 0, loud = r[Math.floor(r.length * .9)] || 0;
+    const thr = Math.max(.008, floor * 2.2, floor + (loud - floor) * .25);
+    if (loud < thr * 1.5) return false;                       // nothing sung in the last seconds
+    let i = chunks.length - 1, quiet = 0;
+    while (i >= 0 && chunks[i].rms < thr) { quiet += chunks[i].n; i--; }
+    if (quiet < rate * .18 || quiet > rate * .9 || i < 0) return false;
+    let sound = 0, span = 0;
+    for (; i >= 0 && span < rate * 2.5; i--) { span += chunks[i].n; if (chunks[i].rms >= thr) sound += chunks[i].n; }
+    return sound >= rate * .8;
+  }
+  /** Lead's early cue: the next line is due within dueIn s (by the singing speed), the line takes lineSec s, words
+   *  were recognised heardAgo s ago. True when a breath now ends the line - only near its end, and only while
+   *  words are being heard (not over an instrumental part or after the singing stopped). */
+  function leadCue(o) {
+    if (!(o.heardAgo <= 6) || !(o.dueIn <= Math.max(1.2, (o.lineSec || 3) * .4))) return false;
+    return breathDip(o.chunks, o.rate);
+  }
+  /* ---------- Sarvam's live stream for singing ----------
+   * The stream sends partial text many times a second while a phrase goes on, then the final text. The tracker is
+   * made for clips: a partial is passed on only when it has two new words or more since the last one passed on and
+   * 1.5 s have gone by; the final text of a phrase is passed on when it adds anything. sf: {} kept between events. */
+  function streamText(sf, m, now) {
+    if (!m || !m.text || (m.event !== 'transcript.partial' && m.event !== 'transcript.final')) return null;
+    const ws = String(m.text).trim().split(/\s+/).filter(Boolean), fed = sf.fed || [];
+    // words after those already passed on from this phrase (a partial grows from the start of the phrase)
+    let k = 0; while (k < fed.length && k < ws.length && fed[k] === ws[k]) k++;
+    const fresh = ws.slice(k);
+    if (m.event === 'transcript.final') { sf.fed = []; sf.at = now; return fresh.length ? ws.join(' ') : null; }
+    if (fresh.length < 2 || now - (sf.at || 0) < 1500) return null;
+    sf.fed = ws; sf.at = now; return ws.join(' ');
+  }
+
+  const Core = { breathDip, leadCue, streamText, learnAdd, usualW, trackManual, seqScore, novelFit, wsimP, trackWin, seqWords, libIndex, libStep, trackIndex, trackStep, echoOf, seqIndex, seqStep, wordMatch, place, serviceIndex, serviceFind, skel, collapseRepeats, translit, key, keyWords, grams, bigrams, dice, heardGrams, scoreG, lineScore, songScore, prepare, decide, numbers, songIndex, songLookup };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.LFCore = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
