@@ -139,7 +139,7 @@ const ML_TENS = { 2: 'ഇരുപത്', 3: 'മുപ്പത്', 4: 'ന�
 const mlOrd = w => w.replace(/[്ു]$/, '') + 'ാം';
 const ML_GLIDE = { 'അ': 'യ', 'ആ': 'യാ', 'ഏ': 'യേ', 'എ': 'യെ', 'ഒ': 'യൊ' };
 function mlWord(n, ord, coll) {
-  if (n >= 100) return n === 100 ? (ord ? 'നൂറാം' : 'നൂറ്') : 'നൂറ്റി' + (rnd() < .5 ? ' ' : '') + mlWord(n - 100, ord, false);
+  if (n >= 100) { if (n === 100) return ord ? 'നൂറാം' : 'നൂറ്'; const r = mlWord(n - 100, ord, false), g = ML_GLIDE[r[0]] || (r[0] === 'ഇ' ? 'യി' : ''); return rnd() < .5 ? 'നൂറ്റി ' + r : 'നൂറ്റി' + (g ? g + r.slice(1) : r); }
   if (n < 10) { const w = (coll && !ord ? ML_UC : ML_U)[n]; return ord ? mlOrd(ML_U[n]) : w; }
   if (n < 20) return ord ? mlOrd(ML_TEEN[n - 10]) : ML_TEEN[n - 10];
   const t = Math.floor(n / 10), u = n % 10;
@@ -243,7 +243,10 @@ function spoken(lang, ord) {
     // bare numbers are only ever this order; one cue word missing too
     // (not words that would run together: "twenty eight" said for 20:8 is 28 to anyone)
     const runs = (ch % 10 === 0 && ch >= 20 && v < 10) || (ch >= 100 && v < 100) || (ch < 10 && v === 100);
-    if (k < .2 && !range && !runs) body = `${bk} ${lang === 'en' && rnd() < .3 ? ch + ':' + v : say(lang, ch, false) + ' ' + say(lang, v, false)}`;
+    // (Hindi book names that are everyday words - गिनती counting, उपदेशक preacher, यहूदा Judah - are only offered without a
+    // chapter/verse word, by design, so they are said with one here)
+    const weakHi = lang === 'hi' && [3, 20, 64].includes(b);
+    if (k < .2 && !range && !runs && !weakHi) body = `${bk} ${lang === 'en' && rnd() < .3 ? ch + ':' + v : say(lang, ch, false) + ' ' + say(lang, v, false)}`;
     else if (k < .3 && !range) body = lang === 'en' || lang === 'hi' ? `${bk} ${say(lang, ch, false)} ${pick(CUEW[lang].v)} ${say(lang, v, false)}` : `${bk} ${say(lang, ch, true)} ${pick(CUEW[lang].ch)} ${say(lang, v, false)}`;
     else if (k < .45 && b === 18) body = lang === 'en' ? `the ${enWord(ch, true)} Psalm ${range ? V : 'verse ' + say('en', v, false)}` : lang === 'ta' ? `${say('ta', ch, true)} சங்கீதம் ${V}` : lang === 'ml' ? `${say('ml', ch, true)} സങ്കീർത്തനം ${V}` : `${bk} ${say('hi', ch, false)}${of} ${V}`;
     else body = `${bk} ${C} ${V}`;

@@ -405,7 +405,7 @@
         if (C[o] != null) { let c = C[o]; if (cps[i + 1] === 0x3C) { c = NUKTA[o] ? NUKTA[o] : c; i++; }
           if (cps[i + 1] === 0x4D) { syl.push([c, '', false]); i++; } else if (M[cps[i + 1]]) { syl.push([c, M[cps[i + 1]], false]); i++; } else syl.push([c, 'a', true]); }
         else if (V[o]) syl.push(['', V[o], false]);
-        else if (o === 0x01 || o === 0x02) { if (syl.length) syl[syl.length - 1][1] += 'n'; }
+        else if (o === 0x01 || o === 0x02) { if (syl.length) { const l = syl[syl.length - 1]; l[1] += 'n'; l[2] = false; } }   // "सं" keeps its a
         else if (o === 0x03) { if (syl.length) syl[syl.length - 1][1] += 'h'; }
         else if (o >= 0x66 && o <= 0x6F) syl.push([String(o - 0x66), '', false]);
         else if (o < 0 || o > 0x7F) syl.push([String.fromCodePoint(o + 0x900), '', false]);
@@ -435,6 +435,8 @@
   // A number word in Hindi (Devanagari or romanised): { n, ord } or null. "सोलहवाँ"/"solahvan" -> { n: 16, ord: true }.
   function hiNumber(w, roman) {
     const m = hiMaps(), k = roman ? key(w) : hn(w), C = roman ? m.rcard : m.card, O = roman ? m.rord : m.ord;
+    // (romanised, the ordinal first: "chauthaa" (4th) and "chaudaa" (14) share a sound key)
+    if (roman && O.has(k)) return { n: O.get(k), ord: true };
     if (C.has(k)) return { n: C.get(k), ord: false };
     if (O.has(k)) return { n: O.get(k), ord: true };
     const s = k.match(roman ? /^(.+?)(vam|van|vaan|ven|vein|vin|veen|va|ve|vi)$/ : /^(.+?)(वां|वें|वीं|वी|वा|वे)$/);
@@ -442,7 +444,7 @@
     return null;
   }
   const HI_CH = 'अध्याय|अध्यायों|अध्यायो|बाब', HI_V = 'पद|पदों|पदो|आयत|आयतें|आयतों|आयते|वचन|वचनों';
-  const HI_DROP = 'का|की|के|में|मे|को|तक|ने|पर|हम|आइए|आइये|अब|यहाँ|यहां|है|हैं|था|पढ़ेंगे|पढ़ें|पढ़िए|पढ़िये|पढ़ते|पढ़ना|देखिए|देखिये|देखें|देखेंगे|खोलिए|खोलिये|खोलें|लिखा|रचित|लिखित|सुसमाचार|पुस्तक|किताब|ग्रंथ|नबी|भविष्यद्वक्ता';
+  const HI_DROP = 'यानी|यानि|वो|उम|अं|मतलब|का|की|के|में|मे|को|तक|ने|पर|हम|आइए|आइये|अब|यहाँ|यहां|है|हैं|था|पढ़ेंगे|पढ़ें|पढ़िए|पढ़िये|पढ़ते|पढ़ना|देखिए|देखिये|देखें|देखेंगे|खोलिए|खोलिये|खोलें|लिखा|रचित|लिखित|सुसमाचार|पुस्तक|किताब|ग्रंथ|नबी|भविष्यद्वक्ता';
   const HI_R_CH = 'adhyay adhyaay adhyaya adhyayon adhyaayon baab bab', HI_R_V = 'pad padon aayat ayat aayaten aayatein ayaten aayaton vachan vachanon';
   const HI_R_DROP = 'ka ki ke mein me men ko tak ne par hum aaiye ab hai hain padhenge padhen padhiye dekhiye dekhen kholiye kholen likha rachit likhit susamachar pustak kitab';
   let HISETS = null;
@@ -459,7 +461,17 @@
     text = String(text || '');
     const dev = /[ऀ-ॿ]/.test(text);
     let roman = false;
-    if (!dev) { if (/[஀-௿ഀ-ൿ]/.test(text)) return text; const S0 = hiSets(); roman = text.split(/\s+/).some(w => S0.rch.has(key(w)) || (S0.rv.has(key(w)) && key(w) !== 'pat')) || /\b(adhyay|aayat)/i.test(text); if (!roman) return text; }
+    if (!dev) {
+      if (/[\u0B80-\u0BFF\u0D00-\u0D7F]/.test(text)) return text;
+      // English letters: Hindi when it has a Hindi chapter/verse word next to a number, or two Hindi number words
+      // (words that are also everyday English - sat, bees, char, das, tees, do - do not count towards that)
+      const raw = text.split(/\s+/).filter(Boolean), S0 = hiSets(), ws = raw.map(key), EN = /^(sat|do|to|car|bees|tees|tin)$/i;
+      const all = raw.filter(w => key(w) && hiNumber(w, true)).length, nums = raw.filter(w => !EN.test(w) && key(w) && hiNumber(w, true)).length, digits = raw.filter(w => /^\d/.test(w)).length;
+      // ("pad" only as spelled: "pat" is Malayalam പത്ത് (10) in English letters)
+      const cue = raw.some((w, i) => S0.rch.has(ws[i]) || (S0.rv.has(ws[i]) && !/^pat$/i.test(w)));
+      roman = (cue && all + digits >= 1) || (all >= 2 && nums >= 1) || (nums >= 1 && digits >= 1);
+      if (!roman) return text;
+    }
     const S = hiSets(), out = [];
     const words = text.replace(/[०-९]/g, d => String(d.codePointAt(0) - 0x966)).replace(/[।॥,.;:!?]/g, ' ').split(/\s+/).filter(Boolean);
     const num = (n, ord) => (ord ? n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th') : String(n));
@@ -468,16 +480,17 @@
       if (!isDev && !roman) { out.push(w); continue; }
       const dm = w.match(/^(\d+)\s*(वाँ|वां|वें|वीं|वी|वा|वे|th|va|van|vaan|ven|vin)?$/);
       if (dm) { out.push(num(+dm[1], !!dm[2])); continue; }
-      if (/^(वाँ|वां|वें|वीं|वा|वे|van|vaan|ven|vin|va|ve)$/.test(w) && /^\d+$/.test(out[out.length - 1] || '')) { out[out.length - 1] += 'th'; continue; }
+      if (/^(वाँ|वां|वें|वीं|वा|वे|van|vaan|ven|vin|va|ve)$/.test(w) && /^\d+([a-z]{2})?$/.test(out[out.length - 1] || '')) { if (/^\d+$/.test(out[out.length - 1])) out[out.length - 1] += 'th'; continue; }   // ("7 वाँ वाँ": once)
       if (isDev ? S.ch.has(k) : S.rch.has(k)) { out.push('adhyay'); continue; }
-      if (isDev ? S.v.has(k) : S.rv.has(k)) { out.push('aayat'); continue; }
+      if (isDev ? S.v.has(k) : S.rv.has(k) && !/^pat$/i.test(w)) { out.push('aayat'); continue; }
       if (isDev ? k === 'से' : k === 'se') { out.push('to'); continue; }
       if (isDev ? k === 'और' : k === 'aur') { out.push('and'); continue; }
       if (isDev ? /^(पत्री|पत्र|चिट्ठी)$/.test(k) : /^(patri|patra)$/.test(k)) { out.push('letter'); continue; }
       if (isDev ? S.drop.has(k) : S.rdrop.has(k)) continue;
       const h = hiNumber(w, !isDev);
       // (romanised "do" is also English "do": a number only beside a chapter/verse word)
-      if (h && !(!isDev && k === 'to' && !/^(adhyay|aayat)$/.test(out[out.length - 1] || '') && !(S.rch.has(key(words[i + 1] || '')) || S.rv.has(key(words[i + 1] || ''))))) {
+      const nextNum = !!words[i + 1] && (/^\d/.test(words[i + 1]) || (key(words[i + 1]) && hiNumber(words[i + 1], true) && key(words[i + 1]) !== 'to'));
+      if (h && !(!isDev && k === 'to' && !/^(adhyay|aayat|to|\d+)$/.test(out[out.length - 1] || '') && !nextNum && !/^(tak|se)$/.test(words[i + 1] || '') && !(S.rch.has(key(words[i + 1] || '')) || S.rv.has(key(words[i + 1] || ''))))) {
         // "[एक] सौ उन्नीस" = 119
         if (h.n === 100 && !h.ord) { let base = 100; const p = out[out.length - 1]; if (/^[1-9]$/.test(p || '')) { base = +p * 100; out.pop(); }
           const nx = words[i + 1] && hiNumber(words[i + 1], !isDev); if (nx && nx.n < 100) { out.push(num(base + nx.n, nx.ord)); i++; } else out.push(String(base)); continue; }
